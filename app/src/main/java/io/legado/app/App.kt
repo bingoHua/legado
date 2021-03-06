@@ -3,6 +3,7 @@ package io.legado.app
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
+import android.content.res.AssetManager
 import android.content.res.Configuration
 import android.os.Build
 import androidx.multidex.MultiDexApplication
@@ -19,6 +20,9 @@ import io.legado.app.help.http.HttpHelper
 import io.legado.app.utils.LanguageUtils
 import io.legado.app.utils.defaultSharedPreferences
 import rxhttp.wrapper.param.RxHttp
+import java.io.FileOutputStream
+import java.io.IOException
+import java.io.InputStream
 
 class App : MultiDexApplication() {
 
@@ -37,7 +41,40 @@ class App : MultiDexApplication() {
             .lifecycleObserverAlwaysActive(true)
             .autoClear(false)
         registerActivityLifecycleCallbacks(ActivityHelp)
+        copyAssetsFile("ssml.xml")
         defaultSharedPreferences.registerOnSharedPreferenceChangeListener(AppConfig)
+    }
+
+    private fun copyAssetsFile(sourceFilename: String) {
+        val destFilename = filesDir.absolutePath + "/" + sourceFilename
+        try {
+            copyFromAssets(assets, sourceFilename, destFilename)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    @Throws(IOException::class)
+    private fun copyFromAssets(assets: AssetManager, source: String, dest: String) {
+        var `is`: InputStream? = null
+        var fos: FileOutputStream? = null
+        try {
+            `is` = assets.open(source)
+            fos = FileOutputStream(dest)
+            val buffer = ByteArray(1024)
+            var size = 0
+            while (`is`.read(buffer, 0, 1024).also { size = it } >= 0) {
+                fos.write(buffer, 0, size)
+            }
+        } finally {
+            if (fos != null) {
+                try {
+                    fos.close()
+                } finally {
+                    `is`?.close()
+                }
+            }
+        }
     }
 
     override fun onConfigurationChanged(newConfig: Configuration) {

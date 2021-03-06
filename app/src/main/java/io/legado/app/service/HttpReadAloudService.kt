@@ -3,8 +3,8 @@ package io.legado.app.service
 import android.app.PendingIntent
 import android.content.Intent
 import android.media.MediaPlayer
-
 import io.legado.app.constant.EventBus
+import io.legado.app.constant.PreferKey
 import io.legado.app.help.AppConfig
 import io.legado.app.help.IntentHelp
 import io.legado.app.help.coroutine.Coroutine
@@ -14,23 +14,24 @@ import io.legado.app.service.help.ReadBook
 import io.legado.app.utils.*
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.isActive
-import java.io.File
-import java.io.FileDescriptor
-import java.io.FileInputStream
-import java.io.IOException
+import splitties.init.appCtx
+import java.io.*
 import java.net.ConnectException
 import java.net.SocketTimeoutException
 import java.util.*
 
 class HttpReadAloudService : BaseReadAloudService(),
-        MediaPlayer.OnPreparedListener,
-        MediaPlayer.OnErrorListener,
-        MediaPlayer.OnCompletionListener {
+    MediaPlayer.OnPreparedListener,
+    MediaPlayer.OnErrorListener,
+    MediaPlayer.OnCompletionListener {
 
     private val player by lazy { MediaPlayer() }
     private lateinit var ttsFolder: String
     private var task: Coroutine<*>? = null
     private var playingIndex = -1
+    private val microAloudDownloader by lazy {
+        MicroAloudDownloader(this)
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -60,7 +61,8 @@ class HttpReadAloudService : BaseReadAloudService(),
     override fun play() {
         if (contentList.isEmpty()) return
         ReadAloud.httpTTS?.let {
-            val fileName = md5SpeakFileName(it.url, AppConfig.ttsSpeechRate.toString(), contentList[nowSpeak])
+            val fileName =
+                md5SpeakFileName(it.url, AppConfig.ttsSpeechRate.toString(), contentList[nowSpeak])
             if (nowSpeak == 0) {
                 downloadAudio()
             } else {
@@ -96,12 +98,18 @@ class HttpReadAloudService : BaseReadAloudService(),
                             return@let
                         } else { //没有下载并且没有缓存文件
                             try {
-                                createSpeakCacheFile(fileName)
-                                AnalyzeUrl(
+                                if (appCtx.getPrefLong(PreferKey.speakEngine) == -30L) {
+                                    microAloudDownloader.download(
+                                        item,
+                                        AppConfig.ttsSpeechRate
+                                    )
+                                } else {
+                                    AnalyzeUrl(
                                         it.url,
                                         speakText = item,
                                         speakSpeed = AppConfig.ttsSpeechRate
-                                ).getByteArray().let { bytes ->
+                                    ).getByteArray()
+                                }?.let { bytes ->
                                     ensureActive()
 
                                     val file = getSpeakFileAsMd5IfNotExist(fileName)
@@ -160,23 +168,23 @@ class HttpReadAloudService : BaseReadAloudService(),
     }
 
     private fun hasSpeakFile(name: String) =
-            FileUtils.exist("${speakFilePath()}$name.mp3")
+        FileUtils.exist("${speakFilePath()}$name.mp3")
 
     private fun hasSpeakCacheFile(name: String) =
-            FileUtils.exist("${speakFilePath()}$name.mp3.cache")
+        FileUtils.exist("${speakFilePath()}$name.mp3.cache")
 
     private fun createSpeakCacheFile(name: String): File =
-            FileUtils.createFileWithReplace("${speakFilePath()}$name.mp3.cache")
+        FileUtils.createFileWithReplace("${speakFilePath()}$name.mp3.cache")
 
     private fun removeSpeakCacheFile(name: String) {
         FileUtils.delete("${speakFilePath()}$name.mp3.cache")
     }
 
     private fun getSpeakFileAsMd5(name: String): File =
-            FileUtils.getFile(File(speakFilePath()), "$name.mp3")
+        FileUtils.getFile(File(speakFilePath()), "$name.mp3")
 
     private fun getSpeakFileAsMd5IfNotExist(name: String): File =
-            FileUtils.createFileIfNotExist("${speakFilePath()}$name.mp3")
+        FileUtils.createFileIfNotExist("${speakFilePath()}$name.mp3")
 
     private fun removeCacheFile() {
         FileUtils.listDirsAndFiles(speakFilePath())?.forEach {
@@ -185,7 +193,7 @@ class HttpReadAloudService : BaseReadAloudService(),
             }
             if (Regex(""".+\.mp3$""").matches(it.name)) { //mp3缓存文件
                 val reg =
-                        """^${MD5Utils.md5Encode16(textChapter!!.title)}_[a-z0-9]{16}\.mp3$""".toRegex()
+                    """^${MD5Utils.md5Encode16(textChapter!!.title)}_[a-z0-9]{16}\.mp3$""".toRegex()
                 if (!reg.matches(it.name)) {
                     FileUtils.deleteFile(it.absolutePath)
                 }

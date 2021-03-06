@@ -217,6 +217,8 @@ dependencies {
         exclude group: 'xmlpull'
     }
 
+    implementation group: 'org.freemarker', name: 'freemarker-gae', version: '2.3.31'
+    implementation 'com.microsoft.cognitiveservices.speech:client-sdk:1.15.0'
 }
 
 apply plugin: 'com.google.gms.google-services'
