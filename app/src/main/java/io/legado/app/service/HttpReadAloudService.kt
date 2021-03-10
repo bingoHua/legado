@@ -30,7 +30,7 @@ class HttpReadAloudService : BaseReadAloudService(),
     private var task: Coroutine<*>? = null
     private var playingIndex = -1
     private val microAloudDownloader by lazy {
-        MicroAloudDownloader(this)
+        MicroAloudDownloader(this, MicroAloudDownloader.MicroProxy("127.0.0.1", 1080, "", ""))
     }
 
     override fun onCreate() {
@@ -98,6 +98,7 @@ class HttpReadAloudService : BaseReadAloudService(),
                             return@let
                         } else { //没有下载并且没有缓存文件
                             try {
+                                LogUtils.d("lzh.", "$item")
                                 if (appCtx.getPrefLong(PreferKey.speakEngine) == -30L) {
                                     microAloudDownloader.download(
                                         item,

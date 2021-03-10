@@ -9,7 +9,7 @@ import freemarker.template.TemplateExceptionHandler
 import java.io.StringWriter
 import java.util.*
 
-class MicroAloudDownloader constructor(context: Context) {
+class MicroAloudDownloader constructor(context: Context, val proxy: MicroProxy) {
     private var cfg: Configuration = Configuration(Configuration.VERSION_2_3_24)
     private lateinit var synthesizer: SpeechSynthesizer
 
@@ -19,9 +19,18 @@ class MicroAloudDownloader constructor(context: Context) {
         cfg.templateExceptionHandler = TemplateExceptionHandler.DEBUG_HANDLER;
     }
 
+    class MicroProxy constructor(
+        val proxyHostName: String,
+        val port: Int,
+        val userName: String,
+        val password: String
+    )
+
     fun download(text: String, rate: Int): ByteArray? {
         val speechConfig: SpeechConfig =
-            SpeechConfig.fromSubscription("9644ad9e4a40402a83462228bfeca076", "eastus")
+            SpeechConfig.fromSubscription("9644ad9e4a40402a83462228bfeca076", "eastus").apply {
+                this.setProxy(proxy.proxyHostName, proxy.port, proxy.userName, proxy.password)
+            }
         synthesizer = SpeechSynthesizer(speechConfig, null)
         val result = synthesizer.SpeakSsml(text.toSsml(cfg, rate))
         return if (result.reason == ResultReason.SynthesizingAudioCompleted) result.audioData else null
