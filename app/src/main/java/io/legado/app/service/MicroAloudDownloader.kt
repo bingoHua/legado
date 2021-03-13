@@ -3,11 +3,15 @@ package io.legado.app.service
 import android.content.Context
 import com.microsoft.cognitiveservices.speech.ResultReason
 import com.microsoft.cognitiveservices.speech.SpeechConfig
+import com.microsoft.cognitiveservices.speech.SpeechSynthesisCancellationDetails
 import com.microsoft.cognitiveservices.speech.SpeechSynthesizer
 import freemarker.template.Configuration
-import freemarker.template.TemplateExceptionHandler
+import io.legado.app.utils.LogUtils
+import kotlinx.coroutines.android.awaitFrame
+import kotlinx.coroutines.awaitAll
 import java.io.StringWriter
 import java.util.*
+import java.util.concurrent.ArrayBlockingQueue
 
 class MicroAloudDownloader constructor(context: Context, private val proxy: MicroProxy? = null) {
     private var cfg: Configuration = Configuration(Configuration.VERSION_2_3_24)
@@ -24,7 +28,6 @@ class MicroAloudDownloader constructor(context: Context, private val proxy: Micr
                 }
             }
         synthesizer = SpeechSynthesizer(speechConfig, null)
-
     }
 
     class MicroProxy constructor(
@@ -36,7 +39,22 @@ class MicroAloudDownloader constructor(context: Context, private val proxy: Micr
 
     fun download(text: String, rate: Int): ByteArray? {
         val result = synthesizer.SpeakSsml(text.toSsml(cfg, rate))
-        return if (result.reason == ResultReason.SynthesizingAudioCompleted) result.audioData else null
+        return when (result.reason) {
+            ResultReason.Canceled -> {
+                val cancellationDetails =
+                    SpeechSynthesisCancellationDetails.fromResult(result).toString()
+                LogUtils.d(
+                    "MicroAloudDownloader", "Error synthesizing. Error detail: " +
+                            System.lineSeparator() + cancellationDetails +
+                            System.lineSeparator() + "Did you update the subscription info?"
+                )
+                return null
+            }
+            ResultReason.SynthesizingAudioCompleted -> {
+                result.audioData
+            }
+            else -> null
+        }
     }
 }
 
