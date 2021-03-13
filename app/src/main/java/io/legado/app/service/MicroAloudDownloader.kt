@@ -7,17 +7,19 @@ import com.microsoft.cognitiveservices.speech.SpeechSynthesisCancellationDetails
 import com.microsoft.cognitiveservices.speech.SpeechSynthesizer
 import freemarker.template.Configuration
 import io.legado.app.utils.LogUtils
-import kotlinx.coroutines.android.awaitFrame
-import kotlinx.coroutines.awaitAll
 import java.io.StringWriter
 import java.util.*
 import java.util.concurrent.ArrayBlockingQueue
+import java.util.concurrent.BlockingDeque
+import java.util.concurrent.BlockingQueue
+import java.util.concurrent.LinkedBlockingDeque
 
 class MicroAloudDownloader constructor(context: Context, private val proxy: MicroProxy? = null) {
+    private val MAX_DOWNLOAD_COUNT = 10
     private var cfg: Configuration = Configuration(Configuration.VERSION_2_3_24)
     private var synthesizer: SpeechSynthesizer
     private var speechConfig: SpeechConfig
-
+    private var blockingDeque: BlockingQueue<Any> = ArrayBlockingQueue(MAX_DOWNLOAD_COUNT)
     init {
         cfg.setDirectoryForTemplateLoading(context.filesDir)
         cfg.defaultEncoding = "UTF-8"
@@ -38,7 +40,10 @@ class MicroAloudDownloader constructor(context: Context, private val proxy: Micr
     )
 
     fun download(text: String, rate: Int): ByteArray? {
+        blockingDeque.put(Any())
+        LogUtils.d("MicroAloudDownloader","startDownload:${text}")
         val result = synthesizer.SpeakSsml(text.toSsml(cfg, rate))
+        blockingDeque.take()
         return when (result.reason) {
             ResultReason.Canceled -> {
                 val cancellationDetails =
@@ -48,9 +53,11 @@ class MicroAloudDownloader constructor(context: Context, private val proxy: Micr
                             System.lineSeparator() + cancellationDetails +
                             System.lineSeparator() + "Did you update the subscription info?"
                 )
-                return null
+                LogUtils.d("MicroAloudDownloader.","retry:${text}")
+                download(text, rate)
             }
             ResultReason.SynthesizingAudioCompleted -> {
+                LogUtils.d("MicroAloudDownloader","downloadComplete:${text}")
                 result.audioData
             }
             else -> null

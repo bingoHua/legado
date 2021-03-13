@@ -47,6 +47,8 @@ class CacheAudioService : BaseService() {
     private var runnable: Runnable = Runnable { upDownload() }
     private val handler = Handler(Looper.getMainLooper())
     private var tasks = CompositeCoroutine()
+    @Volatile
+    private var stop = false
     private lateinit var microAloudDownloader: MicroAloudDownloader
     private lateinit var ttsFolder: String
 
@@ -94,6 +96,7 @@ class CacheAudioService : BaseService() {
         searchPool.close()
         downloadMap.clear()
         handler.removeCallbacks(runnable)
+        stop = true
         super.onDestroy()
     }
 
@@ -161,6 +164,10 @@ class CacheAudioService : BaseService() {
                     val splitContents =
                         contentProcessor.getContent(book, bookChapter.title, chapterContent)
                     splitContents.forEach { paragraph ->
+                        if (stop) {
+                            LogUtils.d(TAG, "service stoped")
+                            return@forEach
+                        }
                         LogUtils.d(TAG, "startDownload.$paragraph")
                         val textChapter = ChapterProvider.getTextChapter(
                             book, bookChapter, splitContents, ReadBook.chapterSize
