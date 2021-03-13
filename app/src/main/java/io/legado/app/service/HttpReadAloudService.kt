@@ -68,7 +68,17 @@ class HttpReadAloudService : BaseReadAloudService(),
             } else {
                 val file = getSpeakFileAsMd5(fileName)
                 if (file.exists()) {
-                    playAudio(FileInputStream(file).fd)
+                    if (file.length() > 0) {
+                        playAudio(FileInputStream(file).fd)
+                    } else {
+                        readAloudNumber += contentList[nowSpeak].length + 1
+                        if (nowSpeak < contentList.lastIndex) {
+                            nowSpeak++
+                            play()
+                        } else {
+                            nextChapter()
+                        }
+                    }
                 } else {
                     downloadAudio()
                 }

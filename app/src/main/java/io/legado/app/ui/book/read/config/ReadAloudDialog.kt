@@ -12,6 +12,7 @@ import io.legado.app.help.AppConfig
 import io.legado.app.lib.theme.bottomBackground
 import io.legado.app.lib.theme.getPrimaryTextColor
 import io.legado.app.service.BaseReadAloudService
+import io.legado.app.service.help.CacheAudio
 import io.legado.app.service.help.ReadAloud
 import io.legado.app.service.help.ReadBook
 import io.legado.app.ui.book.read.ReadBookActivity
@@ -140,6 +141,13 @@ class ReadAloudDialog : BaseDialogFragment() {
         ivPlayNext.setOnClickListener { ReadAloud.nextParagraph(requireContext()) }
         llCatalog.setOnClickListener { callBack?.openChapterList() }
         llToBackstage.setOnClickListener { callBack?.finish() }
+        llCacheAudio.setOnClickListener {
+            ReadBook.book?.let { book ->
+                val start = book.durChapterIndex
+                val end = start + 9
+                context?.let { ct -> CacheAudio.start(ct, book.bookUrl, start, end) }
+            }
+        }
     }
 
     private fun upPlayState() {

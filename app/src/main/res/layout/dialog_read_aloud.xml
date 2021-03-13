@@ -313,6 +313,44 @@
             android:layout_width="0dp"
             android:layout_height="match_parent"
             android:layout_weight="2" />
+        <LinearLayout
+            android:id="@+id/ll_cache_audio"
+            android:layout_width="50dp"
+            android:layout_height="50dp"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:clickable="true"
+            android:contentDescription="@string/cache_audio"
+            android:focusable="true"
+            android:orientation="vertical"
+            android:paddingBottom="7dp">
+
+            <androidx.appcompat.widget.AppCompatImageView
+                android:id="@+id/iv_ache_audio"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:contentDescription="@string/cache_audio"
+                android:src="@drawable/ic_download_line"
+                app:tint="@color/primaryText"
+                tools:ignore="NestedWeights" />
+
+            <TextView
+                android:id="@+id/tv_ache_audio"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_horizontal"
+                android:layout_marginTop="3dp"
+                android:ellipsize="middle"
+                android:singleLine="true"
+                android:text="@string/cache_audio"
+                android:textColor="@color/primaryText"
+                android:textSize="12sp" />
+        </LinearLayout>
+
+        <View
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="2" />
         <!--设置按钮-->
         <LinearLayout
             android:id="@+id/ll_setting"

@@ -387,6 +387,7 @@
         <service android:name=".service.HttpReadAloudService" />
         <service android:name=".service.AudioPlayService" />
         <service android:name=".service.DownloadService" />
+        <service android:name=".service.CacheAudioService" />
 
         <receiver android:name=".receiver.MediaButtonReceiver">
             <intent-filter>

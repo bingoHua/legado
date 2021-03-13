@@ -9,7 +9,7 @@ import freemarker.template.TemplateExceptionHandler
 import java.io.StringWriter
 import java.util.*
 
-class MicroAloudDownloader constructor(context: Context, private val proxy: MicroProxy) {
+class MicroAloudDownloader constructor(context: Context, private val proxy: MicroProxy? = null) {
     private var cfg: Configuration = Configuration(Configuration.VERSION_2_3_24)
     private var synthesizer: SpeechSynthesizer
     private var speechConfig: SpeechConfig
@@ -19,7 +19,9 @@ class MicroAloudDownloader constructor(context: Context, private val proxy: Micr
         cfg.defaultEncoding = "UTF-8"
         speechConfig =
             SpeechConfig.fromSubscription("9644ad9e4a40402a83462228bfeca076", "eastus").apply {
-                this.setProxy(proxy.proxyHostName, proxy.port, proxy.userName, proxy.password)
+                proxy?.let {
+                    this.setProxy(it.proxyHostName, it.port, it.userName, it.password)
+                }
             }
         synthesizer = SpeechSynthesizer(speechConfig, null)
 
