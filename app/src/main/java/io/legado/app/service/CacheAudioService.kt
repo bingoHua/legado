@@ -47,6 +47,7 @@ class CacheAudioService : BaseService() {
     private var runnable: Runnable = Runnable { upDownload() }
     private val handler = Handler(Looper.getMainLooper())
     private var tasks = CompositeCoroutine()
+
     @Volatile
     private var stop = false
     private lateinit var microAloudDownloader: MicroAloudDownloader
@@ -204,13 +205,18 @@ class CacheAudioService : BaseService() {
                         } else {
                             LogUtils.d(TAG, "already exits.$paragraph")
                         }
+                        downloadCount[book.bookUrl]?.increaseChapterSuccess()
+                        downloadCount[book.bookUrl]?.let {
+                            upNotification(
+                                it,
+                                downloadMap[book.bookUrl]?.size,
+                                bookChapter.title
+                            )
+                        }
                     }
                 }
                 downloadCount[book.bookUrl]?.increaseSuccess()
                 downloadCount[book.bookUrl]?.increaseFinished()
-                downloadCount[book.bookUrl]?.let {
-                    upNotification(it, downloadMap[book.bookUrl]?.size, bookChapter.title)
-                }
                 postDownloading(false)
             }
         }
@@ -258,7 +264,7 @@ class CacheAudioService : BaseService() {
         content: String
     ) {
         notificationContent =
-            "进度:" + downloadCount.downloadFinishedCount + "/" + totalCount + ",成功:" + downloadCount.successCount + "," + content
+            "进度:" + downloadCount.downloadFinishedCount + "/" + totalCount + ",已下载段落:" + downloadCount.currentChapterDownloadFinish  + "," + content
     }
 
     private fun upDownload() {
@@ -282,6 +288,13 @@ class CacheAudioService : BaseService() {
 
         @Volatile
         var successCount = 0 //下载成功的条目数量
+
+        @Volatile
+        var currentChapterDownloadFinish = 0 //当前章节已下载完的数量
+
+        fun increaseChapterSuccess() {
+            ++currentChapterDownloadFinish
+        }
 
         fun increaseSuccess() {
             ++successCount

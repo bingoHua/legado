@@ -14,8 +14,9 @@ import java.util.concurrent.BlockingDeque
 import java.util.concurrent.BlockingQueue
 import java.util.concurrent.LinkedBlockingDeque
 
+private const val MAX_DOWNLOAD_COUNT = 10
+
 class MicroAloudDownloader constructor(context: Context, private val proxy: MicroProxy? = null) {
-    private val MAX_DOWNLOAD_COUNT = 10
     private var cfg: Configuration = Configuration(Configuration.VERSION_2_3_24)
     private var synthesizer: SpeechSynthesizer
     private var speechConfig: SpeechConfig
