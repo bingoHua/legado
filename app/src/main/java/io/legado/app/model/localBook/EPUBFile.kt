@@ -181,7 +181,7 @@ class EPUBFile(var book: io.legado.app.data.entities.Book) {
             if (book.getDelTag(tag)) {
                 html = html.replace("<ruby>\\s?([\\u4e00-\\u9fa5])\\s?.*?</ruby>".toRegex(), "$1")
             }
-            return html.htmlFormat()
+            return HtmlFormatter.formatKeepImg(html)
         }
         return null
     }
@@ -317,7 +317,9 @@ class EPUBFile(var book: io.legado.app.data.entities.Book) {
                     )
                 ).getElementsByTag("title")
                 title =
-                    if (elements != null && elements.size > 0) elements[0].text() else "--卷首--"
+                    if (elements != null && elements.size > 0 && elements[0].text()
+                            .isNotBlank()
+                    ) elements[0].text() else "--卷首--"
             }
             chapter.bookUrl = book.bookUrl
             chapter.title = title
