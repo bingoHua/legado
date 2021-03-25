@@ -57,7 +57,10 @@ class PermissionsCompat private constructor() {
 
         fun onDenied(callback: (requestCode: Int, deniedPermissions: Array<String>) -> Unit): Builder {
             request.setOnDeniedCallback(object : OnPermissionsDeniedCallback {
-                override fun onPermissionsDenied(requestCode: Int, deniedPermissions: Array<String>) {
+                override fun onPermissionsDenied(
+                    requestCode: Int,
+                    deniedPermissions: Array<String>
+                ) {
                     callback(requestCode, deniedPermissions)
                 }
             })
