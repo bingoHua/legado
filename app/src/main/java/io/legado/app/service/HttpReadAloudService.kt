@@ -89,7 +89,7 @@ class HttpReadAloudService : BaseReadAloudService(),
     private fun downloadAudio() {
         task?.cancel()
         task = execute {
-            removeCacheFile()
+            //removeCacheFile()
             ReadAloud.httpTTS?.let {
                 contentList.forEachIndexed { index, item ->
                     if (isActive) {
