@@ -1,14 +1,15 @@
 package me.ag2s.epublib.browsersupport;
 
-import me.ag2s.epublib.domain.Book;
-import me.ag2s.epublib.domain.Resource;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 
+import me.ag2s.epublib.domain.EpubBook;
+import me.ag2s.epublib.domain.Resource;
+
 /**
  * A helper class for epub browser applications.
- *
+ * <p>
  * It helps moving from one resource to the other, from one resource
  * to the other and keeping other elements of the application up-to-date
  * by calling the NavigationEventListeners.
@@ -18,19 +19,19 @@ import java.util.List;
 public class Navigator implements Serializable {
 
   private static final long serialVersionUID = 1076126986424925474L;
-  private Book book;
+  private EpubBook book;
   private int currentSpinePos;
   private Resource currentResource;
   private int currentPagePos;
   private String currentFragmentId;
 
-  private List<NavigationEventListener> eventListeners = new ArrayList<>();
+  private final List<NavigationEventListener> eventListeners = new ArrayList<>();
 
   public Navigator() {
     this(null);
   }
 
-  public Navigator(Book book) {
+  public Navigator(EpubBook book) {
     this.book = book;
     this.currentSpinePos = 0;
     if (book != null) {
@@ -135,8 +136,8 @@ public class Navigator implements Serializable {
    * Go to a specific section.
    * Illegal spine positions are silently ignored.
    *
-   * @param newSpinePos
-   * @param source
+   * @param newSpinePos f
+   * @param source f
    * @return The current position within the spine
    */
   public int gotoSpineSection(int newSpinePos, int newPagePos, Object source) {
@@ -158,7 +159,7 @@ public class Navigator implements Serializable {
     return gotoSpineSection(book.getSpine().size() - 1, source);
   }
 
-  public void gotoBook(Book book, Object source) {
+  public void gotoBook(EpubBook book, Object source) {
     NavigationEvent navigationEvent = new NavigationEvent(source, this);
     this.book = book;
     this.currentFragmentId = null;
@@ -186,14 +187,14 @@ public class Navigator implements Serializable {
    *
    * If you want the eventListeners called use gotoSection(index);
    *
-   * @param currentIndex
+   * @param currentIndex f
    */
   public void setCurrentSpinePos(int currentIndex) {
     this.currentSpinePos = currentIndex;
     this.currentResource = book.getSpine().getResource(currentIndex);
   }
 
-  public Book getBook() {
+  public EpubBook getBook() {
     return book;
   }
 
