@@ -25,7 +25,7 @@ class MicroAloudDownloader constructor(context: Context, private val proxy: Micr
         cfg.setDirectoryForTemplateLoading(context.filesDir)
         cfg.defaultEncoding = "UTF-8"
         speechConfig =
-            SpeechConfig.fromSubscription("9644ad9e4a40402a83462228bfeca076", "eastus").apply {
+            SpeechConfig.fromSubscription("887c43954ef744548a4e80f70b00a867", "eastus").apply {
                 proxy?.let {
                     this.setProxy(it.proxyHostName, it.port, it.userName, it.password)
                 }
