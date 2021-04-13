@@ -1,6 +1,5 @@
 package io.legado.app.ui.book.cache
 
-import android.content.Intent
 import android.os.Bundle
 import android.view.Menu
 import android.view.MenuItem
@@ -23,6 +22,7 @@ import io.legado.app.databinding.DialogEditTextBinding
 import io.legado.app.help.AppConfig
 import io.legado.app.help.BookHelp
 import io.legado.app.lib.dialogs.alert
+import io.legado.app.lib.dialogs.selector
 import io.legado.app.service.help.CacheBook
 import io.legado.app.ui.document.FilePicker
 import io.legado.app.ui.document.FilePickerParam
@@ -41,10 +41,6 @@ class CacheActivity : VMBaseActivity<ActivityCacheBookBinding, CacheViewModel>()
     private val exportDir = registerForActivityResult(FilePicker()) { uri ->
         uri ?: return@registerForActivityResult
         if (uri.isContentScheme()) {
-            contentResolver.takePersistableUriPermission(
-                uri,
-                Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
-            )
             ACache.get(this@CacheActivity).put(exportBookPathKey, uri.toString())
             startExport(uri.toString())
         } else {
@@ -122,6 +118,7 @@ class CacheActivity : VMBaseActivity<ActivityCacheBookBinding, CacheViewModel>()
             R.id.menu_enable_replace -> AppConfig.exportUseReplace = !item.isChecked
             R.id.menu_export_web_dav -> AppConfig.exportToWebDav = !item.isChecked
             R.id.menu_export_folder -> export(-1)
+            R.id.menu_export_type -> showExportTypeConfig()
             R.id.menu_export_charset -> showCharsetConfig()
             R.id.menu_log ->
                 TextListDialog.show(supportFragmentManager, getString(R.string.log), CacheBook.logs)
@@ -239,9 +236,20 @@ class CacheActivity : VMBaseActivity<ActivityCacheBookBinding, CacheViewModel>()
         adapter.getItem(exportPosition)?.let { book ->
             Snackbar.make(binding.titleBar, R.string.exporting, Snackbar.LENGTH_INDEFINITE)
                 .show()
-            viewModel.exportEPUB(path, book) {
-                binding.titleBar.snackbar(it)
+            when (AppConfig.exportType) {
+                1 -> viewModel.exportEPUB(path, book) {
+                    binding.titleBar.snackbar(it)
+                }
+                else -> viewModel.export(path, book) {
+                    binding.titleBar.snackbar(it)
+                }
             }
+        }
+    }
+
+    private fun showExportTypeConfig() {
+        selector(R.string.export_type, arrayListOf("txt", "epub")) { _, i ->
+            AppConfig.exportType = i
         }
     }
 

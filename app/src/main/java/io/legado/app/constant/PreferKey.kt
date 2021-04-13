@@ -40,6 +40,8 @@ object PreferKey {
     const val webDavPassword = "web_dav_password"
     const val webDavCreateDir = "webDavCreateDir"
     const val exportToWebDav = "webDavCacheBackup"
+    const val exportType = "exportType"
+    const val changeSourceCheckAuthor = "changeSourceCheckAuthor"
     const val changeSourceLoadToc = "changeSourceLoadToc"
     const val changeSourceLoadInfo = "changeSourceLoadInfo"
     const val chineseConverterType = "chineseConverterType"
@@ -70,6 +72,7 @@ object PreferKey {
     const val exportCharset = "exportCharset"
     const val exportUseReplace = "exportUseReplace"
     const val useZhLayout = "useZhLayout"
+    const val fullScreenGesturesSupport = "fullScreenGesturesSupport"
 
     const val cPrimary = "colorPrimary"
     const val cAccent = "colorAccent"

@@ -13,6 +13,7 @@ import io.legado.app.base.BaseViewModel
 import io.legado.app.constant.AppPattern
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.Book
+import io.legado.app.data.entities.BookChapter
 import io.legado.app.help.AppConfig
 import io.legado.app.help.BookHelp
 import io.legado.app.help.ContentProcessor
@@ -23,6 +24,7 @@ import me.ag2s.epublib.epub.EpubWriter
 import me.ag2s.epublib.util.ResourceUtil
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.nio.charset.Charset
 
@@ -106,7 +108,7 @@ class CacheViewModel(application: Application) : BaseViewModel(application) {
         }
     }
 
-    private suspend fun getAllContents(book: Book, append: (text: String) -> Unit) {
+    private fun getAllContents(book: Book, append: (text: String) -> Unit) {
         val useReplace = AppConfig.exportUseReplace
         val contentProcessor = ContentProcessor(book.name, book.origin)
         append("${book.name}\n${context.getString(R.string.author_show, book.author)}")
@@ -125,9 +127,9 @@ class CacheViewModel(application: Application) : BaseViewModel(application) {
         appDb.bookChapterDao.getChapterList(book.bookUrl).forEach { chapter ->
             BookHelp.getContent(book, chapter)?.let { content ->
                 content.split("\n").forEachIndexed { index, text ->
-                    val matcher = AppPattern.imgPattern.matcher(text)
-                    if (matcher.find()) {
-                        matcher.group(1)?.let {
+                    val matches = AppPattern.imgPattern.toRegex().findAll(input = text)
+                    matches.forEach { matchResult ->
+                        matchResult.groupValues[1].let {
                             val src = NetworkUtils.getAbsoluteURL(chapter.url, it)
                             srcList.add(Triple(chapter.title, index, src))
                         }
@@ -159,23 +161,18 @@ class CacheViewModel(application: Application) : BaseViewModel(application) {
     }
 
     @Suppress("BlockingMethodInNonBlockingContext")
-    private suspend fun exportEpub(doc: DocumentFile, book: Book) {
+    private fun exportEpub(doc: DocumentFile, book: Book) {
         val filename = "${book.name} by ${book.author}.epub"
         DocumentUtils.delete(doc, filename)
         val epubBook = EpubBook()
         epubBook.version = "2.0"
         //set metadata
-        setEpubMetadata(book,epubBook)
+        setEpubMetadata(book, epubBook)
         //set cover
         setCover(book, epubBook)
 
         //set css
-        epubBook.resources.add(
-            Resource(
-                "h1 {color: blue;}p {text-indent:2em;}".encodeToByteArray(),
-                "css/style.css"
-            )
-        )
+        setCSS(epubBook)
         //设置正文
         setEpubContent(book, epubBook)
 
@@ -187,40 +184,48 @@ class CacheViewModel(application: Application) : BaseViewModel(application) {
         }
     }
 
-    private suspend fun exportEpub(file: File, book: Book) {
+    private fun exportEpub(file: File, book: Book) {
         val filename = "${book.name} by ${book.author}.epub"
         val epubBook = EpubBook()
         epubBook.version = "2.0"
         //set metadata
-        setEpubMetadata(book,epubBook)
+        setEpubMetadata(book, epubBook)
         //set cover
         setCover(book, epubBook)
-
         //set css
-        epubBook.resources.add(
-            Resource(
-                "h1 {color: blue;}p {text-indent:2em;}".encodeToByteArray(),
-                "css/style.css"
-            )
-        )
+        setCSS(epubBook)
+
+
         val bookPath = FileUtils.getPath(file, filename)
         val bookFile = FileUtils.createFileWithReplace(bookPath)
         //设置正文
         setEpubContent(book, epubBook)
         EpubWriter().write(epubBook, FileOutputStream(bookFile))
     }
+
+    private fun setCSS(epubBook: EpubBook) {
+        //set css
+        epubBook.resources.add(
+            Resource(
+                "body,div{background:white;outline:none;width:100%;}h2{color:#005a9c;text-align:left;}p{text-indent:2em;text-align:justify;}img{display:inline-block;width:100%;height:auto;max-width: 100%;max-height:100%;}".encodeToByteArray(),
+                "css/style.css"
+            )
+        )
+    }
+
     private fun setCover(book: Book, epubBook: EpubBook) {
 
         Glide.with(context)
             .asBitmap()
-            .load(book.coverUrl)
-            .into(object : CustomTarget<Bitmap>(){
+            .load(book.getDisplayCover())
+            .into(object : CustomTarget<Bitmap>() {
                 override fun onResourceReady(resource: Bitmap, transition: Transition<in Bitmap>?) {
                     val stream = ByteArrayOutputStream()
                     resource.compress(Bitmap.CompressFormat.JPEG, 100, stream)
                     val byteArray: ByteArray = stream.toByteArray()
                     resource.recycle()
-                    epubBook.coverImage= Resource(byteArray,"cover.jpg")
+                    stream.close()
+                    epubBook.coverImage = Resource(byteArray, "cover.jpg")
                 }
 
                 override fun onLoadCleared(placeholder: Drawable?) {
@@ -230,16 +235,16 @@ class CacheViewModel(application: Application) : BaseViewModel(application) {
             })
     }
 
+
     private fun setEpubContent(book: Book, epubBook: EpubBook) {
         val useReplace = AppConfig.exportUseReplace
         val contentProcessor = ContentProcessor(book.name, book.origin)
         appDb.bookChapterDao.getChapterList(book.bookUrl).forEach { chapter ->
             BookHelp.getContent(book, chapter).let { content ->
-                val content1 = contentProcessor
-                    .getContent(book, chapter.title, content ?: "null", false, useReplace)
+                var content1 = fixPic(epubBook, book, content ?: "null", chapter)
+                content1 = contentProcessor
+                    .getContent(book, "", content1, false, useReplace)
                     .joinToString("\n")
-                    .replace(chapter.title,"")
-
                 epubBook.addSection(
                     chapter.title,
                     ResourceUtil.createHTMLResource(chapter.title, content1)
@@ -248,16 +253,48 @@ class CacheViewModel(application: Application) : BaseViewModel(application) {
         }
     }
 
-    private fun setEpubMetadata(book: Book,epubBook: EpubBook) {
+    private fun setPic(src: String, book: Book, epubBook: EpubBook) {
+        val vFile = BookHelp.getImage(book, src)
+        if (vFile.exists()) {
+            val img = Resource(FileInputStream(vFile), MD5Utils.md5Encode16(src) + ".jpg")
+            epubBook.resources.add(img)
+        }
+    }
+
+    private fun fixPic(
+        epubBook: EpubBook,
+        book: Book,
+        content: String,
+        chapter: BookChapter
+    ): String {
+        val data = StringBuilder("")
+        content.split("\n").forEach { text ->
+            var text1 = text
+            val matches = AppPattern.imgPattern.toRegex().findAll(input = text)
+            matches.forEach { matchResult ->
+                matchResult.groupValues[1].let {
+                    val src = NetworkUtils.getAbsoluteURL(chapter.url, it)
+                    setPic(src, book, epubBook)
+                    text1 = text1.replace(src, MD5Utils.md5Encode16(src) + ".jpg")
+
+                }
+            }
+
+            data.append(text1).append("\n")
+        }
+        return data.toString()
+    }
+
+    private fun setEpubMetadata(book: Book, epubBook: EpubBook) {
         val metadata = Metadata()
         metadata.titles.add(book.name)//书籍的名称
-        metadata.authors.add(Author(book.author))//书籍的作者
+        metadata.authors.add(Author(book.getRealAuthor()))//书籍的作者
         metadata.language = "zh"//数据的语言
         metadata.dates.add(Date())//数据的创建日期
         metadata.publishers.add("Legado APP")//数据的创建者
         metadata.descriptions.add(book.getDisplayIntro())//书籍的简介
         //metadata.subjects.add("")//书籍的主题，在静读天下里面有使用这个分类书籍
-        epubBook.metadata=metadata
+        epubBook.metadata = metadata
     }
 
     //////end of EPUB
