@@ -3,11 +3,11 @@ package io.legado.app.service.help
 import android.content.Context
 import android.content.Intent
 import io.legado.app.constant.IntentAction
-import io.legado.app.service.CacheAudioService
+import io.legado.app.service.CacheAudioService2
 
 object CacheAudio {
     fun start(context: Context, bookUrl: String, start: Int, end: Int) {
-        Intent(context,CacheAudioService::class.java).let {
+        Intent(context, CacheAudioService2::class.java).let {
             it.action = IntentAction.start
             it.putExtra("bookUrl", bookUrl)
             it.putExtra("start", start)

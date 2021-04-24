@@ -30,7 +30,7 @@ class HttpReadAloudService : BaseReadAloudService(),
     private var task: Coroutine<*>? = null
     private var playingIndex = -1
     private val microAloudDownloader by lazy {
-        MicroAloudDownloader(this, MicroAloudDownloader.MicroProxy("127.0.0.1", 1080, "", ""))
+        MicroAloudDownloader(this/*, MicroAloudDownloader.MicroProxy("127.0.0.1", 1080, "", "")*/)
     }
 
     override fun onCreate() {
