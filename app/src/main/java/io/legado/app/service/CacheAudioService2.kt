@@ -26,7 +26,6 @@ import io.legado.app.utils.*
 import kotlinx.coroutines.runBlocking
 import splitties.init.appCtx
 import java.io.File
-import java.net.SocketTimeoutException
 import java.util.concurrent.*
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -239,26 +238,34 @@ class CacheAudioService2 : BaseService() {
                         LogUtils.d(TAG, "microAloudDownloader interrupt")
                     }
                 } else {
-                    try {
-                        runBlocking {
-                            ReadAloud.httpTTS?.let {
-                                AnalyzeUrl(
-                                    it.url,
-                                    speakText = paragraph,
-                                    speakSpeed = AppConfig.ttsSpeechRate
-                                ).getByteArray()
+                    var exit = false
+                    while (!exit) {
+                        try {
+                            runBlocking {
+                                ReadAloud.httpTTS?.let {
+                                    AnalyzeUrl(
+                                        it.url,
+                                        speakText = paragraph,
+                                        speakSpeed = AppConfig.ttsSpeechRate
+                                    ).getByteArray()
+                                }?.let {
+                                    val file = getSpeakFileAsMd5IfNotExist(fileName)
+                                    file.writeBytes(it)
+                                    LogUtils.d(TAG, "downloadSuccess.$paragraph")
+                                    exit = true
+                                } ?: run {
+                                    LogUtils.d(TAG, "downloadFail.$paragraph")
+                                }
                             }
-                        }?.let {
-                            val file = getSpeakFileAsMd5IfNotExist(fileName)
-                            file.writeBytes(it)
-                            LogUtils.d(TAG, "downloadSuccess.$paragraph")
-                        } ?: run {
-                            LogUtils.d(TAG, "downloadFail.$paragraph")
+                        } catch (e: InterruptedException) {
+                            LogUtils.d(TAG, "runBlocking interrupt")
+                            exit = true
+                        } catch (e: java.lang.Exception) {
+                            LogUtils.d(
+                                TAG,
+                                "runBlocking retry.currentThread=${Thread.currentThread()}"
+                            )
                         }
-                    } catch (e: InterruptedException) {
-                        LogUtils.d(TAG, "runBlocking interrupt")
-                    } catch (e: SocketTimeoutException) {
-                        LogUtils.d(TAG, "runBlocking interrupt")
                     }
                 }
             } else {
