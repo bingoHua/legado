@@ -26,10 +26,8 @@ import io.legado.app.utils.*
 import kotlinx.coroutines.runBlocking
 import splitties.init.appCtx
 import java.io.File
-import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.CopyOnWriteArraySet
-import java.util.concurrent.Executors
-import java.util.concurrent.TimeUnit
+import java.net.SocketTimeoutException
+import java.util.concurrent.*
 import java.util.concurrent.atomic.AtomicInteger
 
 class CacheAudioService2 : BaseService() {
@@ -258,6 +256,8 @@ class CacheAudioService2 : BaseService() {
                             LogUtils.d(TAG, "downloadFail.$paragraph")
                         }
                     } catch (e: InterruptedException) {
+                        LogUtils.d(TAG, "runBlocking interrupt")
+                    } catch (e: SocketTimeoutException) {
                         LogUtils.d(TAG, "runBlocking interrupt")
                     }
                 }
