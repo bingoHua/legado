@@ -74,6 +74,7 @@ abstract class BaseActivity<VB : ViewBinding>(
              * 添加高刷新率支持
              */
             // 获取系统window支持的模式
+            @Suppress("DEPRECATION")
             val modes = window.windowManager.defaultDisplay.supportedModes
             // 对获取的模式，基于刷新率的大小进行排序，从小到大排序
             modes.sortBy {
@@ -172,11 +173,9 @@ abstract class BaseActivity<VB : ViewBinding>(
                 ATH.applyBackgroundTint(window.decorView)
             }
         }
-        if (AppConfig.isGooglePlay) {
-            ThemeConfig.getBgImage(this)?.let {
-                kotlin.runCatching {
-                    window.decorView.background = it
-                }
+        ThemeConfig.getBgImage(this)?.let {
+            kotlin.runCatching {
+                window.decorView.background = it
             }
         }
     }
