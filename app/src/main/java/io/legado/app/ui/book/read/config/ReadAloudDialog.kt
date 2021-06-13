@@ -117,7 +117,7 @@ class ReadAloudDialog : BaseDialogFragment() {
         llCacheAudio.setOnClickListener {
             ReadBook.book?.let { book ->
                 val start = book.durChapterIndex
-                val end = start + 9
+                val end = start + AppConfig.preDownloadNum
                 context?.let { ct -> CacheAudio.start(ct, book.bookUrl, start, end) }
             }
         }
