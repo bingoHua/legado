@@ -470,7 +470,7 @@
     <string name="sure_del_file">確定刪除文件嗎?</string>
     <string name="files_tree">手機目錄</string>
     <string name="intelligent_import">智慧匯入</string>
-    <string name="find">發現</string>
+    <string name="discovery">發現</string>
     <string name="switch_display_style">切換顯示樣式</string>
     <string name="import_per">匯入本機書籍需儲存權限</string>
     <string name="night_theme">夜間模式</string>
@@ -805,7 +805,7 @@
     <string name="import_bookshelf">匯入書單</string>
     <string name="pre_download">預下載</string>
     <string name="pre_download_s">預先下載%s章正文</string>
-    <string name="sort_enable">啟用排序</string>
+    <string name="is_enabled">是否啟用</string>
     <string name="background_image">背景圖片</string>
     <string name="export_folder">匯出資料夾</string>
     <string name="export_charset">匯出編碼</string>
@@ -829,5 +829,18 @@
     <string name="export_all">导出所有</string>
     <string name="complete">完成</string>
     <string name="show_unread">显示未读标志</string>
+    <string name="use_default_cover">总是使用默认封面</string>
+    <string name="use_default_cover_s">总是显示默认封面,不显示网络封面</string>
+    <string name="title_font_size">字號</string>
+    <string name="title_margin_top">上邊距</string>
+    <string name="title_margin_bottom">下邊距</string>
+    <string name="show">显示</string>
+    <string name="hide">隐藏</string>
+    <string name="hide_when_status_bar_show">状态栏显示时隐藏</string>
+    <string name="reverse_toc">反转目录</string>
+    <string name="show_discovery">显示发现</string>
+    <string name="style">样式</string>
+    <string name="group_style">分组样式</string>
+    <string name="export_file_name">导出文件名</string>
 
 </resources>
