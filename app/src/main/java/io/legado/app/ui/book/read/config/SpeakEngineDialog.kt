@@ -9,7 +9,6 @@ import android.view.View
 import android.view.ViewGroup
 import androidx.appcompat.widget.Toolbar
 import androidx.fragment.app.viewModels
-import androidx.lifecycle.LiveData
 import androidx.recyclerview.widget.LinearLayoutManager
 import io.legado.app.R
 import io.legado.app.base.BaseDialogFragment
@@ -26,11 +25,12 @@ import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.theme.ATH
 import io.legado.app.lib.theme.primaryColor
 import io.legado.app.service.help.ReadAloud
-import io.legado.app.ui.document.FilePicker
-import io.legado.app.ui.document.FilePickerParam
+import io.legado.app.ui.document.HandleFileContract
 import io.legado.app.ui.widget.dialog.TextDialog
 import io.legado.app.utils.*
 import io.legado.app.utils.viewbindingdelegate.viewBinding
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.launch
 import splitties.init.appCtx
 
 
@@ -39,14 +39,13 @@ class SpeakEngineDialog : BaseDialogFragment(), Toolbar.OnMenuItemClickListener 
     private val ttsUrlKey = "ttsUrlKey"
     lateinit var adapter: Adapter
     private val viewModel: SpeakEngineViewModel by viewModels()
-    private var httpTTSData: LiveData<List<HttpTTS>>? = null
     private var engineId = appCtx.getPrefLong(PreferKey.speakEngine)
-    private val importDocResult = registerForActivityResult(FilePicker()) {
+    private val importDocResult = registerForActivityResult(HandleFileContract()) {
         it?.let {
             viewModel.importLocal(it)
         }
     }
-    private val exportDirResult = registerForActivityResult(FilePicker()) {
+    private val exportDirResult = registerForActivityResult(HandleFileContract()) {
         it?.let {
             viewModel.export(it)
         }
@@ -54,7 +53,7 @@ class SpeakEngineDialog : BaseDialogFragment(), Toolbar.OnMenuItemClickListener 
 
     override fun onStart() {
         super.onStart()
-        val dm = requireActivity().getSize()
+        val dm = requireActivity().windowSize
         dialog?.window?.setLayout((dm.widthPixels * 0.9).toInt(), (dm.heightPixels * 0.9).toInt())
     }
 
@@ -72,7 +71,7 @@ class SpeakEngineDialog : BaseDialogFragment(), Toolbar.OnMenuItemClickListener 
         initData()
     }
 
-    private fun initView() = with(binding) {
+    private fun initView() = binding.run {
         toolBar.setBackgroundColor(primaryColor)
         toolBar.setTitle(R.string.speak_engine)
         ATH.applyEdgeEffectColor(recyclerView)
@@ -96,30 +95,28 @@ class SpeakEngineDialog : BaseDialogFragment(), Toolbar.OnMenuItemClickListener 
         }
     }
 
-    private fun initMenu() = with(binding) {
+    private fun initMenu() = binding.run {
         toolBar.inflateMenu(R.menu.speak_engine)
         toolBar.menu.applyTint(requireContext())
         toolBar.setOnMenuItemClickListener(this@SpeakEngineDialog)
     }
 
     private fun initData() {
-        httpTTSData?.removeObservers(this)
-        httpTTSData = appDb.httpTTSDao.observeAll()
-        httpTTSData?.observe(this, {
-            adapter.setItems(it)
-        })
+        launch {
+            appDb.httpTTSDao.flowAll().collect {
+                adapter.setItems(it)
+            }
+        }
     }
 
     override fun onMenuItemClick(item: MenuItem?): Boolean {
         when (item?.itemId) {
             R.id.menu_add -> editHttpTTS()
             R.id.menu_default -> viewModel.importDefault()
-            R.id.menu_import_local -> importDocResult.launch(
-                FilePickerParam(
-                    mode = FilePicker.FILE,
-                    allowExtensions = arrayOf("txt", "json")
-                )
-            )
+            R.id.menu_import_local -> importDocResult.launch {
+                mode = HandleFileContract.FILE
+                allowExtensions = arrayOf("txt", "json")
+            }
             R.id.menu_import_onLine -> importAlert()
             R.id.menu_export -> exportDirResult.launch(null)
         }
@@ -134,6 +131,7 @@ class SpeakEngineDialog : BaseDialogFragment(), Toolbar.OnMenuItemClickListener 
             ?.toMutableList() ?: mutableListOf()
         alert(R.string.import_on_line) {
             val alertBinding = DialogEditTextBinding.inflate(layoutInflater).apply {
+                editView.hint = "url"
                 editView.setFilterValues(cacheUrls)
                 editView.delCallBack = {
                     cacheUrls.remove(it)

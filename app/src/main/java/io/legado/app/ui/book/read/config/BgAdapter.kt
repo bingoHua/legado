@@ -6,10 +6,9 @@ import io.legado.app.base.adapter.ItemViewHolder
 import io.legado.app.base.adapter.RecyclerAdapter
 import io.legado.app.constant.EventBus
 import io.legado.app.databinding.ItemBgImageBinding
-import io.legado.app.help.ImageLoader
 import io.legado.app.help.ReadBookConfig
+import io.legado.app.help.glide.ImageLoader
 import io.legado.app.utils.postEvent
-
 import java.io.File
 
 class BgAdapter(context: Context, val textColor: Int) :
@@ -25,7 +24,7 @@ class BgAdapter(context: Context, val textColor: Int) :
         item: String,
         payloads: MutableList<Any>
     ) {
-        with(binding) {
+        binding.run {
             ImageLoader.load(
                 context,
                 context.assets.open("bg${File.separator}$item").readBytes()

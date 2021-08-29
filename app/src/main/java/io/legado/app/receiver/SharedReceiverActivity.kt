@@ -21,24 +21,16 @@ class SharedReceiverActivity : AppCompatActivity() {
 
     private fun initIntent() {
         when {
-            Intent.ACTION_SEND == intent.action && intent.type == receivingType -> {
+            intent.action == Intent.ACTION_SEND && intent.type == receivingType -> {
                 intent.getStringExtra(Intent.EXTRA_TEXT)?.let {
-                    if (openUrl(it)) {
-                        startActivity<SearchActivity> {
-                            putExtra("key", it)
-                        }
-                    }
+                    dispose(it)
                 }
             }
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
-                    && Intent.ACTION_PROCESS_TEXT == intent.action
+                    && intent.action == Intent.ACTION_PROCESS_TEXT
                     && intent.type == receivingType -> {
                 intent.getStringExtra(Intent.EXTRA_PROCESS_TEXT)?.let {
-                    if (openUrl(it)) {
-                        startActivity<SearchActivity> {
-                            putExtra("key", it)
-                        }
-                    }
+                    dispose(it)
                 }
             }
             intent.getStringExtra("action") == "readAloud" -> {
@@ -47,9 +39,9 @@ class SharedReceiverActivity : AppCompatActivity() {
         }
     }
 
-    private fun openUrl(text: String): Boolean {
+    private fun dispose(text: String) {
         if (text.isBlank()) {
-            return false
+            return
         }
         val urls = text.split("\\s".toRegex()).dropLastWhile { it.isEmpty() }.toTypedArray()
         val result = StringBuilder()
@@ -57,11 +49,10 @@ class SharedReceiverActivity : AppCompatActivity() {
             if (url.matches("http.+".toRegex()))
                 result.append("\n").append(url.trim { it <= ' ' })
         }
-        return if (result.length > 1) {
+        if (result.length > 1) {
             startActivity<MainActivity>()
-            false
         } else {
-            true
+            SearchActivity.start(this, text)
         }
     }
 }

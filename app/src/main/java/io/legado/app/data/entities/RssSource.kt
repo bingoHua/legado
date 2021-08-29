@@ -1,23 +1,16 @@
 package io.legado.app.data.entities
 
 import android.os.Parcelable
-import androidx.room.Entity
-import androidx.room.Index
-import androidx.room.PrimaryKey
-import io.legado.app.constant.AppConst
-import io.legado.app.help.AppConfig
-import io.legado.app.help.CacheManager
-import io.legado.app.help.JsExtensions
-import io.legado.app.help.http.CookieStore
+import androidx.room.*
+import io.legado.app.data.entities.rule.RowUi
 import io.legado.app.utils.ACache
 import io.legado.app.utils.GSON
-import io.legado.app.utils.fromJsonObject
+import io.legado.app.utils.fromJsonArray
 import kotlinx.parcelize.Parcelize
 import splitties.init.appCtx
-import java.util.*
-import javax.script.SimpleBindings
 
 @Parcelize
+@TypeConverters(RssSource.Converters::class)
 @Entity(tableName = "rssSources", indices = [(Index(value = ["sourceUrl"], unique = false))])
 data class RssSource(
     @PrimaryKey
@@ -27,6 +20,10 @@ data class RssSource(
     var sourceGroup: String? = null,
     var sourceComment: String? = null,
     var enabled: Boolean = true,
+    override var header: String? = null,            // 请求头
+    override var loginUrl: String? = null,                // 登录地址
+    var loginUi: List<RowUi>? = null,             //登录UI
+    var loginCheckJs: String? = null,               //登录检测js
     var sortUrl: String? = null,
     var singleUrl: Boolean = false,
     var articleStyle: Int = 0,
@@ -41,12 +38,15 @@ data class RssSource(
     var ruleLink: String? = null,
     var ruleContent: String? = null,
     var style: String? = null,
-    var header: String? = null,
     var enableJs: Boolean = false,
     var loadWithBaseUrl: Boolean = false,
 
     var customOrder: Int = 0
-) : Parcelable, JsExtensions {
+) : Parcelable, BaseSource {
+
+    override fun getStoreUrl(): String {
+        return sourceUrl
+    }
 
     override fun equals(other: Any?): Boolean {
         if (other is RssSource) {
@@ -56,36 +56,6 @@ data class RssSource(
     }
 
     override fun hashCode() = sourceUrl.hashCode()
-
-    @Throws(Exception::class)
-    fun getHeaderMap() = HashMap<String, String>().apply {
-        this[AppConst.UA_NAME] = AppConfig.userAgent
-        header?.let {
-            GSON.fromJsonObject<Map<String, String>>(
-                when {
-                    it.startsWith("@js:", true) ->
-                        evalJS(it.substring(4)).toString()
-                    it.startsWith("<js>", true) ->
-                        evalJS(it.substring(4, it.lastIndexOf("<"))).toString()
-                    else -> it
-                }
-            )?.let { map ->
-                putAll(map)
-            }
-        }
-    }
-
-    /**
-     * 执行JS
-     */
-    @Throws(Exception::class)
-    private fun evalJS(jsStr: String): Any? {
-        val bindings = SimpleBindings()
-        bindings["java"] = this
-        bindings["cookie"] = CookieStore
-        bindings["cache"] = CacheManager
-        return AppConst.SCRIPT_ENGINE.eval(jsStr, bindings)
-    }
 
     fun equal(source: RssSource): Boolean {
         return equal(sourceUrl, source.sourceUrl)
@@ -107,37 +77,40 @@ data class RssSource(
         return a == b || (a.isNullOrEmpty() && b.isNullOrEmpty())
     }
 
-    fun sortUrls(): LinkedHashMap<String, String> = linkedMapOf<String, String>().apply {
+    fun sortUrls(): List<Pair<String, String>> = arrayListOf<Pair<String, String>>().apply {
         kotlin.runCatching {
             var a = sortUrl
             if (sortUrl?.startsWith("<js>", false) == true
-                || sortUrl?.startsWith("@js", false) == true
+                || sortUrl?.startsWith("@js:", false) == true
             ) {
                 val aCache = ACache.get(appCtx, "rssSortUrl")
                 a = aCache.getAsString(sourceUrl) ?: ""
                 if (a.isBlank()) {
-                    val bindings = SimpleBindings()
-                    bindings["baseUrl"] = sourceUrl
-                    bindings["java"] = this
-                    bindings["cookie"] = CookieStore
-                    bindings["cache"] = CacheManager
                     val jsStr = if (sortUrl!!.startsWith("@")) {
-                        sortUrl!!.substring(3)
+                        sortUrl!!.substring(4)
                     } else {
                         sortUrl!!.substring(4, sortUrl!!.lastIndexOf("<"))
                     }
-                    a = AppConst.SCRIPT_ENGINE.eval(jsStr, bindings).toString()
+                    a = evalJS(jsStr).toString()
                     aCache.put(sourceUrl, a)
                 }
             }
             a?.split("(&&|\n)+".toRegex())?.forEach { c ->
                 val d = c.split("::")
                 if (d.size > 1)
-                    this[d[0]] = d[1]
+                    add(Pair(d[0], d[1]))
             }
             if (isEmpty()) {
-                this[""] = sourceUrl
+                add(Pair("", sourceUrl))
             }
         }
+    }
+
+    class Converters {
+        @TypeConverter
+        fun loginUiRuleToString(loginUi: List<RowUi>?): String = GSON.toJson(loginUi)
+
+        @TypeConverter
+        fun stringToLoginRule(json: String?): List<RowUi>? = GSON.fromJsonArray(json)
     }
 }

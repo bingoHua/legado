@@ -9,6 +9,7 @@ import android.view.MenuInflater
 import android.view.MenuItem
 import android.view.View
 import androidx.documentfile.provider.DocumentFile
+import androidx.lifecycle.lifecycleScope
 import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import androidx.preference.Preference
@@ -18,8 +19,8 @@ import io.legado.app.constant.PreferKey
 import io.legado.app.help.AppConfig
 import io.legado.app.help.LocalConfig
 import io.legado.app.help.coroutine.Coroutine
+import io.legado.app.help.storage.AppWebDav
 import io.legado.app.help.storage.Backup
-import io.legado.app.help.storage.BookWebDav
 import io.legado.app.help.storage.ImportOldData
 import io.legado.app.help.storage.Restore
 import io.legado.app.lib.dialogs.alert
@@ -27,16 +28,17 @@ import io.legado.app.lib.permission.Permissions
 import io.legado.app.lib.permission.PermissionsCompat
 import io.legado.app.lib.theme.ATH
 import io.legado.app.lib.theme.accentColor
-import io.legado.app.ui.document.FilePicker
+import io.legado.app.ui.document.HandleFileContract
 import io.legado.app.ui.widget.dialog.TextDialog
 import io.legado.app.utils.*
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Dispatchers.Main
+import kotlinx.coroutines.launch
 import splitties.init.appCtx
 
 class BackupConfigFragment : BasePreferenceFragment(),
     SharedPreferences.OnSharedPreferenceChangeListener {
 
-    private val selectBackupPath = registerForActivityResult(FilePicker()) { uri ->
+    private val selectBackupPath = registerForActivityResult(HandleFileContract()) { uri ->
         uri ?: return@registerForActivityResult
         if (uri.isContentScheme()) {
             AppConfig.backupPath = uri.toString()
@@ -44,7 +46,7 @@ class BackupConfigFragment : BasePreferenceFragment(),
             AppConfig.backupPath = uri.path
         }
     }
-    private val backupDir = registerForActivityResult(FilePicker()) { uri ->
+    private val backupDir = registerForActivityResult(HandleFileContract()) { uri ->
         uri ?: return@registerForActivityResult
         if (uri.isContentScheme()) {
             AppConfig.backupPath = uri.toString()
@@ -52,6 +54,8 @@ class BackupConfigFragment : BasePreferenceFragment(),
                 Backup.backup(appCtx, uri.toString())
             }.onSuccess {
                 appCtx.toastOnUi(R.string.backup_success)
+            }.onError {
+                appCtx.toastOnUi(R.string.backup_fail)
             }
         } else {
             uri.path?.let { path ->
@@ -60,11 +64,13 @@ class BackupConfigFragment : BasePreferenceFragment(),
                     Backup.backup(appCtx, path)
                 }.onSuccess {
                     appCtx.toastOnUi(R.string.backup_success)
+                }.onError {
+                    appCtx.toastOnUi(R.string.backup_fail)
                 }
             }
         }
     }
-    private val restoreDir = registerForActivityResult(FilePicker()) { uri ->
+    private val restoreDir = registerForActivityResult(HandleFileContract()) { uri ->
         uri ?: return@registerForActivityResult
         if (uri.isContentScheme()) {
             AppConfig.backupPath = uri.toString()
@@ -80,7 +86,7 @@ class BackupConfigFragment : BasePreferenceFragment(),
             }
         }
     }
-    private val restoreOld = registerForActivityResult(FilePicker()) { uri ->
+    private val restoreOld = registerForActivityResult(HandleFileContract()) { uri ->
         uri?.let {
             ImportOldData.importUri(appCtx, uri)
         }
@@ -231,6 +237,8 @@ class BackupConfigFragment : BasePreferenceFragment(),
                         Backup.backup(requireContext(), backupPath)
                     }.onSuccess {
                         toastOnUi(R.string.backup_success)
+                    }.onError {
+                        toastOnUi(R.string.backup_fail)
                     }
                 } else {
                     backupDir.launch(null)
@@ -251,32 +259,46 @@ class BackupConfigFragment : BasePreferenceFragment(),
                     Backup.backup(requireContext(), path)
                 }.onSuccess {
                     toastOnUi(R.string.backup_success)
+                }.onError {
+                    toastOnUi(R.string.backup_fail)
                 }
             }
             .request()
     }
 
     fun restore() {
-        Coroutine.async(context = Dispatchers.Main) {
-            BookWebDav.showRestoreDialog(requireContext())
+        Coroutine.async(context = Main) {
+            AppWebDav.showRestoreDialog(requireContext())
         }.onError {
-            longToast("WebDavError:${it.localizedMessage}\n将从本地备份恢复。")
-            val backupPath = getPrefString(PreferKey.backupPath)
-            if (backupPath?.isNotEmpty() == true) {
-                if (backupPath.isContentScheme()) {
-                    val uri = Uri.parse(backupPath)
-                    val doc = DocumentFile.fromTreeUri(requireContext(), uri)
-                    if (doc?.canWrite() == true) {
+            alert {
+                setTitle(R.string.restore)
+                setMessage("WebDavError:${it.localizedMessage}\n将从本地备份恢复。")
+                okButton {
+                    restoreFromLocal()
+                }
+                cancelButton()
+            }.show()
+        }
+    }
+
+    private fun restoreFromLocal() {
+        val backupPath = getPrefString(PreferKey.backupPath)
+        if (backupPath?.isNotEmpty() == true) {
+            if (backupPath.isContentScheme()) {
+                val uri = Uri.parse(backupPath)
+                val doc = DocumentFile.fromTreeUri(requireContext(), uri)
+                if (doc?.canWrite() == true) {
+                    lifecycleScope.launch {
                         Restore.restore(requireContext(), backupPath)
-                    } else {
-                        restoreDir.launch(null)
                     }
                 } else {
-                    restoreUsePermission(backupPath)
+                    restoreDir.launch(null)
                 }
             } else {
-                restoreDir.launch(null)
+                restoreUsePermission(backupPath)
             }
+        } else {
+            restoreDir.launch(null)
         }
     }
 

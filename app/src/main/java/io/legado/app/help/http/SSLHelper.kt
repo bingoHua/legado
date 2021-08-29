@@ -20,21 +20,25 @@ object SSLHelper {
      * 网络上大部分的解决方案都是让客户端不对证书做任何检查，
      * 这是一种有很大安全漏洞的办法
      */
-    val unsafeTrustManager: X509TrustManager = object : X509TrustManager {
-        @SuppressLint("TrustAllX509TrustManager")
-        @Throws(CertificateException::class)
-        override fun checkClientTrusted(chain: Array<X509Certificate>, authType: String) {
-        }
+    val unsafeTrustManager: X509TrustManager =
+        @SuppressLint("CustomX509TrustManager")
+        object : X509TrustManager {
+            @SuppressLint("TrustAllX509TrustManager")
+            @Throws(CertificateException::class)
+            override fun checkClientTrusted(chain: Array<X509Certificate>, authType: String) {
+                //do nothing，接受任意客户端证书
+            }
 
-        @SuppressLint("TrustAllX509TrustManager")
-        @Throws(CertificateException::class)
-        override fun checkServerTrusted(chain: Array<X509Certificate>, authType: String) {
-        }
+            @SuppressLint("TrustAllX509TrustManager")
+            @Throws(CertificateException::class)
+            override fun checkServerTrusted(chain: Array<X509Certificate>, authType: String) {
+                //do nothing，接受任意客户端证书
+            }
 
-        override fun getAcceptedIssuers(): Array<X509Certificate> {
-            return arrayOf()
+            override fun getAcceptedIssuers(): Array<X509Certificate> {
+                return arrayOf()
+            }
         }
-    }
 
     val unsafeSSLSocketFactory: SSLSocketFactory by lazy {
         try {
@@ -79,7 +83,11 @@ object SSLHelper {
      * bksFile 和 password -> 客户端使用bks证书校验服务端证书
      * certificates -> 用含有服务端公钥的证书校验服务端证书
      */
-    fun getSslSocketFactory(bksFile: InputStream, password: String, vararg certificates: InputStream): SSLParams? {
+    fun getSslSocketFactory(
+        bksFile: InputStream,
+        password: String,
+        vararg certificates: InputStream
+    ): SSLParams? {
         return getSslSocketFactoryBase(null, bksFile, password, *certificates)
     }
 
@@ -88,7 +96,11 @@ object SSLHelper {
      * bksFile 和 password -> 客户端使用bks证书校验服务端证书
      * X509TrustManager -> 如果需要自己校验，那么可以自己实现相关校验，如果不需要自己校验，那么传null即可
      */
-    fun getSslSocketFactory(bksFile: InputStream, password: String, trustManager: X509TrustManager): SSLParams? {
+    fun getSslSocketFactory(
+        bksFile: InputStream,
+        password: String,
+        trustManager: X509TrustManager
+    ): SSLParams? {
         return getSslSocketFactoryBase(trustManager, bksFile, password)
     }
 

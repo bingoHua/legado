@@ -1,7 +1,6 @@
 package io.legado.app.service
 
 import android.app.PendingIntent
-import android.content.Intent
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import io.legado.app.R
@@ -10,11 +9,10 @@ import io.legado.app.constant.EventBus
 import io.legado.app.help.AppConfig
 import io.legado.app.help.IntentHelp
 import io.legado.app.help.MediaHelp
-import io.legado.app.service.help.ReadBook
+import io.legado.app.model.ReadBook
 import io.legado.app.utils.getPrefBoolean
 import io.legado.app.utils.postEvent
 import io.legado.app.utils.toastOnUi
-import kotlinx.coroutines.launch
 import java.util.*
 
 class TTSReadAloudService : BaseReadAloudService(), TextToSpeech.OnInitListener {
@@ -27,12 +25,6 @@ class TTSReadAloudService : BaseReadAloudService(), TextToSpeech.OnInitListener 
         super.onCreate()
         initTts()
         upSpeechRate()
-    }
-
-    override fun onTaskRemoved(rootIntent: Intent?) {
-        super.onTaskRemoved(rootIntent)
-        clearTTS()
-        stopSelf()
     }
 
     override fun onDestroy() {
@@ -63,9 +55,7 @@ class TTSReadAloudService : BaseReadAloudService(), TextToSpeech.OnInitListener 
                 play()
             }
         } else {
-            launch {
-                toastOnUi(R.string.tts_init_failed)
-            }
+            toastOnUi(R.string.tts_init_failed)
         }
     }
 
@@ -86,6 +76,10 @@ class TTSReadAloudService : BaseReadAloudService(), TextToSpeech.OnInitListener 
         }
     }
 
+    override fun playStop() {
+        textToSpeech?.stop()
+    }
+
     /**
      * 更新朗读速度
      */
@@ -97,30 +91,6 @@ class TTSReadAloudService : BaseReadAloudService(), TextToSpeech.OnInitListener 
             }
         } else {
             textToSpeech?.setSpeechRate((AppConfig.ttsSpeechRate + 5) / 10f)
-        }
-    }
-
-    /**
-     * 上一段
-     */
-    override fun prevP() {
-        if (nowSpeak > 0) {
-            textToSpeech?.stop()
-            nowSpeak--
-            readAloudNumber -= contentList[nowSpeak].length.minus(1)
-            play()
-        }
-    }
-
-    /**
-     * 下一段
-     */
-    override fun nextP() {
-        if (nowSpeak < contentList.size - 1) {
-            textToSpeech?.stop()
-            readAloudNumber += contentList[nowSpeak].length.plus(1)
-            nowSpeak++
-            play()
         }
     }
 

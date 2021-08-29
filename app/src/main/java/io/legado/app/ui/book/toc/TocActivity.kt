@@ -1,3 +1,5 @@
+@file:Suppress("DEPRECATION")
+
 package io.legado.app.ui.book.toc
 
 import android.content.Intent
@@ -8,9 +10,8 @@ import androidx.activity.viewModels
 import androidx.appcompat.widget.SearchView
 import androidx.core.view.isGone
 import androidx.fragment.app.Fragment
-import androidx.viewpager2.adapter.FragmentStateAdapter
+import androidx.fragment.app.FragmentPagerAdapter
 import com.google.android.material.tabs.TabLayout
-import com.google.android.material.tabs.TabLayoutMediator
 import io.legado.app.R
 import io.legado.app.base.VMBaseActivity
 import io.legado.app.databinding.ActivityChapterListBinding
@@ -18,31 +19,24 @@ import io.legado.app.lib.theme.ATH
 import io.legado.app.lib.theme.accentColor
 import io.legado.app.lib.theme.primaryTextColor
 import io.legado.app.utils.gone
+import io.legado.app.utils.viewbindingdelegate.viewBinding
 import io.legado.app.utils.visible
 
 
 class TocActivity : VMBaseActivity<ActivityChapterListBinding, TocViewModel>() {
-    override val viewModel: TocViewModel
-            by viewModels()
+
+    override val binding by viewBinding(ActivityChapterListBinding::inflate)
+    override val viewModel by viewModels<TocViewModel>()
 
     private lateinit var tabLayout: TabLayout
     private var searchView: SearchView? = null
-
-    override fun getViewBinding(): ActivityChapterListBinding {
-        return ActivityChapterListBinding.inflate(layoutInflater)
-    }
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
         tabLayout = binding.titleBar.findViewById(R.id.tab_layout)
         tabLayout.isTabIndicatorFullWidth = false
         tabLayout.setSelectedTabIndicatorColor(accentColor)
         binding.viewPager.adapter = TabFragmentPageAdapter()
-        TabLayoutMediator(tabLayout, binding.viewPager) { tab, position ->
-            when (position) {
-                0 -> tab.setText(R.string.chapter_list)
-                else -> tab.setText(R.string.bookmark)
-            }
-        }.attach()
+        tabLayout.setupWithViewPager(binding.viewPager)
         intent.getStringExtra("bookUrl")?.let {
             viewModel.initBook(it)
         }
@@ -98,16 +92,25 @@ class TocActivity : VMBaseActivity<ActivityChapterListBinding, TocViewModel>() {
         }
     }
 
-    private inner class TabFragmentPageAdapter : FragmentStateAdapter(this) {
+    @Suppress("DEPRECATION")
+    private inner class TabFragmentPageAdapter :
+        FragmentPagerAdapter(supportFragmentManager, BEHAVIOR_RESUME_ONLY_CURRENT_FRAGMENT) {
 
-        override fun getItemCount(): Int {
+        override fun getItem(position: Int): Fragment {
+            return when (position) {
+                1 -> BookmarkFragment()
+                else -> ChapterListFragment()
+            }
+        }
+
+        override fun getCount(): Int {
             return 2
         }
 
-        override fun createFragment(position: Int): Fragment {
+        override fun getPageTitle(position: Int): CharSequence {
             return when (position) {
-                0 -> ChapterListFragment()
-                else -> BookmarkFragment()
+                1 -> getString(R.string.bookmark)
+                else -> getString(R.string.chapter_list)
             }
         }
 

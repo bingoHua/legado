@@ -5,20 +5,24 @@ import androidx.lifecycle.MutableLiveData
 import com.jayway.jsonpath.JsonPath
 import io.legado.app.R
 import io.legado.app.base.BaseViewModel
+import io.legado.app.constant.AppPattern
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.BookSource
 import io.legado.app.help.AppConfig
+import io.legado.app.help.BookSourceAnalyzer
+import io.legado.app.help.ContentProcessor
 import io.legado.app.help.SourceHelp
 import io.legado.app.help.http.newCall
 import io.legado.app.help.http.okHttpClient
 import io.legado.app.help.http.text
-import io.legado.app.help.storage.OldRule
 import io.legado.app.help.storage.Restore
 import io.legado.app.utils.isAbsUrl
 import io.legado.app.utils.isJsonArray
 import io.legado.app.utils.isJsonObject
+import io.legado.app.utils.splitNotBlank
 
 class ImportBookSourceViewModel(app: Application) : BaseViewModel(app) {
+    var isAddGroup = false
     var groupName: String? = null
     val errorLiveData = MutableLiveData<String>()
     val successLiveData = MutableLiveData<Int>()
@@ -27,35 +31,35 @@ class ImportBookSourceViewModel(app: Application) : BaseViewModel(app) {
     val checkSources = arrayListOf<BookSource?>()
     val selectStatus = arrayListOf<Boolean>()
 
-    fun isSelectAll(): Boolean {
-        selectStatus.forEach {
-            if (!it) {
-                return false
+    val isSelectAll: Boolean
+        get() {
+            selectStatus.forEach {
+                if (!it) {
+                    return false
+                }
             }
+            return true
         }
-        return true
-    }
 
-    fun selectCount(): Int {
-        var count = 0
-        selectStatus.forEach {
-            if (it) {
-                count++
+    val selectCount: Int
+        get() {
+            var count = 0
+            selectStatus.forEach {
+                if (it) {
+                    count++
+                }
             }
+            return count
         }
-        return count
-    }
 
     fun importSelect(finally: () -> Unit) {
         execute {
+            val group = groupName?.trim()
             val keepName = AppConfig.importKeepName
             val selectSource = arrayListOf<BookSource>()
             selectStatus.forEachIndexed { index, b ->
                 if (b) {
                     val source = allSources[index]
-                    if (groupName != null) {
-                        source.bookSourceGroup = groupName
-                    }
                     if (keepName) {
                         checkSources[index]?.let {
                             source.bookSourceName = it.bookSourceName
@@ -63,10 +67,23 @@ class ImportBookSourceViewModel(app: Application) : BaseViewModel(app) {
                             source.customOrder = it.customOrder
                         }
                     }
+                    if (!group.isNullOrEmpty()) {
+                        if (isAddGroup) {
+                            val groups = linkedSetOf<String>()
+                            source.bookSourceGroup?.splitNotBlank(AppPattern.splitGroupRegex)?.let {
+                                groups.addAll(it)
+                            }
+                            groups.add(group)
+                            source.bookSourceGroup = groups.joinToString(",")
+                        } else {
+                            source.bookSourceGroup = group
+                        }
+                    }
                     selectSource.add(source)
                 }
             }
             SourceHelp.insertBookSource(*selectSource.toTypedArray())
+            ContentProcessor.upReplaceRules()
         }.onFinally {
             finally.invoke()
         }
@@ -84,7 +101,7 @@ class ImportBookSourceViewModel(app: Application) : BaseViewModel(app) {
                             importSourceUrl(it)
                         }
                     } else {
-                        OldRule.jsonToBookSource(mText)?.let {
+                        BookSourceAnalyzer.jsonToBookSource(mText)?.let {
                             allSources.add(it)
                         }
                     }
@@ -93,7 +110,7 @@ class ImportBookSourceViewModel(app: Application) : BaseViewModel(app) {
                     val items: List<Map<String, Any>> = Restore.jsonPath.parse(mText).read("$")
                     for (item in items) {
                         val jsonItem = Restore.jsonPath.parse(item)
-                        OldRule.jsonToBookSource(jsonItem.jsonString())?.let {
+                        BookSourceAnalyzer.jsonToBookSource(jsonItem.jsonString())?.let {
                             allSources.add(it)
                         }
                     }
@@ -115,11 +132,23 @@ class ImportBookSourceViewModel(app: Application) : BaseViewModel(app) {
         okHttpClient.newCall {
             url(url)
         }.text("utf-8").let { body ->
-            val items: List<Map<String, Any>> = Restore.jsonPath.parse(body).read("$")
-            for (item in items) {
-                val jsonItem = Restore.jsonPath.parse(item)
-                OldRule.jsonToBookSource(jsonItem.jsonString())?.let { source ->
-                    allSources.add(source)
+            when {
+                body.isJsonArray() -> {
+                    val items: List<Map<String, Any>> = Restore.jsonPath.parse(body).read("$")
+                    for (item in items) {
+                        val jsonItem = Restore.jsonPath.parse(item)
+                        BookSourceAnalyzer.jsonToBookSource(jsonItem.jsonString())?.let { source ->
+                            allSources.add(source)
+                        }
+                    }
+                }
+                body.isJsonObject() -> {
+                    BookSourceAnalyzer.jsonToBookSource(body)?.let {
+                        allSources.add(it)
+                    }
+                }
+                else -> {
+                    throw Exception(context.getString(R.string.wrong_format))
                 }
             }
         }

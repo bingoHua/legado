@@ -5,36 +5,30 @@ import android.net.Uri
 import android.os.Bundle
 import android.view.Menu
 import android.view.MenuItem
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
-import androidx.documentfile.provider.DocumentFile
 import io.legado.app.R
 import io.legado.app.base.VMBaseActivity
 import io.legado.app.data.entities.Book
 import io.legado.app.databinding.ActivityBookInfoEditBinding
-import io.legado.app.lib.permission.Permissions
-import io.legado.app.lib.permission.PermissionsCompat
 import io.legado.app.ui.book.changecover.ChangeCoverDialog
-import io.legado.app.utils.*
-import java.io.File
+import io.legado.app.utils.FileUtils
+import io.legado.app.utils.SelectImageContract
+import io.legado.app.utils.externalFiles
+import io.legado.app.utils.readUri
+import io.legado.app.utils.viewbindingdelegate.viewBinding
 
 class BookInfoEditActivity :
     VMBaseActivity<ActivityBookInfoEditBinding, BookInfoEditViewModel>(),
     ChangeCoverDialog.CallBack {
 
-    private val selectCoverResult =
-        registerForActivityResult(ActivityResultContracts.GetContent()) {
-            it?.let { uri ->
-                coverChangeTo(uri)
-            }
+    private val selectCover = registerForActivityResult(SelectImageContract()) {
+        it?.second?.let { uri ->
+            coverChangeTo(uri)
         }
-
-    override val viewModel: BookInfoEditViewModel
-            by viewModels()
-
-    override fun getViewBinding(): ActivityBookInfoEditBinding {
-        return ActivityBookInfoEditBinding.inflate(layoutInflater)
     }
+
+    override val binding by viewBinding(ActivityBookInfoEditBinding::inflate)
+    override val viewModel by viewModels<BookInfoEditViewModel>()
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
         viewModel.bookData.observe(this, { upView(it) })
@@ -58,14 +52,14 @@ class BookInfoEditActivity :
         return super.onCompatOptionsItemSelected(item)
     }
 
-    private fun initEvent() = with(binding) {
+    private fun initEvent() = binding.run {
         tvChangeCover.setOnClickListener {
             viewModel.bookData.value?.let {
                 ChangeCoverDialog.show(supportFragmentManager, it.name, it.author)
             }
         }
         tvSelectCover.setOnClickListener {
-            selectCoverResult.launch("image/*")
+            selectCover.launch(null)
         }
         tvRefreshCover.setOnClickListener {
             viewModel.book?.customCoverUrl = tieCoverUrl.text?.toString()
@@ -73,7 +67,7 @@ class BookInfoEditActivity :
         }
     }
 
-    private fun upView(book: Book) = with(binding) {
+    private fun upView(book: Book) = binding.run {
         tieBookName.setText(book.name)
         tieBookAuthor.setText(book.author)
         tieCoverUrl.setText(book.getDisplayCover())
@@ -87,7 +81,7 @@ class BookInfoEditActivity :
         }
     }
 
-    private fun saveData() = with(binding) {
+    private fun saveData() = binding.run {
         viewModel.book?.let { book ->
             book.name = tieBookName.text?.toString() ?: ""
             book.author = tieBookAuthor.text?.toString() ?: ""
@@ -108,37 +102,11 @@ class BookInfoEditActivity :
     }
 
     private fun coverChangeTo(uri: Uri) {
-        if (uri.isContentScheme()) {
-            val doc = DocumentFile.fromSingleUri(this, uri)
-            doc?.name?.let {
-                var file = this.externalFilesDir
-                file = FileUtils.createFileIfNotExist(file, "covers", it)
-                kotlin.runCatching {
-                    DocumentUtils.readBytes(this, doc.uri)
-                }.getOrNull()?.let { byteArray ->
-                    file.writeBytes(byteArray)
-                    coverChangeTo(file.absolutePath)
-                } ?: toastOnUi("获取文件出错")
-            }
-        } else {
-            PermissionsCompat.Builder(this)
-                .addPermissions(
-                    Permissions.READ_EXTERNAL_STORAGE,
-                    Permissions.WRITE_EXTERNAL_STORAGE
-                )
-                .rationale(R.string.bg_image_per)
-                .onGranted {
-                    RealPathUtil.getPath(this, uri)?.let { path ->
-                        val imgFile = File(path)
-                        if (imgFile.exists()) {
-                            var file = this.externalFilesDir
-                            file = FileUtils.createFileIfNotExist(file, "covers", imgFile.name)
-                            file.writeBytes(imgFile.readBytes())
-                            coverChangeTo(file.absolutePath)
-                        }
-                    }
-                }
-                .request()
+        readUri(uri) { name, bytes ->
+            var file = this.externalFiles
+            file = FileUtils.createFileIfNotExist(file, "covers", name)
+            file.writeBytes(bytes)
+            coverChangeTo(file.absolutePath)
         }
     }
 

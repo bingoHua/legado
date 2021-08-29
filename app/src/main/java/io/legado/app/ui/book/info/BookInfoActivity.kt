@@ -22,12 +22,12 @@ import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookChapter
 import io.legado.app.databinding.ActivityBookInfoBinding
 import io.legado.app.help.BlurTransformation
-import io.legado.app.help.ImageLoader
+import io.legado.app.help.glide.ImageLoader
 import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.theme.backgroundColor
 import io.legado.app.lib.theme.bottomBackground
 import io.legado.app.lib.theme.getPrimaryTextColor
-import io.legado.app.ui.audio.AudioPlayActivity
+import io.legado.app.ui.book.audio.AudioPlayActivity
 import io.legado.app.ui.book.changecover.ChangeCoverDialog
 import io.legado.app.ui.book.changesource.ChangeSourceDialog
 import io.legado.app.ui.book.group.GroupSelectDialog
@@ -36,8 +36,10 @@ import io.legado.app.ui.book.read.ReadBookActivity
 import io.legado.app.ui.book.search.SearchActivity
 import io.legado.app.ui.book.source.edit.BookSourceEditActivity
 import io.legado.app.ui.book.toc.TocActivityResult
+import io.legado.app.ui.login.SourceLoginActivity
 import io.legado.app.ui.widget.image.CoverImageView
 import io.legado.app.utils.*
+import io.legado.app.utils.viewbindingdelegate.viewBinding
 import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -46,7 +48,6 @@ import kotlinx.coroutines.withContext
 class BookInfoActivity :
     VMBaseActivity<ActivityBookInfoBinding, BookInfoViewModel>(toolBarTheme = Theme.Dark),
     GroupSelectDialog.CallBack,
-    ChapterListAdapter.CallBack,
     ChangeSourceDialog.CallBack,
     ChangeCoverDialog.CallBack {
 
@@ -90,12 +91,8 @@ class BookInfoActivity :
         }
     }
 
-
-    override val viewModel: BookInfoViewModel by viewModels()
-
-    override fun getViewBinding(): ActivityBookInfoBinding {
-        return ActivityBookInfoBinding.inflate(layoutInflater)
-    }
+    override val binding by viewBinding(ActivityBookInfoBinding::inflate)
+    override val viewModel by viewModels<BookInfoViewModel>()
 
     @SuppressLint("PrivateResource")
     override fun onActivityCreated(savedInstanceState: Bundle?) {
@@ -155,6 +152,12 @@ class BookInfoActivity :
                     viewModel.loadBookInfo(it, false)
                 }
             }
+            R.id.menu_login -> viewModel.bookSource?.let {
+                startActivity<SourceLoginActivity> {
+                    putExtra("sourceUrl", it.bookSourceUrl)
+                }
+            }
+            R.id.menu_top -> viewModel.topBook()
             R.id.menu_copy_book_url -> viewModel.bookData.value?.bookUrl?.let {
                 sendToClip(it)
             } ?: toastOnUi(R.string.no_book)
@@ -176,7 +179,7 @@ class BookInfoActivity :
         return super.onCompatOptionsItemSelected(item)
     }
 
-    private fun showBook(book: Book) = with(binding) {
+    private fun showBook(book: Book) = binding.run {
         showCover(book)
         tvName.text = book.name
         tvAuthor.text = getString(R.string.author_show, book.getRealAuthor())
@@ -247,7 +250,7 @@ class BookInfoActivity :
         }
     }
 
-    private fun initOnClick() = with(binding) {
+    private fun initOnClick() = binding.run {
         ivCover.setOnClickListener {
             viewModel.bookData.value?.let {
                 ChangeCoverDialog.show(supportFragmentManager, it.name, it.author)
@@ -393,25 +396,15 @@ class BookInfoActivity :
         }
     }
 
-    override fun openChapter(chapter: BookChapter) {
-        if (chapter.index != viewModel.durChapterIndex) {
-            viewModel.bookData.value?.let {
-                it.durChapterIndex = chapter.index
-                it.durChapterPos = 0
-                readBook(it)
-            }
-        }
-    }
-
-    override fun durChapterIndex(): Int {
-        return viewModel.durChapterIndex
-    }
-
     override fun upGroup(requestCode: Int, groupId: Long) {
         upGroup(groupId)
         viewModel.bookData.value?.group = groupId
         if (viewModel.inBookshelf) {
             viewModel.saveBook()
+        } else if (groupId > 0) {
+            viewModel.saveBook()
+            viewModel.inBookshelf = true
+            upTvBookshelf()
         }
     }
 

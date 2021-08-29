@@ -5,12 +5,10 @@ import io.legado.app.R
 import io.legado.app.base.BaseViewModel
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.Book
-import io.legado.app.data.entities.BookGroup
 import io.legado.app.data.entities.BookSource
 import io.legado.app.help.http.newCall
 import io.legado.app.help.http.okHttpClient
 import io.legado.app.help.http.text
-import io.legado.app.model.webBook.PreciseSearch
 import io.legado.app.model.webBook.WebBook
 import io.legado.app.utils.*
 import kotlinx.coroutines.Dispatchers.IO
@@ -46,10 +44,10 @@ class BookshelfViewModel(application: Application) : BaseViewModel(application) 
                         origin = bookSource.bookSourceUrl,
                         originName = bookSource.bookSourceName
                     )
-                    WebBook(bookSource).getBookInfo(this, book)
+                    WebBook.getBookInfo(this, bookSource, book)
                         .onSuccess(IO) {
                             it.order = appDb.bookDao.maxOrder + 1
-                            appDb.bookDao.insert(it)
+                            it.save()
                             successCount++
                         }.onError {
                             throw Exception(it.localizedMessage)
@@ -58,12 +56,12 @@ class BookshelfViewModel(application: Application) : BaseViewModel(application) 
             }
         }.onSuccess {
             if (successCount > 0) {
-                toastOnUi(R.string.success)
+                context.toastOnUi(R.string.success)
             } else {
-                toastOnUi("ERROR")
+                context.toastOnUi("ERROR")
             }
         }.onError {
-            toastOnUi(it.localizedMessage ?: "ERROR")
+            context.toastOnUi(it.localizedMessage ?: "ERROR")
         }
     }
 
@@ -102,7 +100,7 @@ class BookshelfViewModel(application: Application) : BaseViewModel(application) 
                 }
             }
         }.onError {
-            toastOnUi(it.localizedMessage ?: "ERROR")
+            context.toastOnUi(it.localizedMessage ?: "ERROR")
         }
     }
 
@@ -114,33 +112,17 @@ class BookshelfViewModel(application: Application) : BaseViewModel(application) 
                 val name = it["name"] ?: ""
                 val author = it["author"] ?: ""
                 if (name.isNotEmpty() && appDb.bookDao.getBook(name, author) == null) {
-                    val book = PreciseSearch
-                        .searchFirstBook(this, bookSources, name, author)
+                    val book = WebBook.preciseSearch(this, bookSources, name, author)
                     book?.let {
                         if (groupId > 0) {
                             book.group = groupId
                         }
-                        appDb.bookDao.insert(book)
+                        book.save()
                     }
                 }
             }
         }.onFinally {
-            toastOnUi(R.string.success)
-        }
-    }
-
-    fun checkGroup(groups: List<BookGroup>) {
-        groups.forEach { group ->
-            if (group.groupId >= 0 && group.groupId and (group.groupId - 1) != 0L) {
-                var id = 1L
-                val idsSum = appDb.bookGroupDao.idsSum
-                while (id and idsSum != 0L) {
-                    id = id.shl(1)
-                }
-                appDb.bookGroupDao.delete(group)
-                appDb.bookGroupDao.insert(group.copy(groupId = id))
-                appDb.bookDao.upGroup(group.groupId, id)
-            }
+            context.toastOnUi(R.string.success)
         }
     }
 

@@ -14,7 +14,7 @@ class Coroutine<T>(
 
     companion object {
 
-        val DEFAULT = MainScope()
+        private val DEFAULT = MainScope()
 
         fun <T> async(
             scope: CoroutineScope = DEFAULT,

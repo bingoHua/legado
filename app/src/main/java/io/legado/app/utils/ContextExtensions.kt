@@ -21,6 +21,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import androidx.core.content.edit
 import androidx.preference.PreferenceManager
+import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel
 import io.legado.app.R
 import io.legado.app.constant.AppConst
 import java.io.File
@@ -35,6 +36,10 @@ inline fun <reified A : Activity> Context.startActivity(configIntent: Intent.() 
 
 inline fun <reified T : Service> Context.startService(configIntent: Intent.() -> Unit = {}) {
     startService(Intent(this, T::class.java).apply(configIntent))
+}
+
+inline fun <reified T : Service> Context.stopService() {
+    stopService(Intent(this, T::class.java))
 }
 
 fun Context.toastOnUi(message: Int) {
@@ -146,8 +151,12 @@ fun Context.share(text: String, title: String = getString(R.string.share)) {
 }
 
 @SuppressLint("SetWorldReadable")
-fun Context.shareWithQr(text: String, title: String = getString(R.string.share)) {
-    val bitmap = QRCodeUtils.createQRCode(text)
+fun Context.shareWithQr(
+    text: String,
+    title: String = getString(R.string.share),
+    errorCorrectionLevel: ErrorCorrectionLevel = ErrorCorrectionLevel.H
+) {
+    val bitmap = QRCodeUtils.createQRCode(text, errorCorrectionLevel = errorCorrectionLevel)
     if (bitmap == null) {
         toastOnUi(R.string.text_too_long_qr_error)
     } else {
@@ -219,10 +228,10 @@ val Context.sysBattery: Int
         return batteryStatus?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) ?: -1
     }
 
-val Context.externalFilesDir: File
+val Context.externalFiles: File
     get() = this.getExternalFilesDir(null) ?: this.filesDir
 
-val Context.eCacheDir: File
+val Context.externalCache: File
     get() = this.externalCacheDir ?: this.cacheDir
 
 fun Context.openUrl(url: String) {

@@ -1,21 +1,25 @@
 package io.legado.app.service
 
 import android.app.PendingIntent
-import android.content.Intent
 import android.media.MediaPlayer
 import io.legado.app.constant.EventBus
 import io.legado.app.constant.PreferKey
 import io.legado.app.help.AppConfig
 import io.legado.app.help.IntentHelp
 import io.legado.app.help.coroutine.Coroutine
+import io.legado.app.model.ReadBook
 import io.legado.app.model.analyzeRule.AnalyzeUrl
 import io.legado.app.service.help.ReadAloud
-import io.legado.app.service.help.ReadBook
 import io.legado.app.utils.*
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.isActive
 import splitties.init.appCtx
-import java.io.*
+import kotlinx.coroutines.launch
+import java.io.File
+import java.io.FileDescriptor
+import java.io.FileInputStream
+import java.io.IOException
 import java.net.ConnectException
 import java.net.SocketTimeoutException
 import java.util.*
@@ -41,11 +45,6 @@ class HttpReadAloudService : BaseReadAloudService(),
         player.setOnCompletionListener(this)
     }
 
-    override fun onTaskRemoved(rootIntent: Intent?) {
-        super.onTaskRemoved(rootIntent)
-        stopSelf()
-    }
-
     override fun onDestroy() {
         super.onDestroy()
         task?.cancel()
@@ -68,22 +67,16 @@ class HttpReadAloudService : BaseReadAloudService(),
             } else {
                 val file = getSpeakFileAsMd5(fileName)
                 if (file.exists()) {
-                    if (file.length() > 0) {
-                        playAudio(FileInputStream(file).fd)
-                    } else {
-                        readAloudNumber += contentList[nowSpeak].length + 1
-                        if (nowSpeak < contentList.lastIndex) {
-                            nowSpeak++
-                            play()
-                        } else {
-                            nextChapter()
-                        }
-                    }
+                    playAudio(FileInputStream(file).fd)
                 } else {
                     downloadAudio()
                 }
             }
         }
+    }
+
+    override fun playStop() {
+        player.stop()
     }
 
     private fun downloadAudio() {
@@ -240,30 +233,6 @@ class HttpReadAloudService : BaseReadAloudService(),
         downloadAudio()
     }
 
-    /**
-     * 上一段
-     */
-    override fun prevP() {
-        if (nowSpeak > 0) {
-            player.stop()
-            nowSpeak--
-            readAloudNumber -= contentList[nowSpeak].length.minus(1)
-            play()
-        }
-    }
-
-    /**
-     * 下一段
-     */
-    override fun nextP() {
-        if (nowSpeak < contentList.size - 1) {
-            player.stop()
-            readAloudNumber += contentList[nowSpeak].length.plus(1)
-            nowSpeak++
-            play()
-        }
-    }
-
     override fun onPrepared(mp: MediaPlayer?) {
         super.play()
         if (pause) return
@@ -282,7 +251,8 @@ class HttpReadAloudService : BaseReadAloudService(),
         if (what == -38 && extra == 0) {
             return true
         }
-        handler.postDelayed({
+        launch {
+            delay(100)
             readAloudNumber += contentList[nowSpeak].length + 1
             if (nowSpeak < contentList.lastIndex) {
                 nowSpeak++
@@ -290,7 +260,7 @@ class HttpReadAloudService : BaseReadAloudService(),
             } else {
                 nextChapter()
             }
-        }, 50)
+        }
         return true
     }
 

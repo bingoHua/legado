@@ -19,10 +19,10 @@ import io.legado.app.help.ContentProcessor
 import io.legado.app.help.IntentHelp
 import io.legado.app.help.coroutine.CompositeCoroutine
 import io.legado.app.help.coroutine.Coroutine
+import io.legado.app.model.ReadBook
 import io.legado.app.model.analyzeRule.AnalyzeUrl
 import io.legado.app.service.help.CacheBook
 import io.legado.app.service.help.ReadAloud
-import io.legado.app.service.help.ReadBook
 import io.legado.app.ui.book.read.page.entities.TextChapter
 import io.legado.app.ui.book.read.page.provider.ChapterProvider
 import io.legado.app.utils.*
@@ -161,7 +161,7 @@ class CacheAudioService : BaseService() {
                         postDownloading(false)
                         return@async
                     }
-                    val contentProcessor = ContentProcessor(book.name, book.origin)
+                    val contentProcessor = ContentProcessor.get(book.name, book.origin)
                     val splitContents =
                         contentProcessor.getContent(book, bookChapter.title, chapterContent)
                     splitContents.forEach { paragraph ->

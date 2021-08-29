@@ -12,7 +12,6 @@ import io.legado.app.databinding.ItemFilletTextBinding
 import io.legado.app.databinding.PopupKeyboardToolBinding
 
 
-
 class KeyboardToolPop(
     context: Context,
     private val chars: List<String>,
@@ -52,7 +51,7 @@ class KeyboardToolPop(
             item: String,
             payloads: MutableList<Any>
         ) {
-            with(binding) {
+            binding.run {
                 textView.text = item
             }
         }

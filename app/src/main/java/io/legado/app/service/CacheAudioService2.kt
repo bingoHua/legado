@@ -16,10 +16,10 @@ import io.legado.app.help.AppConfig
 import io.legado.app.help.BookHelp
 import io.legado.app.help.ContentProcessor
 import io.legado.app.help.IntentHelp
+import io.legado.app.model.ReadBook
 import io.legado.app.model.analyzeRule.AnalyzeUrl
 import io.legado.app.service.help.CacheBook
 import io.legado.app.service.help.ReadAloud
-import io.legado.app.service.help.ReadBook
 import io.legado.app.ui.book.read.page.entities.TextChapter
 import io.legado.app.ui.book.read.page.provider.ChapterProvider
 import io.legado.app.utils.*
@@ -114,7 +114,7 @@ class CacheAudioService2 : BaseService() {
                             if (BookHelp.hasContent(book, bookChapter)) {
                                 val chapterContent =
                                     BookHelp.getContent(book, bookChapter) ?: return@forEach
-                                val contentProcessor = ContentProcessor(book.name, book.origin)
+                                val contentProcessor = ContentProcessor.get(book.name, book.origin)
                                 val splitContents =
                                     contentProcessor.getContent(
                                         book,
@@ -146,7 +146,7 @@ class CacheAudioService2 : BaseService() {
                                 }
                                 val chapterContent =
                                     BookHelp.getContent(book, bookChapter) ?: return@forEach
-                                val contentProcessor = ContentProcessor(book.name, book.origin)
+                                val contentProcessor = ContentProcessor.get(book.name, book.origin)
                                 val splitContents =
                                     contentProcessor.getContent(
                                         book,

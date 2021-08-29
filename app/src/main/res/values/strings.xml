@@ -87,7 +87,6 @@
     <string name="web_service">Web service</string>
     <string name="web_service_desc">Web edit source and read book</string>
     <string name="web_edit_source">Edit book sources on the web</string>
-    <string name="http_ip">http://%1$s:%2$d</string>
     <string name="offline_cache">Offline cache</string>
     <string name="offline_cache_t">Offline cache</string>
     <string name="offline_cache_s">cache the selected chapter(s) to Storage</string>
@@ -157,7 +156,6 @@
     <string name="ps_hide_navigation_bar">Hide virtual buttons when reading</string>
     <string name="pt_hide_navigation_bar">Hide navigation bar</string>
     <string name="re_navigation_bar_color">Navigation bar color</string>
-    <string name="git_hub">GitHub</string>
     <string name="scoring">Rating</string>
     <string name="send_mail">Email</string>
     <string name="can_not_open">Open failed</string>
@@ -234,7 +232,7 @@
     <string name="intro_show_null">Description: no introduction</string>
     <string name="open_from_other">Open external book</string>
     <string name="origin_show">Origin: %s</string>
-    <string name="import_replace_rule">Import local rules</string>
+    <string name="import_replace_rule">Import replace rules</string>
     <string name="import_replace_rule_on_line">Import online rules</string>
     <string name="check_update_interval">Check interval for updates</string>
     <string name="bookshelf_px_0">By recent list</string>
@@ -317,7 +315,9 @@
     <string name="line_size">Line spacing</string>
     <string name="paragraph_size">Paragraph spacing</string>
     <string name="to_top">To Top</string>
+    <string name="selection_to_top">Selection To Top</string>
     <string name="to_bottom">To Bottom</string>
+    <string name="selection_to_bottom">Selection To Bottom</string>
     <string name="auto_expand_find">Auto expand Discovery</string>
     <string name="default_expand_first">Default expand the first Discovery.</string>
     <string name="threads_num">Current threads %s</string>
@@ -393,9 +393,11 @@
     <string name="source_group">源分组(sourceGroup)</string>
     <string name="diy_source_group">自定义源分组</string>
     <string name="diy_edit_source_group">输入自定义源分组名称</string>
-    <string name="diy_edit_source_group_title">【%s】</string>
-    <string name="sort_url">分类Url</string>
+    <string name="source_concurrent_rate">并发率(concurrentRate)</string>
+    <string name="sort_url">分类Url(sortUrl)</string>
     <string name="login_url">登录URL(loginUrl)</string>
+    <string name="login_ui">Login UI(loginUi)</string>
+    <string name="login_check_js">登录检查JS(loginCheckJs)</string>
     <string name="comment">源注释(sourceComment)</string>
     <string name="r_search_url">搜索地址(url)</string>
     <string name="r_find_url">发现地址规则(url)</string>
@@ -772,6 +774,7 @@
     <string name="theme_list_summary">Save, Import, Share theme</string>
     <string name="select_theme">Switch default theme</string>
     <string name="sort_by_lastUpdateTime">Sort by update time</string>
+    <string name="sort_by_respondTime">Sort by respond time</string>
     <string name="search_content">Search content</string>
     <string name="rss_source_empty">Follow Wechat official account [开源阅读] to get Subscription source</string>
     <string name="explore_empty">Empty now,Follow Wechat official account [开源阅读] to get Discovery source</string>
@@ -783,6 +786,7 @@
     <string name="style_name">Style name:</string>
     <string name="empty_msg_import_book">Click the folder icon in the upper right corner and select the folder</string>
     <string name="scan_folder">Intelligent scanning</string>
+    <string name="import_file_name">Imported-file name</string>
     <string name="no_book">No books</string>
     <string name="keep_original_name">Keep the original name</string>
     <string name="click_regional_config">Screen touch control</string>
@@ -807,6 +811,9 @@
     <string name="pre_download_s">Download %s chapters in advance</string>
     <string name="is_enabled">Is enabled</string>
     <string name="background_image">Background image</string>
+    <string name="background_image_blurring">Background image blurring</string>
+    <string name="background_image_blurring_radius">Blurring radius</string>
+    <string name="background_image_hint">Disabled when 0, enable range from 1 to 25\nThe greater the radius, the stronger the effect of blurring</string>
     <string name="copy_book_url">Copy book URL</string>
     <string name="copy_toc_url">Copy chapters URL</string>
     <string name="export_folder">Export folder</string>
@@ -844,5 +851,22 @@
     <string name="style">Style</string>
     <string name="group_style">Group style</string>
     <string name="export_file_name">Export file name</string>
+    <string name="reset">Reset</string>
+    <string name="null_url">Null url</string>
+    <string name="dict">字典</string>
+    <string name="unknown_error">未知错误</string>
+    <string name="export_no_chapter_name">No export chapter names</string>
+    <string name="autobackup_fail">Autobackup failed</string>
+    <string name="end">end</string>
+    <string name="custom_group_summary">关闭替换分组/开启添加分组</string>
+    <string name="pref_media_button_per_next">媒体按钮•上一首|下一首</string>
+    <string name="pref_media_button_per_next_summary">上一段|下一段/上一章|下一章</string>
+    <string name="read_aloud_by_page_summary">及时翻页,翻页时会停顿一下</string>
+    <string name="check_source_show_debug_message">Check book source shows debug message</string>
+    <string name="check_source_show_debug_message_summary">Show network status and timestamp during source checking</string>
+    <string name="need_login">需登录</string>
+    <string name="pref_cronet_summary">使用Cronet网络组件</string>
+    <string name="upload_url">上传URL</string>
+    <string name="download_url_rule">下载URL规则</string>
 
 </resources>

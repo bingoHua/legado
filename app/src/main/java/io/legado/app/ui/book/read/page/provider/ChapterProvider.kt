@@ -12,7 +12,6 @@ import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookChapter
 import io.legado.app.help.AppConfig
 import io.legado.app.help.ReadBookConfig
-import io.legado.app.model.analyzeRule.AnalyzeUrl
 import io.legado.app.ui.book.read.page.entities.TextChapter
 import io.legado.app.ui.book.read.page.entities.TextChar
 import io.legado.app.ui.book.read.page.entities.TextLine
@@ -112,31 +111,39 @@ object ChapterProvider {
                     )
                 }
             } else if (book.getImageStyle() != Book.imgStyleText) {
-                content.replace(AppPattern.imgPattern.toRegex(), "\n\$0\n")
-                    .split("\n").forEach { text ->
-                        if (text.isNotBlank()) {
-                            val matcher = AppPattern.imgPattern.matcher(text)
-                            if (matcher.find()) {
-                                matcher.group(1)?.let { src ->
-                                    //if (!book.isEpub()) {
-                                    durY = setTypeImage(
-                                        book, bookChapter, src,
-                                        durY, textPages, book.getImageStyle()
-                                    )
-                                    //}
-                                }
-                            } else {
-                                val isTitle = index == 0
-                                val textPaint = if (isTitle) titlePaint else contentPaint
-                                if (!(isTitle && ReadBookConfig.titleMode == 2)) {
-                                    durY = setTypeText(
-                                        text, durY, textPages,
-                                        stringBuilder, isTitle, textPaint
-                                    )
-                                }
-                            }
+                val matcher = AppPattern.imgPattern.matcher(content)
+                var start = 0
+                while (matcher.find()) {
+                    val text = content.substring(start, matcher.start())
+                    if (text.isNotBlank()) {
+                        val isTitle = index == 0
+                        val textPaint = if (isTitle) titlePaint else contentPaint
+                        if (!(isTitle && ReadBookConfig.titleMode == 2)) {
+                            durY = setTypeText(
+                                text, durY, textPages,
+                                stringBuilder, isTitle, textPaint
+                            )
                         }
                     }
+                    durY = setTypeImage(
+                        book, bookChapter, matcher.group(1)!!,
+                        durY, textPages, book.getImageStyle()
+                    )
+                    start = matcher.end()
+                }
+                if (start < content.length) {
+                    val text = content.substring(start, content.length)
+                    if (text.isNotBlank()) {
+                        val isTitle = index == 0
+                        val textPaint = if (isTitle) titlePaint else contentPaint
+                        if (!(isTitle && ReadBookConfig.titleMode == 2)) {
+                            durY = setTypeText(
+                                text, durY, textPages,
+                                stringBuilder, isTitle, textPaint
+                            )
+                        }
+                    }
+                }
             }
         }
         textPages.last().height = durY + 20.dp
@@ -152,7 +159,7 @@ object ChapterProvider {
 
         return TextChapter(
             bookChapter.index, bookChapter.title,
-            bookChapter.getAbsoluteURL().split(AnalyzeUrl.splitUrlRegex)[0],
+            bookChapter.getAbsoluteURL().substringBefore(",{"), //getAbsoluteURL已经格式过
             textPages, chapterSize
         )
     }
@@ -336,8 +343,10 @@ object ChapterProvider {
             }
             x = x1
         }
-        val words1 = words.copyOfRange(bodyIndent.length, words.size)
-        addCharsToLineMiddle(textLine, words1, textPaint, desiredWidth, x, srcList)
+        if (words.size > bodyIndent.length) {
+            val words1 = words.copyOfRange(bodyIndent.length, words.size)
+            addCharsToLineMiddle(textLine, words1, textPaint, desiredWidth, x, srcList)
+        }
     }
 
     /**
@@ -421,7 +430,7 @@ object ChapterProvider {
      * 超出边界处理
      */
     private fun exceed(textLine: TextLine, words: Array<String>) {
-        val endX = textLine.textChars.last().end
+        val endX = textLine.textChars.lastOrNull()?.end ?: return
         if (endX > visibleRight) {
             val cc = (endX - visibleRight) / words.size
             for (i in 0..words.lastIndex) {

@@ -10,6 +10,7 @@ import splitties.init.appCtx
 @Suppress("MemberVisibilityCanBePrivate")
 object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
     val isGooglePlay = appCtx.channel == "google"
+    val isCronet = appCtx.getPrefBoolean("Cronet")
     var userAgent: String = getPrefUserAgent()
     var isEInkMode = appCtx.getPrefString(PreferKey.themeMode) == "3"
     var clickActionTL = appCtx.getPrefInt(PreferKey.clickActionTL, 2)
@@ -78,6 +79,20 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
             appCtx.putPrefBoolean(PreferKey.showUnread, value)
         }
 
+    var readBrightness: Int
+        get() = if (isNightTheme) {
+            appCtx.getPrefInt(PreferKey.nightBrightness, 100)
+        } else {
+            appCtx.getPrefInt(PreferKey.brightness, 100)
+        }
+        set(value) {
+            if (isNightTheme) {
+                appCtx.putPrefInt(PreferKey.nightBrightness, value)
+            } else {
+                appCtx.putPrefInt(PreferKey.brightness, value)
+            }
+        }
+
     val useDefaultCover: Boolean
         get() = appCtx.getPrefBoolean(PreferKey.useDefaultCover, false)
 
@@ -102,6 +117,12 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
             appCtx.putPrefString(PreferKey.bookExportFileName, value)
         }
 
+    var bookImportFileName: String?
+        get() = appCtx.getPrefString(PreferKey.bookImportFileName)
+        set(value) {
+            appCtx.putPrefString(PreferKey.bookImportFileName, value)
+        }
+
     var backupPath: String?
         get() = appCtx.getPrefString(PreferKey.backupPath)
         set(value) {
@@ -122,7 +143,7 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
         get() = appCtx.getPrefBoolean(PreferKey.autoRefresh)
 
     var threadCount: Int
-        get() = appCtx.getPrefInt(PreferKey.threadCount, 16)
+        get() = appCtx.getPrefInt(PreferKey.threadCount, 8)
         set(value) {
             appCtx.putPrefInt(PreferKey.threadCount, value)
         }
@@ -184,7 +205,11 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
         set(value) {
             appCtx.putPrefBoolean(PreferKey.exportToWebDav, value)
         }
-
+    var exportNoChapterName: Boolean
+        get() = appCtx.getPrefBoolean(PreferKey.exportNoChapterName)
+        set(value) {
+            appCtx.putPrefBoolean(PreferKey.exportNoChapterName, value)
+        }
     var exportType: Int
         get() = appCtx.getPrefInt(PreferKey.exportType)
         set(value) {
@@ -200,7 +225,7 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
     val autoChangeSource: Boolean
         get() = appCtx.getPrefBoolean(PreferKey.autoChangeSource, true)
 
-    val changeSourceLoadInfo get() = appCtx.getPrefBoolean(PreferKey.changeSourceLoadToc)
+    val changeSourceLoadInfo get() = appCtx.getPrefBoolean(PreferKey.changeSourceLoadInfo)
 
     val changeSourceLoadToc get() = appCtx.getPrefBoolean(PreferKey.changeSourceLoadToc)
 
@@ -224,7 +249,7 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
     private fun getPrefUserAgent(): String {
         val ua = appCtx.getPrefString(PreferKey.userAgent)
         if (ua.isNullOrBlank()) {
-            return "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/81.0.4044.138 Safari/537.36"
+            return "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
         }
         return ua
     }

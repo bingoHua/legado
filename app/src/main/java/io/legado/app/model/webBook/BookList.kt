@@ -21,34 +21,35 @@ object BookList {
     @Throws(Exception::class)
     fun analyzeBookList(
         scope: CoroutineScope,
-        body: String?,
         bookSource: BookSource,
+        variableBook: SearchBook,
         analyzeUrl: AnalyzeUrl,
         baseUrl: String,
-        variableBook: SearchBook,
+        body: String?,
         isSearch: Boolean = true,
     ): ArrayList<SearchBook> {
-        val bookList = ArrayList<SearchBook>()
         body ?: throw Exception(
             appCtx.getString(
                 R.string.error_get_web_content,
                 analyzeUrl.ruleUrl
             )
         )
+        val bookList = ArrayList<SearchBook>()
         Debug.log(bookSource.bookSourceUrl, "≡获取成功:${analyzeUrl.ruleUrl}")
         Debug.log(bookSource.bookSourceUrl, body, state = 10)
-        val analyzeRule = AnalyzeRule(variableBook)
+        val analyzeRule = AnalyzeRule(variableBook, bookSource)
         analyzeRule.setContent(body).setBaseUrl(baseUrl)
         analyzeRule.setRedirectUrl(baseUrl)
         bookSource.bookUrlPattern?.let {
             scope.ensureActive()
             if (baseUrl.matches(it.toRegex())) {
                 Debug.log(bookSource.bookSourceUrl, "≡链接为详情页")
-                getInfoItem(scope, body, analyzeRule, bookSource, baseUrl, variableBook.variable)
-                    ?.let { searchBook ->
-                        searchBook.infoHtml = body
-                        bookList.add(searchBook)
-                    }
+                getInfoItem(
+                    scope, bookSource, analyzeRule, analyzeUrl, body, baseUrl, variableBook.variable
+                )?.let { searchBook ->
+                    searchBook.infoHtml = body
+                    bookList.add(searchBook)
+                }
                 return bookList
             }
         }
@@ -72,11 +73,12 @@ object BookList {
         scope.ensureActive()
         if (collections.isEmpty() && bookSource.bookUrlPattern.isNullOrEmpty()) {
             Debug.log(bookSource.bookSourceUrl, "└列表为空,按详情页解析")
-            getInfoItem(scope, body, analyzeRule, bookSource, baseUrl, variableBook.variable)
-                ?.let { searchBook ->
-                    searchBook.infoHtml = body
-                    bookList.add(searchBook)
-                }
+            getInfoItem(
+                scope, bookSource, analyzeRule, analyzeUrl, body, baseUrl, variableBook.variable
+            )?.let { searchBook ->
+                searchBook.infoHtml = body
+                bookList.add(searchBook)
+            }
         } else {
             val ruleName = analyzeRule.splitSourceRule(bookListRule.name)
             val ruleBookUrl = analyzeRule.splitSourceRule(bookListRule.bookUrl)
@@ -89,12 +91,7 @@ object BookList {
             Debug.log(bookSource.bookSourceUrl, "└列表大小:${collections.size}")
             for ((index, item) in collections.withIndex()) {
                 getSearchItem(
-                    scope,
-                    item,
-                    analyzeRule,
-                    bookSource,
-                    baseUrl,
-                    variableBook.variable,
+                    scope, bookSource, analyzeRule, item, baseUrl, variableBook.variable,
                     index == 0,
                     ruleName = ruleName,
                     ruleBookUrl = ruleBookUrl,
@@ -121,14 +118,15 @@ object BookList {
     @Throws(Exception::class)
     private fun getInfoItem(
         scope: CoroutineScope,
-        body: String,
-        analyzeRule: AnalyzeRule,
         bookSource: BookSource,
+        analyzeRule: AnalyzeRule,
+        analyzeUrl: AnalyzeUrl,
+        body: String,
         baseUrl: String,
         variable: String?
     ): SearchBook? {
         val book = Book(variable = variable)
-        book.bookUrl = baseUrl
+        book.bookUrl = analyzeUrl.ruleUrl
         book.origin = bookSource.bookSourceUrl
         book.originName = bookSource.bookSourceName
         book.originOrder = bookSource.customOrder
@@ -153,9 +151,9 @@ object BookList {
     @Throws(Exception::class)
     private fun getSearchItem(
         scope: CoroutineScope,
-        item: Any,
-        analyzeRule: AnalyzeRule,
         bookSource: BookSource,
+        analyzeRule: AnalyzeRule,
+        item: Any,
         baseUrl: String,
         variable: String?,
         log: Boolean,
@@ -186,26 +184,47 @@ object BookList {
             Debug.log(bookSource.bookSourceUrl, "└${searchBook.author}", log)
             scope.ensureActive()
             Debug.log(bookSource.bookSourceUrl, "┌获取分类", log)
-            searchBook.kind = analyzeRule.getStringList(ruleKind)?.joinToString(",")
-            Debug.log(bookSource.bookSourceUrl, "└${searchBook.kind}", log)
+            try {
+                searchBook.kind = analyzeRule.getStringList(ruleKind)?.joinToString(",")
+                Debug.log(bookSource.bookSourceUrl, "└${searchBook.kind}", log)
+            } catch (e: Exception) {
+                Debug.log(bookSource.bookSourceUrl, "└${e.localizedMessage}", log)
+            }
             scope.ensureActive()
             Debug.log(bookSource.bookSourceUrl, "┌获取字数", log)
-            searchBook.wordCount = wordCountFormat(analyzeRule.getString(ruleWordCount))
-            Debug.log(bookSource.bookSourceUrl, "└${searchBook.wordCount}", log)
+            try {
+                searchBook.wordCount = wordCountFormat(analyzeRule.getString(ruleWordCount))
+                Debug.log(bookSource.bookSourceUrl, "└${searchBook.wordCount}", log)
+            } catch (e: java.lang.Exception) {
+                Debug.log(bookSource.bookSourceUrl, "└${e.localizedMessage}", log)
+            }
             scope.ensureActive()
             Debug.log(bookSource.bookSourceUrl, "┌获取最新章节", log)
-            searchBook.latestChapterTitle = analyzeRule.getString(ruleLastChapter)
-            Debug.log(bookSource.bookSourceUrl, "└${searchBook.latestChapterTitle}", log)
+            try {
+                searchBook.latestChapterTitle = analyzeRule.getString(ruleLastChapter)
+                Debug.log(bookSource.bookSourceUrl, "└${searchBook.latestChapterTitle}", log)
+            } catch (e: java.lang.Exception) {
+                Debug.log(bookSource.bookSourceUrl, "└${e.localizedMessage}", log)
+            }
             scope.ensureActive()
             Debug.log(bookSource.bookSourceUrl, "┌获取简介", log)
-            searchBook.intro = HtmlFormatter.format(analyzeRule.getString(ruleIntro))
-            Debug.log(bookSource.bookSourceUrl, "└${searchBook.intro}", log)
+            try {
+                searchBook.intro = HtmlFormatter.format(analyzeRule.getString(ruleIntro))
+                Debug.log(bookSource.bookSourceUrl, "└${searchBook.intro}", log)
+            } catch (e: java.lang.Exception) {
+                Debug.log(bookSource.bookSourceUrl, "└${e.localizedMessage}", log)
+            }
             scope.ensureActive()
             Debug.log(bookSource.bookSourceUrl, "┌获取封面链接", log)
-            analyzeRule.getString(ruleCoverUrl).let {
-                if (it.isNotEmpty()) searchBook.coverUrl = NetworkUtils.getAbsoluteURL(baseUrl, it)
+            try {
+                analyzeRule.getString(ruleCoverUrl).let {
+                    if (it.isNotEmpty()) searchBook.coverUrl =
+                        NetworkUtils.getAbsoluteURL(baseUrl, it)
+                }
+                Debug.log(bookSource.bookSourceUrl, "└${searchBook.coverUrl}", log)
+            } catch (e: java.lang.Exception) {
+                Debug.log(bookSource.bookSourceUrl, "└${e.localizedMessage}", log)
             }
-            Debug.log(bookSource.bookSourceUrl, "└${searchBook.coverUrl}", log)
             scope.ensureActive()
             Debug.log(bookSource.bookSourceUrl, "┌获取详情页链接", log)
             searchBook.bookUrl = analyzeRule.getString(ruleBookUrl, true)

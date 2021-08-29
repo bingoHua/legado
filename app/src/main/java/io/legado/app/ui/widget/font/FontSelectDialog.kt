@@ -15,12 +15,12 @@ import io.legado.app.base.BaseDialogFragment
 import io.legado.app.constant.PreferKey
 import io.legado.app.databinding.DialogFontSelectBinding
 import io.legado.app.help.AppConfig
+import io.legado.app.lib.dialogs.SelectItem
 import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.permission.Permissions
 import io.legado.app.lib.permission.PermissionsCompat
 import io.legado.app.lib.theme.primaryColor
-import io.legado.app.ui.document.FilePicker
-import io.legado.app.ui.document.FilePickerParam
+import io.legado.app.ui.document.HandleFileContract
 import io.legado.app.utils.*
 import io.legado.app.utils.viewbindingdelegate.viewBinding
 import kotlinx.coroutines.Dispatchers.Main
@@ -39,7 +39,7 @@ class FontSelectDialog : BaseDialogFragment(),
     }
     private var adapter: FontAdapter? = null
     private val binding by viewBinding(DialogFontSelectBinding::bind)
-    private val selectFontDir = registerForActivityResult(FilePicker()) { uri ->
+    private val selectFontDir = registerForActivityResult(HandleFileContract()) { uri ->
         uri ?: return@registerForActivityResult
         if (uri.toString().isContentScheme()) {
             putPrefString(PreferKey.fontFolder, uri.toString())
@@ -65,7 +65,7 @@ class FontSelectDialog : BaseDialogFragment(),
 
     override fun onStart() {
         super.onStart()
-        val dm = requireActivity().getSize()
+        val dm = requireActivity().windowSize
         dialog?.window?.setLayout((dm.widthPixels * 0.9).toInt(), (dm.heightPixels * 0.9).toInt())
     }
 
@@ -128,18 +128,16 @@ class FontSelectDialog : BaseDialogFragment(),
     private fun openFolder() {
         launch(Main) {
             val defaultPath = "SD${File.separator}Fonts"
-            selectFontDir.launch(
-                FilePickerParam(
-                    otherActions = arrayOf(defaultPath)
-                )
-            )
+            selectFontDir.launch {
+                otherActions = arrayListOf(SelectItem(defaultPath, -1))
+            }
         }
     }
 
     private fun getLocalFonts(): ArrayList<DocItem> {
         val fontItems = arrayListOf<DocItem>()
         val fontDir =
-            FileUtils.createFolderIfNotExist(requireContext().externalFilesDir, "font")
+            FileUtils.createFolderIfNotExist(requireContext().externalFiles, "font")
         fontDir.listFiles { pathName ->
             pathName.name.lowercase(Locale.getDefault()).matches(fontRegex)
         }?.forEach {

@@ -2,10 +2,83 @@ package io.legado.app.utils
 
 import android.content.Context
 import android.net.Uri
+import androidx.appcompat.app.AppCompatActivity
 import androidx.documentfile.provider.DocumentFile
+import androidx.fragment.app.Fragment
+import io.legado.app.R
+import io.legado.app.lib.permission.Permissions
+import io.legado.app.lib.permission.PermissionsCompat
 import java.io.File
 
 fun Uri.isContentScheme() = this.scheme == "content"
+
+/**
+ * 读取URI
+ */
+fun AppCompatActivity.readUri(uri: Uri?, success: (name: String, bytes: ByteArray) -> Unit) {
+    uri ?: return
+    try {
+        if (uri.isContentScheme()) {
+            val doc = DocumentFile.fromSingleUri(this, uri)
+            doc ?: error("未获取到文件")
+            val name = doc.name ?: error("未获取到文件名")
+            val fileBytes = DocumentUtils.readBytes(this, doc.uri)
+            fileBytes ?: error("读取文件出错")
+            success.invoke(name, fileBytes)
+        } else {
+            PermissionsCompat.Builder(this)
+                .addPermissions(
+                    Permissions.READ_EXTERNAL_STORAGE,
+                    Permissions.WRITE_EXTERNAL_STORAGE
+                )
+                .rationale(R.string.bg_image_per)
+                .onGranted {
+                    RealPathUtil.getPath(this, uri)?.let { path ->
+                        val imgFile = File(path)
+                        success.invoke(imgFile.name, imgFile.readBytes())
+                    }
+                }
+                .request()
+        }
+    } catch (e: Exception) {
+        e.printStackTrace()
+        toastOnUi(e.localizedMessage ?: "read uri error")
+    }
+}
+
+/**
+ * 读取URI
+ */
+fun Fragment.readUri(uri: Uri?, success: (name: String, bytes: ByteArray) -> Unit) {
+    uri ?: return
+    try {
+        if (uri.isContentScheme()) {
+            val doc = DocumentFile.fromSingleUri(requireContext(), uri)
+            doc ?: error("未获取到文件")
+            val name = doc.name ?: error("未获取到文件名")
+            val fileBytes = DocumentUtils.readBytes(requireContext(), doc.uri)
+            fileBytes ?: error("读取文件出错")
+            success.invoke(name, fileBytes)
+        } else {
+            PermissionsCompat.Builder(this)
+                .addPermissions(
+                    Permissions.READ_EXTERNAL_STORAGE,
+                    Permissions.WRITE_EXTERNAL_STORAGE
+                )
+                .rationale(R.string.bg_image_per)
+                .onGranted {
+                    RealPathUtil.getPath(requireContext(), uri)?.let { path ->
+                        val imgFile = File(path)
+                        success.invoke(imgFile.name, imgFile.readBytes())
+                    }
+                }
+                .request()
+        }
+    } catch (e: Exception) {
+        e.printStackTrace()
+        toastOnUi(e.localizedMessage ?: "read uri error")
+    }
+}
 
 @Throws(Exception::class)
 fun Uri.readBytes(context: Context): ByteArray? {

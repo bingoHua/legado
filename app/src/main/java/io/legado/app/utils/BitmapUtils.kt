@@ -31,7 +31,7 @@ object BitmapUtils {
         val ips = FileInputStream(path)
         // inJustDecodeBounds如果设置为true,仅仅返回图片实际的宽和高,宽和高是赋值给opts.outWidth,opts.outHeight;
         op.inJustDecodeBounds = true
-        BitmapFactory.decodeFileDescriptor(ips.fd,null,op)
+        BitmapFactory.decodeFileDescriptor(ips.fd, null, op)
         //获取比例大小
         val wRatio = ceil((op.outWidth / width).toDouble()).toInt()
         val hRatio = ceil((op.outHeight / height).toDouble()).toInt()
@@ -44,7 +44,7 @@ object BitmapUtils {
             }
         }
         op.inJustDecodeBounds = false
-        return BitmapFactory.decodeFileDescriptor(ips.fd,null,op)
+        return BitmapFactory.decodeFileDescriptor(ips.fd, null, op)
 
     }
 
@@ -57,10 +57,10 @@ object BitmapUtils {
         val opts = BitmapFactory.Options()
         val ips = FileInputStream(path)
         opts.inJustDecodeBounds = true
-        BitmapFactory.decodeFileDescriptor(ips.fd,null,opts)
+        BitmapFactory.decodeFileDescriptor(ips.fd, null, opts)
         opts.inSampleSize = computeSampleSize(opts, -1, 128 * 128)
         opts.inJustDecodeBounds = false
-        return BitmapFactory.decodeFileDescriptor(ips.fd,null,opts)
+        return BitmapFactory.decodeFileDescriptor(ips.fd, null, opts)
     }
 
     /**
@@ -249,7 +249,7 @@ object BitmapUtils {
     /**
      * 高斯模糊
      */
-    fun stackBlur(srcBitmap: Bitmap?): Bitmap? {
+    fun stackBlur(srcBitmap: Bitmap?, radius: Float = 8f): Bitmap? {
         if (srcBitmap == null) return null
         val rs = RenderScript.create(appCtx)
         val blurredBitmap = srcBitmap.copy(Config.ARGB_8888, true)
@@ -268,7 +268,7 @@ object BitmapUtils {
         script.setInput(input)
 
         //设置模糊半径
-        script.setRadius(8f)
+        script.setRadius(radius)
 
         //启动 ScriptIntrinsicBlur
         script.forEach(output)

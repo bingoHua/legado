@@ -1,11 +1,11 @@
 package io.legado.app.ui.book.arrange
 
+import android.annotation.SuppressLint
 import android.os.Bundle
 import android.view.Menu
 import android.view.MenuItem
 import androidx.activity.viewModels
 import androidx.appcompat.widget.PopupMenu
-import androidx.lifecycle.LiveData
 import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.LinearLayoutManager
 import io.legado.app.R
@@ -26,7 +26,10 @@ import io.legado.app.ui.widget.recycler.ItemTouchCallback
 import io.legado.app.ui.widget.recycler.VerticalDivider
 import io.legado.app.utils.cnCompare
 import io.legado.app.utils.getPrefInt
+import io.legado.app.utils.viewbindingdelegate.viewBinding
 import kotlinx.coroutines.Dispatchers.IO
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -36,20 +39,16 @@ class ArrangeBookActivity : VMBaseActivity<ActivityArrangeBookBinding, ArrangeBo
     SelectActionBar.CallBack,
     ArrangeBookAdapter.CallBack,
     GroupSelectDialog.CallBack {
-    override val viewModel: ArrangeBookViewModel
-            by viewModels()
+
+    override val binding by viewBinding(ActivityArrangeBookBinding::inflate)
+    override val viewModel by viewModels<ArrangeBookViewModel>()
     override val groupList: ArrayList<BookGroup> = arrayListOf()
     private val groupRequestCode = 22
     private val addToGroupRequestCode = 34
     private lateinit var adapter: ArrangeBookAdapter
-    private var groupLiveData: LiveData<List<BookGroup>>? = null
-    private var booksLiveData: LiveData<List<Book>>? = null
+    private var booksFlowJob: Job? = null
     private var menu: Menu? = null
     private var groupId: Long = -1
-
-    override fun getViewBinding(): ActivityArrangeBookBinding {
-        return ActivityArrangeBookBinding.inflate(layoutInflater)
-    }
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
         groupId = intent.getLongExtra("groupId", -1)
@@ -108,38 +107,39 @@ class ArrangeBookActivity : VMBaseActivity<ActivityArrangeBookBinding, ArrangeBo
         binding.selectActionBar.setCallBack(this)
     }
 
+    @SuppressLint("NotifyDataSetChanged")
     private fun initGroupData() {
-        groupLiveData?.removeObservers(this)
-        groupLiveData = appDb.bookGroupDao.liveDataAll()
-        groupLiveData?.observe(this, {
-            groupList.clear()
-            groupList.addAll(it)
-            adapter.notifyDataSetChanged()
-            upMenu()
-        })
+        launch {
+            appDb.bookGroupDao.flowAll().collect {
+                groupList.clear()
+                groupList.addAll(it)
+                adapter.notifyDataSetChanged()
+                upMenu()
+            }
+        }
     }
 
     private fun initBookData() {
-        booksLiveData?.removeObservers(this)
-        booksLiveData =
+        booksFlowJob?.cancel()
+        booksFlowJob = launch {
             when (groupId) {
-                AppConst.bookGroupAllId -> appDb.bookDao.observeAll()
-                AppConst.bookGroupLocalId -> appDb.bookDao.observeLocal()
-                AppConst.bookGroupAudioId -> appDb.bookDao.observeAudio()
-                AppConst.bookGroupNoneId -> appDb.bookDao.observeNoGroup()
-                else -> appDb.bookDao.observeByGroup(groupId)
-            }
-        booksLiveData?.observe(this, { list ->
-            val books = when (getPrefInt(PreferKey.bookshelfSort)) {
-                1 -> list.sortedByDescending { it.latestChapterTime }
-                2 -> list.sortedWith { o1, o2 ->
-                    o1.name.cnCompare(o2.name)
+                AppConst.bookGroupAllId -> appDb.bookDao.flowAll()
+                AppConst.bookGroupLocalId -> appDb.bookDao.flowLocal()
+                AppConst.bookGroupAudioId -> appDb.bookDao.flowAudio()
+                AppConst.bookGroupNoneId -> appDb.bookDao.flowNoGroup()
+                else -> appDb.bookDao.flowByGroup(groupId)
+            }.collect { list ->
+                val books = when (getPrefInt(PreferKey.bookshelfSort)) {
+                    1 -> list.sortedByDescending { it.latestChapterTime }
+                    2 -> list.sortedWith { o1, o2 ->
+                        o1.name.cnCompare(o2.name)
+                    }
+                    3 -> list.sortedBy { it.order }
+                    else -> list.sortedByDescending { it.durChapterTime }
                 }
-                3 -> list.sortedBy { it.order }
-                else -> list.sortedByDescending { it.durChapterTime }
+                adapter.setItems(books)
             }
-            adapter.setItems(books)
-        })
+        }
     }
 
     override fun onCompatOptionsItemSelected(item: MenuItem): Boolean {

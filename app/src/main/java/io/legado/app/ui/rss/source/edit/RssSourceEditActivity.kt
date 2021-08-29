@@ -10,6 +10,7 @@ import android.view.ViewTreeObserver
 import android.widget.EditText
 import android.widget.PopupWindow
 import androidx.activity.viewModels
+import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel
 import io.legado.app.R
 import io.legado.app.base.VMBaseActivity
 import io.legado.app.constant.AppConst
@@ -24,6 +25,7 @@ import io.legado.app.ui.rss.source.debug.RssSourceDebugActivity
 import io.legado.app.ui.widget.KeyboardToolPop
 import io.legado.app.ui.widget.dialog.TextDialog
 import io.legado.app.utils.*
+import io.legado.app.utils.viewbindingdelegate.viewBinding
 import kotlin.math.abs
 
 class RssSourceEditActivity :
@@ -31,6 +33,8 @@ class RssSourceEditActivity :
     ViewTreeObserver.OnGlobalLayoutListener,
     KeyboardToolPop.CallBack {
 
+    override val binding by viewBinding(ActivityRssSourceEditBinding::inflate)
+    override val viewModel by viewModels<RssSourceEditViewModel>()
     private var mSoftKeyboardTool: PopupWindow? = null
     private var mIsSoftKeyBoardShowing = false
     private val adapter = RssSourceEditAdapter()
@@ -42,13 +46,6 @@ class RssSourceEditActivity :
             }
         }
     }
-
-    override fun getViewBinding(): ActivityRssSourceEditBinding {
-        return ActivityRssSourceEditBinding.inflate(layoutInflater)
-    }
-
-    override val viewModel: RssSourceEditViewModel
-            by viewModels()
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
         initView()
@@ -117,7 +114,8 @@ class RssSourceEditActivity :
             R.id.menu_share_str -> share(GSON.toJson(getRssSource()))
             R.id.menu_share_qr -> shareWithQr(
                 GSON.toJson(getRssSource()),
-                getString(R.string.share_rss_source)
+                getString(R.string.share_rss_source),
+                ErrorCorrectionLevel.L
             )
             R.id.menu_help -> showRuleHelp()
         }
@@ -258,7 +256,7 @@ class RssSourceEditActivity :
         val rect = Rect()
         // 获取当前页面窗口的显示范围
         window.decorView.getWindowVisibleDisplayFrame(rect)
-        val screenHeight = this@RssSourceEditActivity.getSize().heightPixels
+        val screenHeight = this@RssSourceEditActivity.windowSize.heightPixels
         val keyboardHeight = screenHeight - rect.bottom // 输入法的高度
         val preShowing = mIsSoftKeyBoardShowing
         if (abs(keyboardHeight) > screenHeight / 5) {

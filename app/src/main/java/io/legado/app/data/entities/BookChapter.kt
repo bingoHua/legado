@@ -6,13 +6,13 @@ import androidx.room.ForeignKey
 import androidx.room.Ignore
 import androidx.room.Index
 import io.legado.app.model.analyzeRule.AnalyzeUrl
+import io.legado.app.model.analyzeRule.RuleDataInterface
 import io.legado.app.utils.GSON
 import io.legado.app.utils.MD5Utils
 import io.legado.app.utils.NetworkUtils
 import io.legado.app.utils.fromJsonObject
 import kotlinx.parcelize.IgnoredOnParcel
 import kotlinx.parcelize.Parcelize
-
 
 @Parcelize
 @Entity(
@@ -40,16 +40,16 @@ data class BookChapter(
     var startFragmentId: String? = null,  //EPUB书籍当前章节的fragmentId
     var endFragmentId: String? = null,    //EPUB书籍下一章节的fragmentId
     var variable: String? = null        //变量
-) : Parcelable {
+) : Parcelable, RuleDataInterface {
 
     @delegate:Transient
     @delegate:Ignore
     @IgnoredOnParcel
-    val variableMap by lazy {
+    override val variableMap by lazy {
         GSON.fromJsonObject<HashMap<String, String>>(variable) ?: HashMap()
     }
 
-    fun putVariable(key: String, value: String) {
+    override fun putVariable(key: String, value: String) {
         variableMap[key] = value
         variable = GSON.toJson(variableMap)
     }
@@ -63,13 +63,11 @@ data class BookChapter(
         return false
     }
 
-    fun getAbsoluteURL(): String {
-        val urlArray = url.split(AnalyzeUrl.splitUrlRegex)
-        var absoluteUrl = NetworkUtils.getAbsoluteURL(baseUrl, urlArray[0])
-        if (urlArray.size > 1) {
-            absoluteUrl = "$absoluteUrl,${urlArray[1]}"
-        }
-        return absoluteUrl
+    fun getAbsoluteURL():String{
+        val urlMatcher = AnalyzeUrl.paramPattern.matcher(url)
+        val urlBefore = if(urlMatcher.find())url.substring(0,urlMatcher.start()) else url
+        val urlAbsoluteBefore = NetworkUtils.getAbsoluteURL(baseUrl,urlBefore)
+        return if(urlBefore.length == url.length) urlAbsoluteBefore else urlAbsoluteBefore + ',' + url.substring(urlMatcher.end())
     }
 
     fun getFileName(): String = String.format("%05d-%s.nb", index, MD5Utils.md5Encode16(title))

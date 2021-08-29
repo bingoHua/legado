@@ -21,9 +21,8 @@ import io.legado.app.databinding.DialogRecyclerViewBinding
 import io.legado.app.databinding.ItemIconPreferenceBinding
 import io.legado.app.lib.theme.primaryColor
 import io.legado.app.utils.getCompatDrawable
-import io.legado.app.utils.getSize
 import io.legado.app.utils.viewbindingdelegate.viewBinding
-
+import io.legado.app.utils.windowSize
 
 
 class IconListPreference(context: Context, attrs: AttributeSet) : ListPreference(context, attrs) {
@@ -55,7 +54,17 @@ class IconListPreference(context: Context, attrs: AttributeSet) : ListPreference
 
     override fun onBindViewHolder(holder: PreferenceViewHolder?) {
         super.onBindViewHolder(holder)
-        val v = Preference.bindView<ImageView>(context, holder, icon, title, summary, widgetLayoutResource, R.id.preview, 50, 50)
+        val v = Preference.bindView<ImageView>(
+            context,
+            holder,
+            icon,
+            title,
+            summary,
+            widgetLayoutResource,
+            R.id.preview,
+            50,
+            50
+        )
         if (v is ImageView) {
             val selectedIndex = findIndexOfValue(value)
             if (selectedIndex >= 0) {
@@ -122,7 +131,7 @@ class IconListPreference(context: Context, attrs: AttributeSet) : ListPreference
 
         override fun onStart() {
             super.onStart()
-            val dm = requireActivity().getSize()
+            val dm = requireActivity().windowSize
             dialog?.window?.setLayout(
                 (dm.widthPixels * 0.8).toInt(),
                 ViewGroup.LayoutParams.WRAP_CONTENT
@@ -168,7 +177,7 @@ class IconListPreference(context: Context, attrs: AttributeSet) : ListPreference
                 item: CharSequence,
                 payloads: MutableList<Any>
             ) {
-                with(binding) {
+                binding.run {
                     val index = findIndexOfValue(item.toString())
                     dialogEntries?.let {
                         label.text = it[index]

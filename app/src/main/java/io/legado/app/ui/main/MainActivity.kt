@@ -21,7 +21,6 @@ import io.legado.app.constant.PreferKey
 import io.legado.app.databinding.ActivityMainBinding
 import io.legado.app.help.AppConfig
 import io.legado.app.help.BookHelp
-import io.legado.app.help.DefaultData
 import io.legado.app.help.LocalConfig
 import io.legado.app.help.storage.Backup
 import io.legado.app.lib.theme.ATH
@@ -36,12 +35,15 @@ import io.legado.app.ui.main.rss.RssFragment
 import io.legado.app.ui.widget.dialog.TextDialog
 import io.legado.app.utils.observeEvent
 import io.legado.app.utils.toastOnUi
+import io.legado.app.utils.viewbindingdelegate.viewBinding
 
 
 class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
     BottomNavigationView.OnNavigationItemSelectedListener,
     BottomNavigationView.OnNavigationItemReselectedListener {
-    override val viewModel: MainViewModel by viewModels()
+
+    override val binding by viewBinding(ActivityMainBinding::inflate)
+    override val viewModel by viewModels<MainViewModel>()
     private var exitTime: Long = 0
     private var bookshelfReselected: Long = 0
     private var exploreReselected: Long = 0
@@ -49,10 +51,6 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
     private val fragmentMap = hashMapOf<Int, Fragment>()
     private var bottomMenuCount = 2
     private val realPositions = arrayOf(0, 1, 2, 3)
-
-    override fun getViewBinding(): ActivityMainBinding {
-        return ActivityMainBinding.inflate(layoutInflater)
-    }
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
         upBottomMenu()
@@ -83,7 +81,7 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
         }, 3000)
     }
 
-    override fun onNavigationItemSelected(item: MenuItem): Boolean = with(binding) {
+    override fun onNavigationItemSelected(item: MenuItem): Boolean = binding.run {
         when (item.itemId) {
             R.id.menu_bookshelf -> viewPagerMain.setCurrentItem(0, false)
             R.id.menu_discovery -> viewPagerMain.setCurrentItem(1, false)
@@ -124,8 +122,7 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
                 TextDialog.show(supportFragmentManager, text, TextDialog.MD)
             } else if (!BuildConfig.DEBUG) {
                 val log = String(assets.open("updateLog.md").readBytes())
-                TextDialog.show(supportFragmentManager, log, TextDialog.MD, 5000, true)
-                DefaultData.importDefaultTocRules()//版本更新时更新自带本地txt目录规则
+                TextDialog.show(supportFragmentManager, log, TextDialog.MD)
             }
             viewModel.upVersion()
         }
@@ -138,6 +135,11 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
                     if (pagePosition != 0) {
                         binding.viewPagerMain.currentItem = 0
                         return true
+                    }
+                    (fragmentMap[getFragmentId(0)] as? BookshelfFragment2)?.let {
+                        if (it.back()) {
+                            return true
+                        }
                     }
                     if (System.currentTimeMillis() - exitTime > 2000) {
                         toastOnUi(R.string.double_click_exit)

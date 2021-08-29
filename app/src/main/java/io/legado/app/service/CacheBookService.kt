@@ -1,8 +1,6 @@
 package io.legado.app.service
 
 import android.content.Intent
-import android.os.Handler
-import android.os.Looper
 import androidx.core.app.NotificationCompat
 import io.legado.app.R
 import io.legado.app.base.BaseService
@@ -12,6 +10,7 @@ import io.legado.app.constant.IntentAction
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookChapter
+import io.legado.app.data.entities.BookSource
 import io.legado.app.help.AppConfig
 import io.legado.app.help.BookHelp
 import io.legado.app.help.IntentHelp
@@ -22,21 +21,22 @@ import io.legado.app.service.help.CacheBook
 import io.legado.app.utils.postEvent
 import io.legado.app.utils.toastOnUi
 import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import splitties.init.appCtx
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArraySet
 import java.util.concurrent.Executors
+import kotlin.math.min
 
 class CacheBookService : BaseService() {
     private val threadCount = AppConfig.threadCount
-    private var searchPool =
-        Executors.newFixedThreadPool(threadCount).asCoroutineDispatcher()
+    private var cachePool =
+        Executors.newFixedThreadPool(min(threadCount, 8)).asCoroutineDispatcher()
     private var tasks = CompositeCoroutine()
-    private val handler = Handler(Looper.getMainLooper())
-    private var runnable: Runnable = Runnable { upDownload() }
     private val bookMap = ConcurrentHashMap<String, Book>()
-    private val webBookMap = ConcurrentHashMap<String, WebBook>()
+    private val bookSourceMap = ConcurrentHashMap<String, BookSource>()
     private val downloadMap = ConcurrentHashMap<String, CopyOnWriteArraySet<BookChapter>>()
     private val downloadCount = ConcurrentHashMap<String, DownloadCount>()
     private val finalMap = ConcurrentHashMap<String, CopyOnWriteArraySet<BookChapter>>()
@@ -62,7 +62,13 @@ class CacheBookService : BaseService() {
     override fun onCreate() {
         super.onCreate()
         upNotification()
-        handler.postDelayed(runnable, 1000)
+        launch {
+            while (isActive) {
+                delay(1000)
+                upNotification()
+                postEvent(EventBus.UP_DOWNLOAD, downloadMap)
+            }
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -82,8 +88,7 @@ class CacheBookService : BaseService() {
 
     override fun onDestroy() {
         tasks.clear()
-        searchPool.close()
-        handler.removeCallbacks(runnable)
+        cachePool.close()
         downloadMap.clear()
         finalMap.clear()
         super.onDestroy()
@@ -106,22 +111,20 @@ class CacheBookService : BaseService() {
         return book
     }
 
-    private fun getWebBook(bookUrl: String, origin: String): WebBook? {
-        var webBook = webBookMap[origin]
-        if (webBook == null) {
+    private fun getBookSource(bookUrl: String, origin: String): BookSource? {
+        var bookSource = bookSourceMap[origin]
+        if (bookSource == null) {
             synchronized(this) {
-                webBook = webBookMap[origin]
-                if (webBook == null) {
-                    appDb.bookSourceDao.getBookSource(origin)?.let {
-                        webBook = WebBook(it)
-                    }
-                    if (webBook == null) {
+                bookSource = bookSourceMap[origin]
+                if (bookSource == null) {
+                    bookSource = appDb.bookSourceDao.getBookSource(origin)
+                    if (bookSource == null) {
                         removeDownload(bookUrl)
                     }
                 }
             }
         }
-        return webBook
+        return bookSource
     }
 
     private fun addDownloadData(bookUrl: String?, start: Int, end: Int) {
@@ -133,7 +136,7 @@ class CacheBookService : BaseService() {
             return
         }
         downloadCount[bookUrl] = DownloadCount()
-        execute {
+        execute(context = cachePool) {
             appDb.bookChapterDao.getChapterList(bookUrl, start, end).let {
                 if (it.isNotEmpty()) {
                     val chapters = CopyOnWriteArraySet<BookChapter>()
@@ -158,7 +161,7 @@ class CacheBookService : BaseService() {
 
     private fun download() {
         downloadingCount += 1
-        val task = Coroutine.async(this, context = searchPool) {
+        val task = Coroutine.async(this, context = cachePool) {
             if (!isActive) return@async
             val bookChapter: BookChapter? = synchronized(this@CacheBookService) {
                 downloadMap.forEach {
@@ -179,22 +182,22 @@ class CacheBookService : BaseService() {
                     postDownloading(true)
                     return@async
                 }
-                val webBook = getWebBook(bookChapter.bookUrl, book.origin)
-                if (webBook == null) {
+                val bookSource = getBookSource(bookChapter.bookUrl, book.origin)
+                if (bookSource == null) {
                     postDownloading(true)
                     return@async
                 }
                 if (!BookHelp.hasImageContent(book, bookChapter)) {
-                    webBook.getContent(this, book, bookChapter, context = searchPool)
+                    WebBook.getContent(this, bookSource, book, bookChapter, context = cachePool)
                         .timeout(60000L)
-                        .onError {
+                        .onError(cachePool) {
                             synchronized(this) {
                                 downloadingList.remove(bookChapter.url)
                             }
                             notificationContent = "getContentError${it.localizedMessage}"
                             upNotification()
                         }
-                        .onSuccess {
+                        .onSuccess(cachePool) {
                             synchronized(this@CacheBookService) {
                                 downloadCount[book.bookUrl]?.increaseSuccess()
                                 downloadCount[book.bookUrl]?.increaseFinished()
@@ -217,7 +220,7 @@ class CacheBookService : BaseService() {
                                     downloadCount.remove(book.bookUrl)
                                 }
                             }
-                        }.onFinally {
+                        }.onFinally(cachePool) {
                             postDownloading(true)
                         }
                 } else {
@@ -227,7 +230,7 @@ class CacheBookService : BaseService() {
                     postDownloading(true)
                 }
             }
-        }.onError {
+        }.onError(cachePool) {
             notificationContent = "ERROR:${it.localizedMessage}"
             CacheBook.addLog(notificationContent)
             upNotification()
@@ -249,13 +252,6 @@ class CacheBookService : BaseService() {
     private fun stopDownload() {
         tasks.clear()
         stopSelf()
-    }
-
-    private fun upDownload() {
-        upNotification()
-        postEvent(EventBus.UP_DOWNLOAD, downloadMap)
-        handler.removeCallbacks(runnable)
-        handler.postDelayed(runnable, 1000)
     }
 
     private fun upNotification(

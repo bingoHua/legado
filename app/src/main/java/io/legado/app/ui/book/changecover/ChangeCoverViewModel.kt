@@ -2,9 +2,8 @@ package io.legado.app.ui.book.changecover
 
 import android.app.Application
 import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
 import androidx.lifecycle.MutableLiveData
+import androidx.lifecycle.viewModelScope
 import io.legado.app.base.BaseViewModel
 import io.legado.app.constant.AppPattern
 import io.legado.app.data.appDb
@@ -13,9 +12,7 @@ import io.legado.app.data.entities.SearchBook
 import io.legado.app.help.AppConfig
 import io.legado.app.help.coroutine.CompositeCoroutine
 import io.legado.app.model.webBook.WebBook
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.ExecutorCoroutineDispatcher
-import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.*
 import java.util.concurrent.CopyOnWriteArraySet
 import java.util.concurrent.Executors
 import kotlin.math.min
@@ -23,7 +20,7 @@ import kotlin.math.min
 class ChangeCoverViewModel(application: Application) : BaseViewModel(application) {
     private val threadCount = AppConfig.threadCount
     private var searchPool: ExecutorCoroutineDispatcher? = null
-    val handler = Handler(Looper.getMainLooper())
+    private var upAdapterJob: Job? = null
     var name: String = ""
     var author: String = ""
     private var tasks = CompositeCoroutine()
@@ -31,7 +28,6 @@ class ChangeCoverViewModel(application: Application) : BaseViewModel(application
     val searchStateData = MutableLiveData<Boolean>()
     val searchBooksLiveData = MutableLiveData<List<SearchBook>>()
     private val searchBooks = CopyOnWriteArraySet<SearchBook>()
-    private val sendRunnable = Runnable { upAdapter() }
     private var postTime = 0L
 
     @Volatile
@@ -49,7 +45,7 @@ class ChangeCoverViewModel(application: Application) : BaseViewModel(application
     }
 
     private fun initSearchPool() {
-        searchPool = Executors.newFixedThreadPool(threadCount).asCoroutineDispatcher()
+        searchPool = Executors.newFixedThreadPool(min(threadCount,8)).asCoroutineDispatcher()
         searchIndex = -1
     }
 
@@ -68,13 +64,16 @@ class ChangeCoverViewModel(application: Application) : BaseViewModel(application
     @Synchronized
     private fun upAdapter() {
         if (System.currentTimeMillis() >= postTime + 500) {
-            handler.removeCallbacks(sendRunnable)
+            upAdapterJob?.cancel()
             postTime = System.currentTimeMillis()
             val books = searchBooks.toList()
             searchBooksLiveData.postValue(books.sortedBy { it.originOrder })
         } else {
-            handler.removeCallbacks(sendRunnable)
-            handler.postDelayed(sendRunnable, 500)
+            upAdapterJob?.cancel()
+            upAdapterJob = viewModelScope.launch {
+                delay(500)
+                upAdapter()
+            }
         }
     }
 
@@ -101,10 +100,10 @@ class ChangeCoverViewModel(application: Application) : BaseViewModel(application
             searchNext()
             return
         }
-        val task = WebBook(source)
-            .searchBook(this, name, context = searchPool!!)
+        val task = WebBook
+            .searchBook(viewModelScope, source, name, context = searchPool!!)
             .timeout(60000L)
-            .onSuccess(Dispatchers.IO) {
+            .onSuccess(searchPool) {
                 if (it.isNotEmpty()) {
                     val searchBook = it[0]
                     if (searchBook.name == name && searchBook.author == author
@@ -118,7 +117,7 @@ class ChangeCoverViewModel(application: Application) : BaseViewModel(application
                     }
                 }
             }
-            .onFinally {
+            .onFinally(searchPool) {
                 searchNext()
             }
         tasks.add(task)
@@ -137,6 +136,7 @@ class ChangeCoverViewModel(application: Application) : BaseViewModel(application
             )
         ) {
             searchStateData.postValue(false)
+            tasks.clear()
         }
     }
 

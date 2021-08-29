@@ -40,20 +40,6 @@
             android:defaultValue="true"
             android:key="showRss"
             android:title="@string/show_rss"
-            app:iconSpaceReserved="false" />
-
-        <io.legado.app.ui.widget.prefs.Preference
-            android:key="defaultCover"
-            android:title="@string/default_cover"
-            app:allowDividerAbove="false"
-            app:allowDividerBelow="false"
-            app:iconSpaceReserved="false" />
-
-        <io.legado.app.ui.widget.prefs.SwitchPreference
-            android:defaultValue="false"
-            android:key="useDefaultCover"
-            android:title="@string/use_default_cover"
-            android:summary="@string/use_default_cover_s"
             app:allowDividerAbove="false"
             app:allowDividerBelow="false"
             app:iconSpaceReserved="false" />
@@ -71,10 +57,10 @@
             android:title="UserAgent" />
 
         <io.legado.app.ui.widget.prefs.SwitchPreference
-            android:key="highBrush"
+            android:key="Cronet"
             android:defaultValue="false"
-            android:title="@string/high_brush_title"
-            android:summary="@string/high_brush_summary" />
+            android:title="Cronet"
+            android:summary="@string/pref_cronet_summary" />
 
         <io.legado.app.ui.widget.prefs.Preference
             android:key="preDownloadNum"

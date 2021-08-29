@@ -1,7 +1,9 @@
 package io.legado.app.data.entities
 
+import android.content.Context
 import android.os.Parcelable
 import androidx.room.*
+import io.legado.app.R
 import io.legado.app.utils.GSON
 import io.legado.app.utils.fromJsonObject
 import kotlinx.parcelize.IgnoredOnParcel
@@ -36,45 +38,45 @@ data class SearchBook(
     var time: Long = System.currentTimeMillis(),
     var variable: String? = null,
     var originOrder: Int = 0
-): Parcelable, BaseBook, Comparable<SearchBook> {
-    
+) : Parcelable, BaseBook, Comparable<SearchBook> {
+
     @Ignore
     @IgnoredOnParcel
     override var infoHtml: String? = null
-    
+
     @Ignore
     @IgnoredOnParcel
     override var tocHtml: String? = null
-    
+
     override fun equals(other: Any?) = other is SearchBook && other.bookUrl == bookUrl
-    
+
     override fun hashCode() = bookUrl.hashCode()
-    
+
     override fun compareTo(other: SearchBook): Int {
         return other.originOrder - this.originOrder
     }
-    
+
     @delegate:Transient
     @delegate:Ignore
     @IgnoredOnParcel
     override val variableMap by lazy {
         GSON.fromJsonObject<HashMap<String, String>>(variable) ?: HashMap()
     }
-    
+
     override fun putVariable(key: String, value: String) {
         variableMap[key] = value
         variable = GSON.toJson(variableMap)
     }
-    
+
     @delegate:Transient
     @delegate:Ignore
     @IgnoredOnParcel
     val origins: LinkedHashSet<String> by lazy { linkedSetOf(origin) }
-    
+
     fun addOrigin(origin: String) {
         origins.add(origin)
     }
-    
+
     fun getDisplayLastChapterTitle(): String {
         latestChapterTitle?.let {
             if (it.isNotEmpty()) {
@@ -83,7 +85,16 @@ data class SearchBook(
         }
         return "无最新章节"
     }
-    
+
+    fun trimIntro(context: Context): String {
+        val trimIntro = intro?.trim()
+        return if (trimIntro.isNullOrEmpty()) {
+            context.getString(R.string.intro_show_null)
+        } else {
+            context.getString(R.string.intro_show, trimIntro)
+        }
+    }
+
     fun toBook() = Book(
         name = name,
         author = author,

@@ -1,15 +1,14 @@
 package io.legado.app.model.analyzeRule
 
 import android.annotation.SuppressLint
-import android.text.TextUtils
 import androidx.annotation.Keep
 import com.bumptech.glide.load.model.GlideUrl
 import com.bumptech.glide.load.model.LazyHeaders
 import io.legado.app.constant.AppConst.SCRIPT_ENGINE
 import io.legado.app.constant.AppConst.UA_NAME
-import io.legado.app.constant.AppPattern.EXP_PATTERN
 import io.legado.app.constant.AppPattern.JS_PATTERN
 import io.legado.app.data.entities.BaseBook
+import io.legado.app.data.entities.BaseSource
 import io.legado.app.data.entities.BookChapter
 import io.legado.app.help.AppConfig
 import io.legado.app.help.CacheManager
@@ -38,10 +37,11 @@ class AnalyzeUrl(
     val book: BaseBook? = null,
     val chapter: BookChapter? = null,
     private val ruleData: RuleDataInterface? = null,
-    headerMapF: Map<String, String>? = null
+    private val source: BaseSource? = null,
+    headerMapF: Map<String, String>? = null,
 ) : JsExtensions {
     companion object {
-        val splitUrlRegex = Regex(",\\s*(?=\\{)")
+        val paramPattern: Pattern = Pattern.compile("\\s*,\\s*(?=\\{)")
         private val pagePattern = Pattern.compile("<(.*?)>")
     }
 
@@ -58,7 +58,8 @@ class AnalyzeUrl(
     private var retry: Int = 0
 
     init {
-        baseUrl = baseUrl.split(splitUrlRegex, 1)[0]
+        val urlMatcher = paramPattern.matcher(baseUrl)
+        if (urlMatcher.find()) baseUrl = baseUrl.substring(0, urlMatcher.start())
         headerMapF?.let {
             headerMap.putAll(it)
             if (it.containsKey("proxy")) {
@@ -74,39 +75,24 @@ class AnalyzeUrl(
     }
 
     private fun analyzeJs() {
-        val ruleList = arrayListOf<String>()
         var start = 0
         var tmp: String
         val jsMatcher = JS_PATTERN.matcher(ruleUrl)
         while (jsMatcher.find()) {
             if (jsMatcher.start() > start) {
                 tmp =
-                    ruleUrl.substring(start, jsMatcher.start()).replace("\n", "").trim { it <= ' ' }
-                if (!TextUtils.isEmpty(tmp)) {
-                    ruleList.add(tmp)
+                    ruleUrl.substring(start, jsMatcher.start()).trim { it <= ' ' }
+                if (tmp.isNotEmpty()) {
+                    ruleUrl = tmp.replace("@result", ruleUrl)
                 }
             }
-            ruleList.add(jsMatcher.group())
+            ruleUrl = evalJS(jsMatcher.group(2) ?: jsMatcher.group(1), ruleUrl) as String
             start = jsMatcher.end()
         }
         if (ruleUrl.length > start) {
-            tmp = ruleUrl.substring(start).replace("\n", "").trim { it <= ' ' }
-            if (!TextUtils.isEmpty(tmp)) {
-                ruleList.add(tmp)
-            }
-        }
-        for (rule in ruleList) {
-            var ruleStr = rule
-            when {
-                ruleStr.startsWith("<js>") -> {
-                    ruleStr = ruleStr.substring(4, ruleStr.lastIndexOf("<"))
-                    ruleUrl = evalJS(ruleStr, ruleUrl) as String
-                }
-                ruleStr.startsWith("@js", true) -> {
-                    ruleStr = ruleStr.substring(4)
-                    ruleUrl = evalJS(ruleStr, ruleUrl) as String
-                }
-                else -> ruleUrl = ruleStr.replace("@result", ruleUrl)
+            tmp = ruleUrl.substring(start).trim { it <= ' ' }
+            if (tmp.isNotEmpty()) {
+                ruleUrl = tmp.replace("@result", ruleUrl)
             }
         }
     }
@@ -114,64 +100,49 @@ class AnalyzeUrl(
     /**
      * 替换关键字,页数,JS
      */
-    private fun replaceKeyPageJs() {
+    private fun replaceKeyPageJs() { //先替换内嵌规则再替换页数规则，避免内嵌规则中存在大于小于号时，规则被切错
+        //js
+        if (ruleUrl.contains("{{") && ruleUrl.contains("}}")) {
+
+            val analyze = RuleAnalyzer(ruleUrl) //创建解析
+
+            //替换所有内嵌{{js}}
+            val url = analyze.innerRule("{{", "}}") {
+                val jsEval = evalJS(it) ?: ""
+                when {
+                    jsEval is String -> jsEval
+                    jsEval is Double && jsEval % 1.0 == 0.0 -> String.format("%.0f", jsEval)
+                    else -> jsEval.toString()
+                }
+            }
+            if (url.isNotEmpty()) ruleUrl = url
+        }
         //page
         page?.let {
             val matcher = pagePattern.matcher(ruleUrl)
             while (matcher.find()) {
                 val pages = matcher.group(1)!!.split(",")
-                ruleUrl = if (page <= pages.size) {
+                ruleUrl = if (page < pages.size) { //pages[pages.size - 1]等同于pages.last()
                     ruleUrl.replace(matcher.group(), pages[page - 1].trim { it <= ' ' })
                 } else {
                     ruleUrl.replace(matcher.group(), pages.last().trim { it <= ' ' })
                 }
             }
         }
-        //js
-        if (ruleUrl.contains("{{") && ruleUrl.contains("}}")) {
-            var jsEval: Any
-            val sb = StringBuffer()
-            val bindings = SimpleBindings()
-            bindings["java"] = this
-            bindings["cookie"] = CookieStore
-            bindings["cache"] = CacheManager
-            bindings["baseUrl"] = baseUrl
-            bindings["page"] = page
-            bindings["key"] = key
-            bindings["speakText"] = speakText
-            bindings["speakSpeed"] = speakSpeed
-            bindings["book"] = book
-            val expMatcher = EXP_PATTERN.matcher(ruleUrl)
-            while (expMatcher.find()) {
-                jsEval = expMatcher.group(1)?.let {
-                    SCRIPT_ENGINE.eval(it, bindings)
-                } ?: ""
-                if (jsEval is String) {
-                    expMatcher.appendReplacement(sb, jsEval)
-                } else if (jsEval is Double && jsEval % 1.0 == 0.0) {
-                    expMatcher.appendReplacement(sb, String.format("%.0f", jsEval))
-                } else {
-                    expMatcher.appendReplacement(sb, jsEval.toString())
-                }
-            }
-            expMatcher.appendTail(sb)
-            ruleUrl = sb.toString()
-        }
     }
 
     /**
      * 处理URL
      */
-    private fun initUrl() {
-        var urlArray = ruleUrl.split(splitUrlRegex, 2)
-        url = NetworkUtils.getAbsoluteURL(baseUrl, urlArray[0])
-        urlHasQuery = urlArray[0]
+    private fun initUrl() { //replaceKeyPageJs已经替换掉额外内容，此处url是基础形式，可以直接切首个‘,’之前字符串。
+        val urlMatcher = paramPattern.matcher(ruleUrl)
+        urlHasQuery = if (urlMatcher.find()) ruleUrl.substring(0, urlMatcher.start()) else ruleUrl
+        url = NetworkUtils.getAbsoluteURL(baseUrl, urlHasQuery)
         NetworkUtils.getBaseUrl(url)?.let {
             baseUrl = it
         }
-        if (urlArray.size > 1) {
-            val option = GSON.fromJsonObject<UrlOption>(urlArray[1])
-            option?.let { _ ->
+        if (urlHasQuery.length != ruleUrl.length) {
+            GSON.fromJsonObject<UrlOption>(ruleUrl.substring(urlMatcher.end()))?.let { option ->
                 option.method?.let {
                     if (it.equals("POST", true)) method = RequestMethod.POST
                 }
@@ -201,16 +172,17 @@ class AnalyzeUrl(
                 retry = option.retry
             }
         }
+
         headerMap[UA_NAME] ?: let {
             headerMap[UA_NAME] = AppConfig.userAgent
         }
         when (method) {
             RequestMethod.GET -> {
                 if (!useWebView) {
-                    urlArray = url.split("?")
-                    url = urlArray[0]
-                    if (urlArray.size > 1) {
-                        analyzeFields(urlArray[1])
+                    val pos = url.indexOf('?')
+                    if (pos != -1) {
+                        analyzeFields(url.substring(pos + 1))
+                        url = url.substring(0, pos)
                     }
                 }
             }
@@ -233,7 +205,7 @@ class AnalyzeUrl(
         for (query in queryS) {
             val queryM = query.splitNotBlank("=")
             val value = if (queryM.size > 1) queryM[1] else ""
-            if (TextUtils.isEmpty(charset)) {
+            if (charset.isNullOrEmpty()) {
                 if (NetworkUtils.hasUrlEncoded(value)) {
                     fieldMap[queryM[0]] = value
                 } else {
@@ -250,9 +222,10 @@ class AnalyzeUrl(
     /**
      * 执行JS
      */
-    private fun evalJS(jsStr: String, result: Any? = null): Any? {
+    fun evalJS(jsStr: String, result: Any? = null): Any? {
         val bindings = SimpleBindings()
         bindings["java"] = this
+        bindings["baseUrl"] = baseUrl
         bindings["cookie"] = CookieStore
         bindings["cache"] = CacheManager
         bindings["page"] = page
@@ -260,8 +233,8 @@ class AnalyzeUrl(
         bindings["speakText"] = speakText
         bindings["speakSpeed"] = speakSpeed
         bindings["book"] = book
+        bindings["source"] = source
         bindings["result"] = result
-        bindings["baseUrl"] = baseUrl
         return SCRIPT_ENGINE.eval(jsStr, bindings)
     }
 

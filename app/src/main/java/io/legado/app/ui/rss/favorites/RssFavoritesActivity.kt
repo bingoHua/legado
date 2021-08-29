@@ -1,7 +1,6 @@
 package io.legado.app.ui.rss.favorites
 
 import android.os.Bundle
-import androidx.lifecycle.LiveData
 import androidx.recyclerview.widget.LinearLayoutManager
 import io.legado.app.base.BaseActivity
 import io.legado.app.data.appDb
@@ -10,17 +9,16 @@ import io.legado.app.databinding.ActivityRssFavoritesBinding
 import io.legado.app.ui.rss.read.ReadRssActivity
 import io.legado.app.ui.widget.recycler.VerticalDivider
 import io.legado.app.utils.startActivity
+import io.legado.app.utils.viewbindingdelegate.viewBinding
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.launch
 
 
 class RssFavoritesActivity : BaseActivity<ActivityRssFavoritesBinding>(),
     RssFavoritesAdapter.CallBack {
 
-    private var liveData: LiveData<List<RssStar>>? = null
+    override val binding by viewBinding(ActivityRssFavoritesBinding::inflate)
     private lateinit var adapter: RssFavoritesAdapter
-
-    override fun getViewBinding(): ActivityRssFavoritesBinding {
-        return ActivityRssFavoritesBinding.inflate(layoutInflater)
-    }
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
         initView()
@@ -37,11 +35,11 @@ class RssFavoritesActivity : BaseActivity<ActivityRssFavoritesBinding>(),
     }
 
     private fun initData() {
-        liveData?.removeObservers(this)
-        liveData = appDb.rssStarDao.liveAll()
-        liveData?.observe(this, {
-            adapter.setItems(it)
-        })
+        launch {
+            appDb.rssStarDao.liveAll().collect {
+                adapter.setItems(it)
+            }
+        }
     }
 
     override fun readRss(rssStar: RssStar) {

@@ -11,7 +11,7 @@ import io.legado.app.base.adapter.ItemViewHolder
 import io.legado.app.base.adapter.RecyclerAdapter
 import io.legado.app.data.entities.RssStar
 import io.legado.app.databinding.ItemRssArticleBinding
-import io.legado.app.help.ImageLoader
+import io.legado.app.help.glide.ImageLoader
 import io.legado.app.utils.gone
 import io.legado.app.utils.visible
 
@@ -29,7 +29,7 @@ class RssFavoritesAdapter(context: Context, val callBack: CallBack) :
         item: RssStar,
         payloads: MutableList<Any>
     ) {
-        with(binding) {
+        binding.run {
             tvTitle.text = item.title
             tvPubDate.text = item.pubDate
             if (item.image.isNullOrBlank()) {

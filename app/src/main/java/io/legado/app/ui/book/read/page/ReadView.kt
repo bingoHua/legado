@@ -6,14 +6,16 @@ import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Rect
 import android.graphics.RectF
+import android.os.Build
 import android.util.AttributeSet
 import android.view.MotionEvent
 import android.view.ViewConfiguration
+import android.view.WindowInsets
 import android.widget.FrameLayout
 import io.legado.app.help.AppConfig
 import io.legado.app.help.ReadBookConfig
 import io.legado.app.lib.theme.accentColor
-import io.legado.app.service.help.ReadBook
+import io.legado.app.model.ReadBook
 import io.legado.app.ui.book.read.page.api.DataSource
 import io.legado.app.ui.book.read.page.delegate.*
 import io.legado.app.ui.book.read.page.entities.PageDirection
@@ -41,9 +43,9 @@ class ReadView(context: Context, attrs: AttributeSet) :
             upContent()
         }
     var isScroll = false
-    var prevPage: PageView = PageView(context)
-    var curPage: PageView = PageView(context)
-    var nextPage: PageView = PageView(context)
+    val prevPage by lazy { PageView(context) }
+    val curPage by lazy { PageView(context) }
+    val nextPage by lazy { PageView(context) }
     val defaultAnimationSpeed = 300
     private var pressDown = false
     private var isMove = false
@@ -138,6 +140,7 @@ class ReadView(context: Context, attrs: AttributeSet) :
                     bottom.toFloat(),
                     autoPagePint
                 )
+                it.recycle()
             }
         }
     }
@@ -156,6 +159,17 @@ class ReadView(context: Context, attrs: AttributeSet) :
     @SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(event: MotionEvent): Boolean {
         callBack.screenOffTimerStart()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            val insets =
+                this.rootWindowInsets.getInsetsIgnoringVisibility(WindowInsets.Type.mandatorySystemGestures())
+            val height = activity?.windowManager?.currentWindowMetrics?.bounds?.height()
+            if (height != null) {
+                if (event.y > height.minus(insets.bottom)) {
+                    return true
+                }
+            }
+        }
+
         when (event.action) {
             MotionEvent.ACTION_DOWN -> {
                 if (isTextSelected) {

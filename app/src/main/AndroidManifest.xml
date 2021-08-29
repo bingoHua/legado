@@ -3,13 +3,6 @@
     xmlns:tools="http://schemas.android.com/tools"
     package="io.legado.app">
 
-    <uses-permission
-        android:name="android.permission.MANAGE_DOCUMENTS"
-        tools:ignore="ProtectedPermissions" />
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
-    <uses-permission
-        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
-        tools:ignore="ScopedStorage" />
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
@@ -21,6 +14,11 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <uses-permission android:name="android.permission.DOWNLOAD_WITHOUT_NOTIFICATION" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    <uses-permission
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        tools:ignore="ScopedStorage" />
 
     <application
         android:name=".App"
@@ -33,7 +31,9 @@
         android:theme="@style/AppTheme.Light"
         tools:ignore="AllowBackup,GoogleAppIndexingWarning,UnusedAttribute">
         <!-- 主入口 -->
-        <activity android:name=".ui.welcome.WelcomeActivity">
+        <activity
+            android:name=".ui.welcome.WelcomeActivity"
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 
@@ -49,6 +49,7 @@
         <activity
             android:name=".ui.welcome.Launcher1"
             android:enabled="false"
+            android:exported="true"
             android:icon="@mipmap/launcher1">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -65,6 +66,7 @@
         <activity
             android:name=".ui.welcome.Launcher2"
             android:enabled="false"
+            android:exported="true"
             android:icon="@mipmap/launcher2">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -81,6 +83,7 @@
         <activity
             android:name=".ui.welcome.Launcher3"
             android:enabled="false"
+            android:exported="true"
             android:icon="@mipmap/launcher3">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -97,6 +100,7 @@
         <activity
             android:name=".ui.welcome.Launcher4"
             android:enabled="false"
+            android:exported="true"
             android:icon="@mipmap/launcher4">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -113,6 +117,7 @@
         <activity
             android:name=".ui.welcome.Launcher5"
             android:enabled="false"
+            android:exported="true"
             android:icon="@mipmap/launcher5">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -129,6 +134,7 @@
         <activity
             android:name=".ui.welcome.Launcher6"
             android:enabled="false"
+            android:exported="true"
             android:icon="@mipmap/launcher6">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -150,6 +156,7 @@
         <activity
             android:name=".ui.book.read.ReadBookActivity"
             android:configChanges="locale|keyboardHidden|orientation|screenSize|smallestScreenSize|screenLayout"
+            android:exported="true"
             android:launchMode="singleTask">
             <intent-filter>
                 <action android:name="com.samsung.android.support.REMOTE_ACTION" />
@@ -169,7 +176,7 @@
             android:launchMode="singleTask" />
         <!-- 音频播放界面 -->
         <activity
-            android:name=".ui.audio.AudioPlayActivity"
+            android:name="io.legado.app.ui.book.audio.AudioPlayActivity"
             android:launchMode="singleTask" />
         <!-- 授权界面 -->
         <activity
@@ -286,9 +293,10 @@
             android:launchMode="singleTop" />
         <!-- 书源登录 -->
         <activity
-            android:name=".ui.login.SourceLoginActivity"
+            android:name="io.legado.app.ui.login.SourceLoginActivity"
             android:configChanges="orientation|screenSize"
-            android:hardwareAccelerated="true" />
+            android:hardwareAccelerated="true"
+            android:theme="@style/AppTheme.Transparent" />
         <!-- 阅读记录 -->
         <activity
             android:name=".ui.about.ReadRecordActivity"
@@ -296,13 +304,14 @@
             android:hardwareAccelerated="true" />
         <!-- 选择文件 -->
         <activity
-            android:name=".ui.document.FilePickerActivity"
+            android:name=".ui.document.HandleFileActivity"
             android:configChanges="orientation|screenSize"
             android:hardwareAccelerated="true"
             android:theme="@style/AppTheme.Transparent" />
         <!-- 文字处理 -->
         <activity
             android:name=".receiver.SharedReceiverActivity"
+            android:exported="true"
             android:label="@string/receiving_shared_label"
             android:theme="@style/AppTheme.Transparent">
             <intent-filter>
@@ -320,10 +329,11 @@
                 <data android:mimeType="text/plain" />
             </intent-filter>
         </activity>
-        <!-- 导入书源 -->
+        <!-- 一键导入 -->
         <activity
-            android:name=".ui.association.ImportBookSourceActivity"
+            android:name=".ui.association.OnLineImportActivity"
             android:configChanges="locale|keyboardHidden|orientation|screenSize|smallestScreenSize|screenLayout"
+            android:exported="true"
             android:theme="@style/AppTheme.Transparent">
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
@@ -331,46 +341,14 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
 
-                <data
-                    android:host="booksource"
-                    android:scheme="yuedu" />
-            </intent-filter>
-        </activity>
-        <!-- 导入订阅源 -->
-        <activity
-            android:name=".ui.association.ImportRssSourceActivity"
-            android:configChanges="locale|keyboardHidden|orientation|screenSize|smallestScreenSize|screenLayout"
-            android:theme="@style/AppTheme.Transparent">
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-
-                <data
-                    android:host="rsssource"
-                    android:scheme="yuedu" />
-            </intent-filter>
-        </activity>
-        <!-- 导入替换规则 -->
-        <activity
-            android:name=".ui.association.ImportReplaceRuleActivity"
-            android:configChanges="locale|keyboardHidden|orientation|screenSize|smallestScreenSize|screenLayout"
-            android:theme="@style/AppTheme.Transparent">
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-
-                <data
-                    android:host="replace"
-                    android:scheme="yuedu" />
+                <data android:scheme="legado" />
+                <data android:scheme="yuedu" />
             </intent-filter>
         </activity>
         <!-- 打开文件 -->
         <activity
             android:name=".ui.association.FileAssociationActivity"
+            android:exported="true"
             android:launchMode="singleTop"
             android:theme="@style/AppTheme.Transparent">
             <!-- VIEW (Open with) action -->
@@ -420,6 +398,16 @@
         <service android:name=".service.CheckSourceService" />
         <service android:name=".service.CacheBookService" />
         <service android:name=".service.WebService" />
+        <service
+            android:name=".service.WebTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_web_service_noti"
+            android:label="legado Web Service"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
         <service android:name=".service.TTSReadAloudService" />
         <service android:name=".service.HttpReadAloudService" />
         <service android:name=".service.AudioPlayService" />
@@ -427,7 +415,9 @@
         <service android:name=".service.CacheAudioService" />
         <service android:name=".service.CacheAudioService2" />
 
-        <receiver android:name=".receiver.MediaButtonReceiver">
+        <receiver
+            android:name=".receiver.MediaButtonReceiver"
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MEDIA_BUTTON" />
             </intent-filter>

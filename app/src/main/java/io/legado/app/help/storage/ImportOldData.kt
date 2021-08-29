@@ -5,6 +5,7 @@ import android.net.Uri
 import androidx.documentfile.provider.DocumentFile
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.BookSource
+import io.legado.app.help.BookSourceAnalyzer
 import io.legado.app.utils.DocumentUtils
 import io.legado.app.utils.FileUtils
 import io.legado.app.utils.isContentScheme
@@ -96,7 +97,7 @@ object ImportOldData {
         val items: List<Map<String, Any>> = Restore.jsonPath.parse(json).read("$")
         for (item in items) {
             val jsonItem = Restore.jsonPath.parse(item)
-            OldRule.jsonToBookSource(jsonItem.jsonString())?.let {
+            BookSourceAnalyzer.jsonToBookSource(jsonItem.jsonString())?.let {
                 bookSources.add(it)
             }
         }

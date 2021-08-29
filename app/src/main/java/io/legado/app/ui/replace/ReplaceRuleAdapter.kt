@@ -27,6 +27,17 @@ class ReplaceRuleAdapter(context: Context, var callBack: CallBack) :
 
     private val selected = linkedSetOf<ReplaceRule>()
 
+    val selection: LinkedHashSet<ReplaceRule>
+        get() {
+            val selection = linkedSetOf<ReplaceRule>()
+            getItems().map {
+                if (selected.contains(it)) {
+                    selection.add(it)
+                }
+            }
+            return selection
+        }
+
     val diffItemCallBack = object : DiffUtil.ItemCallback<ReplaceRule>() {
 
         override fun areItemsTheSame(oldItem: ReplaceRule, newItem: ReplaceRule): Boolean {
@@ -84,16 +95,6 @@ class ReplaceRuleAdapter(context: Context, var callBack: CallBack) :
         callBack.upCountView()
     }
 
-    fun getSelection(): LinkedHashSet<ReplaceRule> {
-        val selection = linkedSetOf<ReplaceRule>()
-        getItems().map {
-            if (selected.contains(it)) {
-                selection.add(it)
-            }
-        }
-        return selection
-    }
-
     override fun getViewBinding(parent: ViewGroup): ItemReplaceRuleBinding {
         return ItemReplaceRuleBinding.inflate(inflater, parent, false)
     }
@@ -108,7 +109,7 @@ class ReplaceRuleAdapter(context: Context, var callBack: CallBack) :
         item: ReplaceRule,
         payloads: MutableList<Any>
     ) {
-        with(binding) {
+        binding.run {
             val bundle = payloads.getOrNull(0) as? Bundle
             if (bundle == null) {
                 root.setBackgroundColor(ColorUtils.withAlpha(context.backgroundColor, 0.5f))

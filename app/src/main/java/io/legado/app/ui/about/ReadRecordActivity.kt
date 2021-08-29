@@ -18,6 +18,7 @@ import io.legado.app.ui.book.read.ReadBookActivity
 import io.legado.app.ui.book.search.SearchActivity
 import io.legado.app.utils.cnCompare
 import io.legado.app.utils.startActivity
+import io.legado.app.utils.viewbindingdelegate.viewBinding
 import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.Dispatchers.Main
 import kotlinx.coroutines.launch
@@ -29,9 +30,7 @@ class ReadRecordActivity : BaseActivity<ActivityReadRecordBinding>() {
     lateinit var adapter: RecordAdapter
     private var sortMode = 0
 
-    override fun getViewBinding(): ActivityReadRecordBinding {
-        return ActivityReadRecordBinding.inflate(layoutInflater)
-    }
+    override val binding by viewBinding(ActivityReadRecordBinding::inflate)
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
         initView()
@@ -57,7 +56,7 @@ class ReadRecordActivity : BaseActivity<ActivityReadRecordBinding>() {
         return super.onCompatOptionsItemSelected(item)
     }
 
-    private fun initView() = with(binding) {
+    private fun initView() = binding.run {
         readRecord.tvBookName.setText(R.string.all_read_time)
         adapter = RecordAdapter(this@ReadRecordActivity)
         recyclerView.adapter = adapter
@@ -121,9 +120,7 @@ class ReadRecordActivity : BaseActivity<ActivityReadRecordBinding>() {
                             appDb.bookDao.findByName(item.bookName).firstOrNull()
                         }
                         if (book == null) {
-                            startActivity<SearchActivity> {
-                                putExtra("key", item.bookName)
-                            }
+                            SearchActivity.start(this@ReadRecordActivity, item.bookName)
                         } else {
                             startActivity<ReadBookActivity> {
                                 putExtra("bookUrl", book.bookUrl)

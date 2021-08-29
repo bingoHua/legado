@@ -12,6 +12,7 @@ import android.widget.PopupWindow
 import androidx.activity.viewModels
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.google.android.material.tabs.TabLayout
+import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel
 import io.legado.app.R
 import io.legado.app.base.VMBaseActivity
 import io.legado.app.constant.AppConst
@@ -24,20 +25,21 @@ import io.legado.app.lib.dialogs.selector
 import io.legado.app.lib.theme.ATH
 import io.legado.app.lib.theme.backgroundColor
 import io.legado.app.ui.book.source.debug.BookSourceDebugActivity
-import io.legado.app.ui.document.FilePicker
-import io.legado.app.ui.document.FilePickerParam
+import io.legado.app.ui.document.HandleFileContract
 import io.legado.app.ui.login.SourceLoginActivity
 import io.legado.app.ui.qrcode.QrCodeResult
 import io.legado.app.ui.widget.KeyboardToolPop
 import io.legado.app.ui.widget.dialog.TextDialog
 import io.legado.app.utils.*
+import io.legado.app.utils.viewbindingdelegate.viewBinding
 import kotlin.math.abs
 
 class BookSourceEditActivity :
     VMBaseActivity<ActivityBookSourceEditBinding, BookSourceEditViewModel>(false),
     KeyboardToolPop.CallBack {
-    override val viewModel: BookSourceEditViewModel
-            by viewModels()
+
+    override val binding by viewBinding(ActivityBookSourceEditBinding::inflate)
+    override val viewModel by viewModels<BookSourceEditViewModel>()
 
     private val adapter = BookSourceEditAdapter()
     private val sourceEntities: ArrayList<EditEntity> = ArrayList()
@@ -52,7 +54,7 @@ class BookSourceEditActivity :
             upRecyclerView(source)
         }
     }
-    private val selectDoc = registerForActivityResult(FilePicker()) { uri ->
+    private val selectDoc = registerForActivityResult(HandleFileContract()) { uri ->
         uri ?: return@registerForActivityResult
         if (uri.isContentScheme()) {
             sendText(uri.toString())
@@ -63,10 +65,6 @@ class BookSourceEditActivity :
 
     private var mSoftKeyboardTool: PopupWindow? = null
     private var mIsSoftKeyBoardShowing = false
-
-    override fun getViewBinding(): ActivityBookSourceEditBinding {
-        return ActivityBookSourceEditBinding.inflate(layoutInflater)
-    }
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
         initView()
@@ -112,7 +110,8 @@ class BookSourceEditActivity :
             R.id.menu_share_str -> share(GSON.toJson(getSource()))
             R.id.menu_share_qr -> shareWithQr(
                 GSON.toJson(getSource()),
-                getString(R.string.share_book_source)
+                getString(R.string.share_book_source),
+                ErrorCorrectionLevel.L
             )
             R.id.menu_help -> showRuleHelp()
             R.id.menu_login -> getSource().let {
@@ -122,8 +121,6 @@ class BookSourceEditActivity :
                     } else {
                         startActivity<SourceLoginActivity> {
                             putExtra("sourceUrl", it.bookSourceUrl)
-                            putExtra("loginUrl", it.loginUrl)
-                            putExtra("userAgent", it.getHeaderMap()[AppConst.UA_NAME])
                         }
                     }
                 }
@@ -200,9 +197,17 @@ class BookSourceEditActivity :
             add(EditEntity("bookSourceGroup", source?.bookSourceGroup, R.string.source_group))
             add(EditEntity("bookSourceComment", source?.bookSourceComment, R.string.comment))
             add(EditEntity("loginUrl", source?.loginUrl, R.string.login_url))
+            add(EditEntity("loginUi", source?.getLoginUiStr(), R.string.login_ui))
+            add(EditEntity("loginCheckJs", source?.loginCheckJs, R.string.login_check_js))
             add(EditEntity("bookUrlPattern", source?.bookUrlPattern, R.string.book_url_pattern))
             add(EditEntity("header", source?.header, R.string.source_http_header))
-
+            add(
+                EditEntity(
+                    "concurrentRate",
+                    source?.concurrentRate,
+                    R.string.source_concurrent_rate
+                )
+            )
         }
         //搜索
         val sr = source?.getSearchRule()
@@ -291,9 +296,12 @@ class BookSourceEditActivity :
                 "bookSourceName" -> source.bookSourceName = it.value ?: ""
                 "bookSourceGroup" -> source.bookSourceGroup = it.value
                 "loginUrl" -> source.loginUrl = it.value
+                "loginUi" -> source.loginUi = GSON.fromJsonArray(it.value)
+                "loginCheckJs" -> source.loginCheckJs = it.value
                 "bookUrlPattern" -> source.bookUrlPattern = it.value
                 "header" -> source.header = it.value
                 "bookSourceComment" -> source.bookSourceComment = it.value ?: ""
+                "concurrentRate" -> source.concurrentRate = it.value
             }
         }
         searchEntities.forEach {
@@ -407,11 +415,9 @@ class BookSourceEditActivity :
                 0 -> insertText(AppConst.urlOption)
                 1 -> showRuleHelp()
                 2 -> showRegexHelp()
-                3 -> selectDoc.launch(
-                    FilePickerParam(
-                        mode = FilePicker.FILE
-                    )
-                )
+                3 -> selectDoc.launch {
+                    mode = HandleFileContract.FILE
+                }
             }
         }
     }
@@ -444,7 +450,7 @@ class BookSourceEditActivity :
             val rect = Rect()
             // 获取当前页面窗口的显示范围
             window.decorView.getWindowVisibleDisplayFrame(rect)
-            val screenHeight = this@BookSourceEditActivity.getSize().heightPixels
+            val screenHeight = this@BookSourceEditActivity.windowSize.heightPixels
             val keyboardHeight = screenHeight - rect.bottom // 输入法的高度
             val preShowing = mIsSoftKeyBoardShowing
             if (abs(keyboardHeight) > screenHeight / 5) {

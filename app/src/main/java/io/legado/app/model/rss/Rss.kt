@@ -12,6 +12,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlin.coroutines.CoroutineContext
 
+@Suppress("MemberVisibilityCanBePrivate")
 object Rss {
 
     fun getArticles(
@@ -21,18 +22,27 @@ object Rss {
         rssSource: RssSource,
         page: Int,
         context: CoroutineContext = Dispatchers.IO
-    ): Coroutine<RssResult> {
+    ): Coroutine<Pair<MutableList<RssArticle>, String?>> {
         return Coroutine.async(scope, context) {
-            val ruleData = RuleData()
-            val analyzeUrl = AnalyzeUrl(
-                sortUrl,
-                page = page,
-                ruleData = ruleData,
-                headerMapF = rssSource.getHeaderMap()
-            )
-            val body = analyzeUrl.getStrResponse(rssSource.sourceUrl).body
-            RssParserByRule.parseXML(sortName, sortUrl, body, rssSource, ruleData)
+            getArticlesAwait(sortName, sortUrl, rssSource, page)
         }
+    }
+
+    suspend fun getArticlesAwait(
+        sortName: String,
+        sortUrl: String,
+        rssSource: RssSource,
+        page: Int,
+    ): Pair<MutableList<RssArticle>, String?> {
+        val ruleData = RuleData()
+        val analyzeUrl = AnalyzeUrl(
+            sortUrl,
+            page = page,
+            ruleData = ruleData,
+            headerMapF = rssSource.getHeaderMap()
+        )
+        val body = analyzeUrl.getStrResponse(rssSource.sourceUrl).body
+        return RssParserByRule.parseXML(sortName, sortUrl, body, rssSource, ruleData)
     }
 
     fun getContent(
@@ -43,19 +53,27 @@ object Rss {
         context: CoroutineContext = Dispatchers.IO
     ): Coroutine<String> {
         return Coroutine.async(scope, context) {
-            val analyzeUrl = AnalyzeUrl(
-                rssArticle.link,
-                baseUrl = rssArticle.origin,
-                ruleData = rssArticle,
-                headerMapF = rssSource.getHeaderMap()
-            )
-            val body = analyzeUrl.getStrResponse(rssArticle.origin).body
-            Debug.log(rssSource.sourceUrl, "≡获取成功:${rssSource.sourceUrl}")
-            Debug.log(rssSource.sourceUrl, body, state = 20)
-            val analyzeRule = AnalyzeRule(rssArticle)
-            analyzeRule.setContent(body)
-                .setBaseUrl(NetworkUtils.getAbsoluteURL(rssArticle.origin, rssArticle.link))
-            analyzeRule.getString(ruleContent)
+            getContentAwait(rssArticle, ruleContent, rssSource)
         }
+    }
+
+    suspend fun getContentAwait(
+        rssArticle: RssArticle,
+        ruleContent: String,
+        rssSource: RssSource,
+    ): String {
+        val analyzeUrl = AnalyzeUrl(
+            rssArticle.link,
+            baseUrl = rssArticle.origin,
+            ruleData = rssArticle,
+            headerMapF = rssSource.getHeaderMap()
+        )
+        val body = analyzeUrl.getStrResponse(rssArticle.origin).body
+        Debug.log(rssSource.sourceUrl, "≡获取成功:${rssSource.sourceUrl}")
+        Debug.log(rssSource.sourceUrl, body, state = 20)
+        val analyzeRule = AnalyzeRule(rssArticle, rssSource)
+        analyzeRule.setContent(body)
+            .setBaseUrl(NetworkUtils.getAbsoluteURL(rssArticle.origin, rssArticle.link))
+        return analyzeRule.getString(ruleContent)
     }
 }

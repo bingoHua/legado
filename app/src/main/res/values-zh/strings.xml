@@ -86,7 +86,6 @@
     <string name="web_service">Web 服务</string>
     <string name="web_service_desc">浏览器写源,看书</string>
     <string name="web_edit_source">web编辑书源</string>
-    <string name="http_ip">http://%1$s:%2$d</string>
     <string name="offline_cache">离线缓存</string>
     <string name="offline_cache_t">离线缓存</string>
     <string name="offline_cache_s">缓存选择的章节到本地</string>
@@ -156,7 +155,6 @@
     <string name="ps_hide_navigation_bar">阅读界面隐藏虚拟按键</string>
     <string name="pt_hide_navigation_bar">隐藏导航栏</string>
     <string name="re_navigation_bar_color">导航栏颜色</string>
-    <string name="git_hub">GitHub</string>
     <string name="scoring">评分</string>
     <string name="send_mail">发送邮件</string>
     <string name="can_not_open">无法打开</string>
@@ -233,7 +231,7 @@
     <string name="intro_show_null">简介: 暂无简介</string>
     <string name="open_from_other">打开外部书籍</string>
     <string name="origin_show">来源: %s</string>
-    <string name="import_replace_rule">本地导入</string>
+    <string name="import_replace_rule">导入替换规则</string>
     <string name="import_replace_rule_on_line">导入在线规则</string>
     <string name="check_update_interval">检查更新间隔</string>
     <string name="bookshelf_px_0">按阅读时间</string>
@@ -316,7 +314,9 @@
     <string name="line_size">行距</string>
     <string name="paragraph_size">段距</string>
     <string name="to_top">置顶</string>
+    <string name="selection_to_top">置顶所选</string>
     <string name="to_bottom">置底</string>
+    <string name="selection_to_bottom">置底所选</string>
     <string name="auto_expand_find">自动展开发现</string>
     <string name="default_expand_first">默认展开第一组发现</string>
     <string name="threads_num">当前线程数 %s</string>
@@ -392,9 +392,11 @@
     <string name="source_group">源分组(sourceGroup)</string>
     <string name="diy_source_group">自定义源分组</string>
     <string name="diy_edit_source_group">输入自定义源分组名称</string>
-    <string name="diy_edit_source_group_title">【%s】</string>
-    <string name="sort_url">分类Url</string>
+    <string name="source_concurrent_rate">并发率(concurrentRate)</string>
+    <string name="sort_url">分类Url(sortUrl)</string>
     <string name="login_url">登录URL(loginUrl)</string>
+    <string name="login_ui">登录UI(loginUi)</string>
+    <string name="login_check_js">登录检查JS(loginCheckJs)</string>
     <string name="comment">源注释(sourceComment)</string>
     <string name="r_search_url">搜索地址(url)</string>
     <string name="r_find_url">发现地址规则(url)</string>
@@ -764,12 +766,12 @@
     <string name="import_str">导入</string>
     <string name="export_str">导出</string>
     <string name="save_theme_config">保存主题配置</string>
-    <string name="save_day_theme_summary">保存白天主题配置以共调用和分享</string>
-    <string name="save_night_theme_summary">保存夜间主题配置以共调用和分享</string>
+    <string name="save_day_theme_summary">保存白天主题配置以供调用和分享</string>
+    <string name="save_night_theme_summary">保存夜间主题配置以供调用和分享</string>
     <string name="theme_list">主题列表</string>
     <string name="theme_list_summary">使用保存主题,导入,分享主题</string>
     <string name="select_theme">切换默认主题</string>
-    <string name="sort_by_lastUpdateTime">时间排序</string>
+    <string name="sort_by_lastUpdateTime">更新时间排序</string>
     <string name="search_content">全文搜索</string>
     <string name="rss_source_empty">关注公众号[开源阅读]获取订阅源!</string>
     <string name="explore_empty">当前没有发现源,关注公众号[开源阅读]添加带发现的书源!</string>
@@ -781,6 +783,7 @@
     <string name="style_name">样式名称:</string>
     <string name="empty_msg_import_book">点击右上角文件夹图标,选择文件夹</string>
     <string name="scan_folder">智能扫描</string>
+    <string name="import_file_name">导入文件名</string>
     <string name="copy_book_url">拷贝书籍URL</string>
     <string name="copy_toc_url">拷贝目录URL</string>
     <string name="no_book">没有书籍</string>
@@ -807,8 +810,12 @@
     <string name="pre_download_s">预先下载%s章正文</string>
     <string name="is_enabled">是否启用</string>
     <string name="background_image">背景图片</string>
+    <string name="background_image_blurring">背景图片虚化</string>
+    <string name="background_image_blurring_radius">虚化半径</string>
+    <string name="background_image_hint">0为停用，启用范围1~25\n半径数值越大，虚化效果越高</string>
     <string name="export_folder">导出文件夹</string>
     <string name="export_charset">导出编码</string>
+    <string name="export_no_chapter_name">TXT不导出章节名</string>
     <string name="export_to_web_dav">导出到WebDav</string>
     <string name="reverse_content">反转内容</string>
     <string name="debug">调试</string>
@@ -842,5 +849,22 @@
     <string name="style">样式</string>
     <string name="group_style">分组样式</string>
     <string name="export_file_name">导出文件名</string>
+    <string name="reset">重置</string>
+    <string name="null_url">url为空</string>
+    <string name="dict">字典</string>
+    <string name="unknown_error">未知错误</string>
+    <string name="autobackup_fail">自动备份失败</string>
+    <string name="end">结束</string>
+    <string name="custom_group_summary">关闭替换分组/开启添加分组</string>
+    <string name="pref_media_button_per_next">媒体按钮•上一首|下一首</string>
+    <string name="pref_media_button_per_next_summary">上一段|下一段/上一章|下一章</string>
+    <string name="read_aloud_by_page_summary">及时翻页,翻页时会停顿一下</string>
+    <string name="check_source_show_debug_message">校验显示详细信息</string>
+    <string name="check_source_show_debug_message_summary">书源校验时显示网络请求步骤和时间</string>
+    <string name="need_login">需登录</string>
+    <string name="pref_cronet_summary">使用Cronet网络组件</string>
+    <string name="upload_url">上传URL</string>
+    <string name="download_url_rule">下载URL规则</string>
+    <string name="sort_by_respondTime">响应时间排序</string>
 
 </resources>

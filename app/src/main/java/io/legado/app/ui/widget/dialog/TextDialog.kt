@@ -8,12 +8,12 @@ import androidx.fragment.app.FragmentManager
 import io.legado.app.R
 import io.legado.app.base.BaseDialogFragment
 import io.legado.app.databinding.DialogTextViewBinding
-import io.legado.app.utils.getSize
 import io.legado.app.utils.viewbindingdelegate.viewBinding
+import io.legado.app.utils.windowSize
 import io.noties.markwon.Markwon
-import io.noties.markwon.image.glide.GlideImagesPlugin
 import io.noties.markwon.ext.tables.TablePlugin
 import io.noties.markwon.html.HtmlPlugin
+import io.noties.markwon.image.glide.GlideImagesPlugin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -49,7 +49,7 @@ class TextDialog : BaseDialogFragment() {
 
     override fun onStart() {
         super.onStart()
-        val dm = requireActivity().getSize()
+        val dm = requireActivity().windowSize
         dialog?.window?.setLayout((dm.widthPixels * 0.9).toInt(), (dm.heightPixels * 0.9).toInt())
     }
 

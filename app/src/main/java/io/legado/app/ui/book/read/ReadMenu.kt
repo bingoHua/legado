@@ -18,7 +18,7 @@ import io.legado.app.help.AppConfig
 import io.legado.app.help.LocalConfig
 import io.legado.app.help.ThemeConfig
 import io.legado.app.lib.theme.*
-import io.legado.app.service.help.ReadBook
+import io.legado.app.model.ReadBook
 import io.legado.app.ui.widget.seekbar.SeekBarChangeListener
 import io.legado.app.utils.*
 import splitties.views.onLongClick
@@ -52,7 +52,7 @@ class ReadMenu @JvmOverloads constructor(
         bindEvent()
     }
 
-    private fun initView() = with(binding) {
+    private fun initView() = binding.run {
         if (AppConfig.isNightTheme) {
             fabNightTheme.setImageResource(R.drawable.ic_daytime)
         } else {
@@ -82,9 +82,12 @@ class ReadMenu @JvmOverloads constructor(
         tvFont.setTextColor(textColor)
         ivSetting.setColorFilter(textColor)
         tvSetting.setTextColor(textColor)
-        vwBg.setOnClickListener { }
-        vwNavigationBar.setOnClickListener { }
-        seekBrightness.progress = context.getPrefInt("brightness", 100)
+        vwBg.setOnClickListener(null)
+        vwNavigationBar.setOnClickListener(null)
+        llBrightness.setOnClickListener(null)
+        seekBrightness.post {
+            seekBrightness.progress = AppConfig.readBrightness
+        }
     }
 
     fun upBrightnessState() {
@@ -95,7 +98,7 @@ class ReadMenu @JvmOverloads constructor(
             binding.ivBrightnessAuto.setColorFilter(context.buttonDisabledColor)
             binding.seekBrightness.isEnabled = true
         }
-        setScreenBrightness(context.getPrefInt("brightness", 100))
+        setScreenBrightness(AppConfig.readBrightness)
     }
 
     /**
@@ -133,7 +136,7 @@ class ReadMenu @JvmOverloads constructor(
         return context.getPrefBoolean("brightnessAuto", true) || !showBrightnessView
     }
 
-    private fun bindEvent() = with(binding) {
+    private fun bindEvent() = binding.run {
         tvChapterName.setOnClickListener {
             callBack.openSourceEditActivity()
         }
@@ -151,11 +154,13 @@ class ReadMenu @JvmOverloads constructor(
         seekBrightness.setOnSeekBarChangeListener(object : SeekBarChangeListener {
 
             override fun onProgressChanged(seekBar: SeekBar, progress: Int, fromUser: Boolean) {
-                setScreenBrightness(progress)
+                if (fromUser) {
+                    setScreenBrightness(progress)
+                }
             }
 
             override fun onStopTrackingTouch(seekBar: SeekBar) {
-                context.putPrefInt("brightness", seekBar.progress)
+                AppConfig.readBrightness = seekBar.progress
             }
 
         })
@@ -279,7 +284,7 @@ class ReadMenu @JvmOverloads constructor(
     }
 
     fun upBookView() {
-        binding.tvLogin.isGone = ReadBook.webBook?.bookSource?.loginUrl.isNullOrEmpty()
+        binding.tvLogin.isGone = ReadBook.bookSource?.loginUrl.isNullOrEmpty()
         ReadBook.curTextChapter?.let {
             binding.tvChapterName.text = it.title
             binding.tvChapterName.visible()
@@ -303,7 +308,7 @@ class ReadMenu @JvmOverloads constructor(
         binding.seekReadPage.progress = seek
     }
 
-    fun setAutoPage(autoPage: Boolean) = with(binding) {
+    fun setAutoPage(autoPage: Boolean) = binding.run {
         if (autoPage) {
             fabAutoPage.setImageResource(R.drawable.ic_auto_page_stop)
             fabAutoPage.contentDescription = context.getString(R.string.auto_next_page_stop)

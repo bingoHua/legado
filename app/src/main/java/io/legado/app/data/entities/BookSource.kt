@@ -3,20 +3,12 @@ package io.legado.app.data.entities
 import android.os.Parcelable
 import android.text.TextUtils
 import androidx.room.*
-import io.legado.app.constant.AppConst
 import io.legado.app.constant.BookType
 import io.legado.app.data.entities.rule.*
-import io.legado.app.help.AppConfig
-import io.legado.app.help.CacheManager
-import io.legado.app.help.JsExtensions
-import io.legado.app.help.http.CookieStore
-import io.legado.app.utils.ACache
-import io.legado.app.utils.GSON
-import io.legado.app.utils.fromJsonObject
-import io.legado.app.utils.splitNotBlank
+import io.legado.app.utils.*
+import kotlinx.parcelize.IgnoredOnParcel
 import kotlinx.parcelize.Parcelize
 import splitties.init.appCtx
-import javax.script.SimpleBindings
 
 @Parcelize
 @TypeConverters(BookSource.Converters::class)
@@ -29,15 +21,19 @@ data class BookSource(
     var bookSourceGroup: String? = null,            // 分组
     @PrimaryKey
     var bookSourceUrl: String = "",                 // 地址，包括 http/https
-    var bookSourceType: Int = BookType.default,     // 类型，0 文本，1 音频
+    var bookSourceType: Int = BookType.default,     // 类型，0 文本，1 音频, 3 图片
     var bookUrlPattern: String? = null,             // 详情页url正则
+    var concurrentRate: String? = null,             //并发率
     var customOrder: Int = 0,                       // 手动排序编号
     var enabled: Boolean = true,                    // 是否启用
     var enabledExplore: Boolean = true,             // 启用发现
-    var header: String? = null,                     // 请求头
-    var loginUrl: String? = null,                   // 登录地址
-    var bookSourceComment: String? = null,            // 注释
+    override var header: String? = null,            // 请求头
+    override var loginUrl: String? = null,                // 登录地址
+    var loginUi: List<RowUi>? = null,               //登录UI
+    var loginCheckJs: String? = null,               //登录检测js
+    var bookSourceComment: String? = null,          // 注释
     var lastUpdateTime: Long = 0,                   // 最后更新时间，用于排序
+    var respondTime: Long = 180000L,                // 响应时间，用于排序
     var weight: Int = 0,                            // 智能排序的权重
     var exploreUrl: String? = null,                 // 发现url
     var ruleExplore: ExploreRule? = null,           // 发现规则
@@ -46,7 +42,53 @@ data class BookSource(
     var ruleBookInfo: BookInfoRule? = null,         // 书籍信息页规则
     var ruleToc: TocRule? = null,                   // 目录页规则
     var ruleContent: ContentRule? = null            // 正文页规则
-) : Parcelable, JsExtensions {
+) : Parcelable, BaseSource {
+
+    override fun getStoreUrl(): String {
+        return bookSourceUrl
+    }
+
+    @delegate:Transient
+    @delegate:Ignore
+    @IgnoredOnParcel
+    val exploreKinds: List<ExploreKind> by lazy {
+        val exploreUrl = exploreUrl ?: return@lazy emptyList()
+        val kinds = arrayListOf<ExploreKind>()
+        var ruleStr = exploreUrl
+        if (ruleStr.isNotBlank()) {
+            kotlin.runCatching {
+                if (exploreUrl.startsWith("<js>", false)
+                    || exploreUrl.startsWith("@js:", false)
+                ) {
+                    val aCache = ACache.get(appCtx, "explore")
+                    ruleStr = aCache.getAsString(bookSourceUrl) ?: ""
+                    if (ruleStr.isBlank()) {
+                        val jsStr = if (exploreUrl.startsWith("@")) {
+                            exploreUrl.substring(4)
+                        } else {
+                            exploreUrl.substring(4, exploreUrl.lastIndexOf("<"))
+                        }
+                        ruleStr = evalJS(jsStr).toString().trim()
+                        aCache.put(bookSourceUrl, ruleStr)
+                    }
+                }
+                if (ruleStr.isJsonArray()) {
+                    GSON.fromJsonArray<ExploreKind>(ruleStr)?.let {
+                        kinds.addAll(it)
+                    }
+                } else {
+                    ruleStr.split("(&&|\n)+".toRegex()).forEach { kindStr ->
+                        val kindCfg = kindStr.split("::")
+                        kinds.add(ExploreKind(kindCfg.first(), kindCfg.getOrNull(1)))
+                    }
+                }
+            }.onFailure {
+                it.printStackTrace()
+                kinds.add(ExploreKind(it.localizedMessage ?: ""))
+            }
+        }
+        return@lazy kinds
+    }
 
     override fun hashCode(): Int {
         return bookSourceUrl.hashCode()
@@ -55,23 +97,11 @@ data class BookSource(
     override fun equals(other: Any?) =
         if (other is BookSource) other.bookSourceUrl == bookSourceUrl else false
 
-    @Throws(Exception::class)
-    fun getHeaderMap() = (HashMap<String, String>().apply {
-        this[AppConst.UA_NAME] = AppConfig.userAgent
-        header?.let {
-            GSON.fromJsonObject<Map<String, String>>(
-                when {
-                    it.startsWith("@js:", true) ->
-                        evalJS(it.substring(4)).toString()
-                    it.startsWith("<js>", true) ->
-                        evalJS(it.substring(4, it.lastIndexOf("<"))).toString()
-                    else -> it
-                }
-            )?.let { map ->
-                putAll(map)
-            }
+    fun getLoginUiStr(): String? {
+        return loginUi?.let {
+            GSON.toJson(it)
         }
-    }) as Map<String, String>
+    }
 
     fun getSearchRule() = ruleSearch ?: SearchRule()
 
@@ -100,56 +130,6 @@ data class BookSource(
         }
     }
 
-    fun getExploreKinds() = arrayListOf<ExploreKind>().apply {
-        exploreUrl?.let { urlRule ->
-            var a = urlRule
-            if (a.isNotBlank()) {
-                kotlin.runCatching {
-                    if (urlRule.startsWith("<js>", false)
-                        || urlRule.startsWith("@js", false)
-                    ) {
-                        val aCache = ACache.get(appCtx, "explore")
-                        a = aCache.getAsString(bookSourceUrl) ?: ""
-                        if (a.isBlank()) {
-                            val bindings = SimpleBindings()
-                            bindings["baseUrl"] = bookSourceUrl
-                            bindings["java"] = this
-                            bindings["cookie"] = CookieStore
-                            bindings["cache"] = CacheManager
-                            val jsStr = if (urlRule.startsWith("@")) {
-                                urlRule.substring(3)
-                            } else {
-                                urlRule.substring(4, urlRule.lastIndexOf("<"))
-                            }
-                            a = AppConst.SCRIPT_ENGINE.eval(jsStr, bindings).toString()
-                            aCache.put(bookSourceUrl, a)
-                        }
-                    }
-                    val b = a.split("(&&|\n)+".toRegex())
-                    b.forEach { c ->
-                        val d = c.split("::")
-                        if (d.size > 1)
-                            add(ExploreKind(d[0], d[1]))
-                    }
-                }.onFailure {
-                    add(ExploreKind(it.localizedMessage ?: ""))
-                }
-            }
-        }
-    }
-
-    /**
-     * 执行JS
-     */
-    @Throws(Exception::class)
-    private fun evalJS(jsStr: String): Any {
-        val bindings = SimpleBindings()
-        bindings["java"] = this
-        bindings["cookie"] = CookieStore
-        bindings["cache"] = CacheManager
-        return AppConst.SCRIPT_ENGINE.eval(jsStr, bindings)
-    }
-
     fun equal(source: BookSource) =
         equal(bookSourceName, source.bookSourceName)
                 && equal(bookSourceUrl, source.bookSourceUrl)
@@ -160,7 +140,7 @@ data class BookSource(
                 && enabled == source.enabled
                 && enabledExplore == source.enabledExplore
                 && equal(header, source.header)
-                && equal(loginUrl, source.loginUrl)
+                && loginUrl == source.loginUrl
                 && equal(exploreUrl, source.exploreUrl)
                 && equal(searchUrl, source.searchUrl)
                 && getSearchRule() == source.getSearchRule()
@@ -171,12 +151,13 @@ data class BookSource(
 
     private fun equal(a: String?, b: String?) = a == b || (a.isNullOrEmpty() && b.isNullOrEmpty())
 
-    data class ExploreKind(
-        var title: String,
-        var url: String? = null
-    )
-
     class Converters {
+        @TypeConverter
+        fun loginUiRuleToString(loginUi: List<RowUi>?): String = GSON.toJson(loginUi)
+
+        @TypeConverter
+        fun stringToLoginRule(json: String?): List<RowUi>? = GSON.fromJsonArray(json)
+
         @TypeConverter
         fun exploreRuleToString(exploreRule: ExploreRule?): String = GSON.toJson(exploreRule)
 

@@ -2,44 +2,58 @@ package io.legado.app.model.localBook
 
 import android.net.Uri
 import androidx.documentfile.provider.DocumentFile
+import io.legado.app.constant.AppConst
+import io.legado.app.constant.AppPattern
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookChapter
+import io.legado.app.help.AppConfig
 import io.legado.app.help.BookHelp
 import io.legado.app.utils.*
 import splitties.init.appCtx
 import java.io.File
+import java.util.regex.Matcher
 import java.util.regex.Pattern
-
+import javax.script.SimpleBindings
 
 object LocalBook {
     private const val folderName = "bookTxt"
     val cacheFolder: File by lazy {
-        val rootFile = appCtx.getExternalFilesDir(null)
-            ?: appCtx.externalCacheDir
-            ?: appCtx.cacheDir
-        FileUtils.createFolderIfNotExist(rootFile, folderName)
+        FileUtils.createFolderIfNotExist(appCtx.externalFiles, folderName)
     }
 
     fun getChapterList(book: Book): ArrayList<BookChapter> {
-        return if (book.isEpub()) {
-            EpubFile.getChapterList(book)
-        } else {
-            AnalyzeTxtFile().analyze(book)
+        return when {
+            book.isEpub() -> {
+                EpubFile.getChapterList(book)
+            }
+            book.isUmd() -> {
+                UmdFile.getChapterList(book)
+            }
+            else -> {
+                TextFile().analyze(book)
+            }
         }
     }
 
     fun getContext(book: Book, chapter: BookChapter): String? {
-        return if (book.isEpub()) {
-            EpubFile.getContent(book, chapter)
-        } else {
-            AnalyzeTxtFile.getContent(book, chapter)
+        return when {
+            book.isEpub() -> {
+                EpubFile.getContent(book, chapter)
+            }
+            book.isUmd() -> {
+                UmdFile.getContent(book, chapter)
+            }
+            else -> {
+                TextFile.getContent(book, chapter)
+            }
         }
     }
 
     fun importFile(uri: Uri): Book {
         val path: String
-        val fileName = if (uri.isContentScheme()) {
+        //这个变量不要修改,否则会导致读取不到缓存
+        val fileName = (if (uri.isContentScheme()) {
             path = uri.toString()
             val doc = DocumentFile.fromSingleUri(appCtx, uri)
             doc?.let {
@@ -55,93 +69,88 @@ object LocalBook {
         } else {
             path = uri.path!!
             File(path).name
+        })
+        var book = appDb.bookDao.getBook(path)
+        if (book == null) {
+            val nameAuthor = analyzeNameAuthor(fileName)
+            book = Book(
+                bookUrl = path,
+                name = nameAuthor.first,
+                author = nameAuthor.second,
+                originName = fileName,
+                coverUrl = FileUtils.getPath(
+                    appCtx.externalFiles,
+                    "covers",
+                    "${MD5Utils.md5Encode16(path)}.jpg"
+                )
+            )
+            if (book.isEpub()) EpubFile.upBookInfo(book)
+            if (book.isUmd()) UmdFile.upBookInfo(book)
+            appDb.bookDao.insert(book)
         }
+        return book
+    }
 
+    fun analyzeNameAuthor(fileName: String): Pair<String, String> {
+        val tempFileName = fileName.substringBeforeLast(".")
         val name: String
         val author: String
 
-        if (("《" in fileName && "》" in fileName)
-            || "作者" in fileName
-            || (fileName.contains(" by ", true))
-        ) {
+        //匹配(知轩藏书常用格式) 《书名》其它信息作者：作者名.txt
+        val m1 = Pattern
+            .compile("(.*?)《([^《》]+)》(.*)")
+            .matcher(tempFileName)
 
+        //匹配 书名 by 作者名.txt
+        val m2 = Pattern
+            .compile("(^)(.+) by (.+)$")
+            .matcher(tempFileName)
 
-            //匹配(知轩藏书常用格式) 《书名》其它信息作者：作者名.txt
-            val m1 = Pattern
-                .compile("《(.*?)》.*?作者：(.*?)\\.txt")
-                .matcher(fileName)
-            //匹配 书名 by 作者名.txt
-            val m2 = Pattern
-                .compile("txt\\.(.*?) yb (.*?)$")
-                .matcher(fileName.reversed())
+        (m1.takeIf { m1.find() } ?: m2.takeIf { m2.find() }).run {
 
-            if (m1.find()) {
-                name = m1.group(1) ?: fileName.replace(".txt", "")
-                author = m1.group(2) ?: ""
-                BookHelp.formatBookAuthor(author)
-            } else if (m2.find()) {
-                var temp = m2.group(2)
-                name = if (temp==null||temp == "") {
-                    fileName.replace(".txt", "")
-                } else {
-                    temp.reversed()
-                }
-                temp = m2.group(1) ?: ""
-                author = temp.reversed()
-                BookHelp.formatBookAuthor(author)
+            if (this is Matcher) {
+
+                //按默认格式将文件名分解成书名、作者名
+                name = group(2)!!
+                author = BookHelp.formatBookAuthor((group(1) ?: "") + (group(3) ?: ""))
+
+            } else if (!AppConfig.bookImportFileName.isNullOrBlank()) {
+
+                //在脚本中定义如何分解文件名成书名、作者名
+                val jsonStr = AppConst.SCRIPT_ENGINE.eval(
+
+                    //在用户脚本后添加捕获author、name的代码，只要脚本中author、name有值就会被捕获
+                    AppConfig.bookImportFileName + "\nJSON.stringify({author:author,name:name})",
+
+                    //将文件名注入到脚步的src变量中
+                    SimpleBindings().also { it["src"] = tempFileName }
+                ).toString()
+                val bookMess = GSON.fromJsonObject<HashMap<String, String>>(jsonStr) ?: HashMap()
+                name = bookMess["name"] ?: tempFileName
+                author = bookMess["author"]?.takeIf { it.length != tempFileName.length } ?: ""
+
             } else {
 
-                val st = fileName.indexOf("《")
-                val e = fileName.indexOf("》")
-                name = if (e > st && st != -1) {
-                    fileName.substring(st + 1, e)
-                } else {
-                    fileName.replace(".txt", "")
-                }
-
-
-                val s = fileName.indexOf("作者")
-                author = if (s != -1 && s + 2 < fileName.length) {
-                    fileName.substring(s + 2).replace(".txt", "")
-                } else {
-                    ""
-                }
-                BookHelp.formatBookAuthor(author)
+                name = tempFileName.replace(AppPattern.nameRegex, "")
+                author = tempFileName.replace(AppPattern.authorRegex, "")
+                    .takeIf { it.length != tempFileName.length } ?: ""
 
             }
-        } else {
 
-            name = fileName.replace(".txt", "")
-            author = ""
         }
-
-
-        val book = Book(
-            bookUrl = path,
-            name = name,
-            author = author,
-            originName = fileName,
-            coverUrl = FileUtils.getPath(
-                appCtx.externalFilesDir,
-                "covers",
-                "${MD5Utils.md5Encode16(path)}.jpg"
-            )
-        )
-        if (book.isEpub()) EpubFile.upBookInfo(book)
-        appDb.bookDao.insert(book)
-        return book
+        return Pair(name, author)
     }
 
     fun deleteBook(book: Book, deleteOriginal: Boolean) {
         kotlin.runCatching {
-            if (book.isLocalTxt()) {
+            if (book.isLocalTxt() || book.isUmd()) {
                 val bookFile = FileUtils.getFile(cacheFolder, book.originName)
                 bookFile.delete()
             }
-            if(book.isEpub()){
-                val bookFile=BookHelp.getEpubFile(book).parentFile
-                if (bookFile!=null&&bookFile.exists()){
-                    FileUtils.delete(bookFile,true)
+            if (book.isEpub()) {
+                val bookFile = BookHelp.getEpubFile(book).parentFile
+                if (bookFile != null && bookFile.exists()) {
+                    FileUtils.delete(bookFile, true)
                 }
 
             }

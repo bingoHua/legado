@@ -7,6 +7,7 @@ import okhttp3.*
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.asRequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
+import org.intellij.lang.annotations.Language
 import org.jsoup.Jsoup
 import java.io.File
 import java.io.InputStream
@@ -19,6 +20,7 @@ import java.util.*
 class WebDav(urlStr: String) {
     companion object {
         // 指定返回哪些属性
+        @Language("xml")
         private const val DIR =
             """<?xml version="1.0"?>
             <a:propfind xmlns:a="DAV:">
@@ -183,11 +185,14 @@ class WebDav(urlStr: String) {
     /**
      * 上传文件
      */
-    suspend fun upload(localPath: String, contentType: String? = null): Boolean {
+    suspend fun upload(
+        localPath: String,
+        contentType: String = "application/octet-stream"
+    ): Boolean {
         val file = File(localPath)
         if (!file.exists()) return false
         // 务必注意RequestBody不要嵌套，不然上传时内容可能会被追加多余的文件信息
-        val fileBody = file.asRequestBody(contentType?.toMediaType())
+        val fileBody = file.asRequestBody(contentType.toMediaType())
         val url = httpUrl
         val auth = HttpAuth.auth
         if (url != null && auth != null) {
@@ -202,9 +207,9 @@ class WebDav(urlStr: String) {
         return false
     }
 
-    suspend fun upload(byteArray: ByteArray, contentType: String? = null): Boolean {
+    suspend fun upload(byteArray: ByteArray, contentType: String): Boolean {
         // 务必注意RequestBody不要嵌套，不然上传时内容可能会被追加多余的文件信息
-        val fileBody = byteArray.toRequestBody(contentType?.toMediaType())
+        val fileBody = byteArray.toRequestBody(contentType.toMediaType())
         val url = httpUrl
         val auth = HttpAuth.auth
         if (url != null && auth != null) {

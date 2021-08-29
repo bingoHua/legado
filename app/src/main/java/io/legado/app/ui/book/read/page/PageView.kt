@@ -15,7 +15,7 @@ import io.legado.app.data.entities.Bookmark
 import io.legado.app.databinding.ViewBookPageBinding
 import io.legado.app.help.ReadBookConfig
 import io.legado.app.help.ReadTipConfig
-import io.legado.app.service.help.ReadBook
+import io.legado.app.model.ReadBook
 import io.legado.app.ui.book.read.page.entities.TextPage
 import io.legado.app.ui.book.read.page.provider.ChapterProvider
 import io.legado.app.ui.widget.BatteryView
@@ -55,7 +55,7 @@ class PageView(context: Context) : FrameLayout(context) {
         }
     }
 
-    fun upStyle() = with(binding) {
+    fun upStyle() = binding.run {
         upTipStyle()
         ReadBookConfig.let {
             val tipColor = with(ReadTipConfig) {
@@ -85,7 +85,9 @@ class PageView(context: Context) : FrameLayout(context) {
             vwTopDivider.visible(it.showHeaderLine)
             vwBottomDivider.visible(it.showFooterLine)
             pageNvBar.layoutParams = pageNvBar.layoutParams.apply {
-                height = if (it.hideNavigationBar) 0 else App.navigationBarHeight
+                height =
+                    if (it.hideNavigationBar) 0
+                    else App.navigationBarHeight
             }
         }
         contentTextView.upVisibleRect()
@@ -102,7 +104,7 @@ class PageView(context: Context) : FrameLayout(context) {
             ReadBookConfig.hideStatusBar || (activity as? BaseActivity<*>)?.isInMultiWindow == true
     }
 
-    private fun upTipStyle() = with(binding) {
+    private fun upTipStyle() = binding.run {
         ReadTipConfig.apply {
             tvHeaderLeft.isInvisible = tipHeaderLeft != chapterTitle
             bvHeaderLeft.isInvisible =
@@ -173,7 +175,7 @@ class PageView(context: Context) : FrameLayout(context) {
         }
     }
 
-    private fun getTipView(tip: Int): BatteryView? = with(binding) {
+    private fun getTipView(tip: Int): BatteryView? = binding.run {
         return when (tip) {
             ReadTipConfig.tipHeaderLeft ->
                 if (tip == ReadTipConfig.chapterTitle) tvHeaderLeft else bvHeaderLeft

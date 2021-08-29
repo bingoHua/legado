@@ -2,7 +2,6 @@ package io.legado.app.ui.rss.read
 
 import android.annotation.SuppressLint
 import android.app.DownloadManager
-import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.content.res.Configuration
 import android.net.Uri
@@ -12,20 +11,21 @@ import android.view.*
 import android.webkit.*
 import androidx.activity.viewModels
 import androidx.core.view.size
+import androidx.webkit.WebSettingsCompat
+import androidx.webkit.WebViewFeature
 import io.legado.app.R
 import io.legado.app.base.VMBaseActivity
 import io.legado.app.constant.AppConst
 import io.legado.app.databinding.ActivityRssReadBinding
 import io.legado.app.help.AppConfig
+import io.legado.app.lib.dialogs.SelectItem
 import io.legado.app.lib.theme.DrawableUtils
 import io.legado.app.lib.theme.primaryTextColor
 import io.legado.app.service.help.Download
-import io.legado.app.ui.association.ImportBookSourceActivity
-import io.legado.app.ui.association.ImportReplaceRuleActivity
-import io.legado.app.ui.association.ImportRssSourceActivity
-import io.legado.app.ui.document.FilePicker
-import io.legado.app.ui.document.FilePickerParam
+import io.legado.app.ui.association.OnLineImportActivity
+import io.legado.app.ui.document.HandleFileContract
 import io.legado.app.utils.*
+import io.legado.app.utils.viewbindingdelegate.viewBinding
 import kotlinx.coroutines.launch
 import org.apache.commons.text.StringEscapeUtils
 import org.jsoup.Jsoup
@@ -35,20 +35,17 @@ import splitties.systemservices.downloadManager
 class ReadRssActivity : VMBaseActivity<ActivityRssReadBinding, ReadRssViewModel>(false),
     ReadRssViewModel.CallBack {
 
-    override val viewModel: ReadRssViewModel
-            by viewModels()
-    private val imagePathKey = ""
+    override val binding by viewBinding(ActivityRssReadBinding::inflate)
+    override val viewModel by viewModels<ReadRssViewModel>()
+    private val imagePathKey = "imagePath"
     private var starMenuItem: MenuItem? = null
     private var ttsMenuItem: MenuItem? = null
     private var customWebViewCallback: WebChromeClient.CustomViewCallback? = null
     private var webPic: String? = null
-    private val saveImage = registerForActivityResult(FilePicker()) {
+    private val saveImage = registerForActivityResult(HandleFileContract()) {
+        it ?: return@registerForActivityResult
         ACache.get(this).put(imagePathKey, it.toString())
         viewModel.saveImage(webPic, it.toString())
-    }
-
-    override fun getViewBinding(): ActivityRssReadBinding {
-        return ActivityRssReadBinding.inflate(layoutInflater)
     }
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
@@ -89,13 +86,19 @@ class ReadRssActivity : VMBaseActivity<ActivityRssReadBinding, ReadRssViewModel>
 
     override fun onCompatOptionsItemSelected(item: MenuItem): Boolean {
         when (item.itemId) {
+            R.id.menu_rss_refresh -> viewModel.refresh()
             R.id.menu_rss_star -> viewModel.favorite()
             R.id.menu_share_it -> viewModel.rssArticle?.let {
                 share(it.link)
-            }
+            } ?: toastOnUi(R.string.null_url)
             R.id.menu_aloud -> readAloud()
         }
         return super.onCompatOptionsItemSelected(item)
+    }
+
+    @JavascriptInterface
+    fun isNightTheme(): Boolean {
+        return AppConfig.isNightTheme(this)
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -106,8 +109,8 @@ class ReadRssActivity : VMBaseActivity<ActivityRssReadBinding, ReadRssViewModel>
             mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
             domStorageEnabled = true
             allowContentAccess = true
-            //javaScriptEnabled = true
         }
+        binding.webView.addJavascriptInterface(this, "app")
         upWebViewTheme()
         binding.webView.setOnLongClickListener {
             val hitTestResult = binding.webView.hitTestResult
@@ -153,16 +156,23 @@ class ReadRssActivity : VMBaseActivity<ActivityRssReadBinding, ReadRssViewModel>
     }
 
     private fun saveImage() {
-        val default = arrayListOf<String>()
-        val path = ACache.get(this).getAsString(imagePathKey)
-        if (!path.isNullOrEmpty()) {
-            default.add(path)
+        val path = ACache.get(this@ReadRssActivity).getAsString(imagePathKey)
+        if (path.isNullOrEmpty()) {
+            selectSaveFolder()
+        } else {
+            viewModel.saveImage(webPic, path)
         }
-        saveImage.launch(
-            FilePickerParam(
-                otherActions = default.toTypedArray()
-            )
-        )
+    }
+
+    private fun selectSaveFolder() {
+        val default = arrayListOf<SelectItem>()
+        val path = ACache.get(this@ReadRssActivity).getAsString(imagePathKey)
+        if (!path.isNullOrEmpty()) {
+            default.add(SelectItem(path, -1))
+        }
+        saveImage.launch {
+            otherActions = default
+        }
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -196,8 +206,21 @@ class ReadRssActivity : VMBaseActivity<ActivityRssReadBinding, ReadRssViewModel>
 
     private fun upWebViewTheme() {
         if (AppConfig.isNightTheme) {
-            binding.webView
-                .evaluateJavascript(AppConst.darkWebViewJs, null)
+            if (WebViewFeature.isFeatureSupported(WebViewFeature.FORCE_DARK_STRATEGY)) {
+                WebSettingsCompat.setForceDarkStrategy(
+                    binding.webView.settings,
+                    WebSettingsCompat.DARK_STRATEGY_PREFER_WEB_THEME_OVER_USER_AGENT_DARKENING
+                )
+            }
+            if (WebViewFeature.isFeatureSupported(WebViewFeature.FORCE_DARK)) {
+                WebSettingsCompat.setForceDark(
+                    binding.webView.settings,
+                    WebSettingsCompat.FORCE_DARK_ON
+                )
+            } else {
+                binding.webView
+                    .evaluateJavascript(AppConst.darkWebViewJs, null)
+            }
         }
     }
 
@@ -313,41 +336,23 @@ class ReadRssActivity : VMBaseActivity<ActivityRssReadBinding, ReadRssViewModel>
         }
 
         private fun shouldOverrideUrlLoading(url: Uri): Boolean {
-            if (url.scheme == "http" || url.scheme == "https") {
-                return false
-            } else if (url.scheme == "yuedu") {
-                when (url.host) {
-                    "booksource" -> {
-                        val intent = Intent(
-                            this@ReadRssActivity,
-                            ImportBookSourceActivity::class.java
-                        )
-                        intent.data = url
-                        startActivity(intent)
-                    }
-                    "rsssource" -> {
-                        val intent = Intent(
-                            this@ReadRssActivity,
-                            ImportRssSourceActivity::class.java
-                        )
-                        intent.data = url
-                        startActivity(intent)
-                    }
-                    "replace" -> {
-                        val intent = Intent(
-                            this@ReadRssActivity,
-                            ImportReplaceRuleActivity::class.java
-                        )
-                        intent.data = url
-                        startActivity(intent)
-                    }
+            when (url.scheme) {
+                "http", "https" -> {
+                    return false
                 }
-                return true
+                "legado", "yuedu" -> {
+                    startActivity<OnLineImportActivity> {
+                        data = url
+                    }
+                    return true
+                }
+                else -> {
+                    binding.root.longSnackbar("跳转其它应用", "确认") {
+                        openUrl(url)
+                    }
+                    return true
+                }
             }
-            binding.root.longSnackbar("跳转其它应用", "确认") {
-                openUrl(url)
-            }
-            return true
         }
 
     }

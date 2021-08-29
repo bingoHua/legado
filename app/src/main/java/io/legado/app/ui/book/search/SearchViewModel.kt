@@ -1,9 +1,8 @@
 package io.legado.app.ui.book.search
 
 import android.app.Application
-import android.os.Handler
-import android.os.Looper
 import androidx.lifecycle.MutableLiveData
+import androidx.lifecycle.viewModelScope
 import io.legado.app.base.BaseViewModel
 import io.legado.app.constant.PreferKey
 import io.legado.app.data.appDb
@@ -11,13 +10,12 @@ import io.legado.app.data.entities.SearchBook
 import io.legado.app.data.entities.SearchKeyword
 import io.legado.app.model.webBook.SearchBookModel
 import io.legado.app.utils.getPrefBoolean
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.isActive
+import kotlinx.coroutines.*
 
 class SearchViewModel(application: Application) : BaseViewModel(application),
     SearchBookModel.CallBack {
-    val handler = Handler(Looper.getMainLooper())
-    private val searchBookModel = SearchBookModel(this, this)
+    private val searchBookModel = SearchBookModel(viewModelScope, this)
+    private var upAdapterJob: Job? = null
     var isSearchLiveData = MutableLiveData<Boolean>()
     var searchBookLiveData = MutableLiveData<List<SearchBook>>()
     var searchKey: String = ""
@@ -25,7 +23,6 @@ class SearchViewModel(application: Application) : BaseViewModel(application),
     private var searchBooks = arrayListOf<SearchBook>()
     private var searchID = 0L
     private var postTime = 0L
-    private val sendRunnable = Runnable { upAdapter() }
 
     /**
      * 开始搜索
@@ -47,12 +44,15 @@ class SearchViewModel(application: Application) : BaseViewModel(application),
     @Synchronized
     private fun upAdapter() {
         if (System.currentTimeMillis() >= postTime + 500) {
-            handler.removeCallbacks(sendRunnable)
+            upAdapterJob?.cancel()
             postTime = System.currentTimeMillis()
             searchBookLiveData.postValue(searchBooks)
         } else {
-            handler.removeCallbacks(sendRunnable)
-            handler.postDelayed(sendRunnable, 500 - System.currentTimeMillis() + postTime)
+            upAdapterJob?.cancel()
+            upAdapterJob = viewModelScope.launch {
+                delay(500)
+                upAdapter()
+            }
         }
     }
 
@@ -64,7 +64,7 @@ class SearchViewModel(application: Application) : BaseViewModel(application),
     override fun onSearchSuccess(searchBooks: ArrayList<SearchBook>) {
         val precision = context.getPrefBoolean(PreferKey.precisionSearch)
         appDb.searchBookDao.insert(*searchBooks.toTypedArray())
-        mergeItems(this, searchBooks, precision)
+        mergeItems(viewModelScope, searchBooks, precision)
     }
 
     override fun onSearchFinish() {
@@ -184,6 +184,10 @@ class SearchViewModel(application: Application) : BaseViewModel(application),
         execute {
             appDb.searchKeywordDao.deleteAll()
         }
+    }
+
+    fun deleteHistory(searchKeyword: SearchKeyword) {
+        appDb.searchKeywordDao.delete(searchKeyword)
     }
 
     override fun onCleared() {

@@ -19,8 +19,8 @@ import io.legado.app.lib.theme.backgroundColor
 import io.legado.app.service.BaseReadAloudService
 import io.legado.app.service.help.ReadAloud
 import io.legado.app.utils.getPrefLong
-import io.legado.app.utils.getSize
 import io.legado.app.utils.postEvent
+import io.legado.app.utils.windowSize
 import splitties.init.appCtx
 
 class ReadAloudConfigDialog : DialogFragment() {
@@ -28,7 +28,7 @@ class ReadAloudConfigDialog : DialogFragment() {
 
     override fun onStart() {
         super.onStart()
-        val dm = requireActivity().getSize()
+        val dm = requireActivity().windowSize
         dialog?.window?.let {
             it.setBackgroundDrawableResource(R.color.transparent)
             it.setLayout((dm.widthPixels * 0.9).toInt(), ViewGroup.LayoutParams.WRAP_CONTENT)
@@ -39,7 +39,7 @@ class ReadAloudConfigDialog : DialogFragment() {
         inflater: LayoutInflater,
         container: ViewGroup?,
         savedInstanceState: Bundle?
-    ): View? {
+    ): View {
         val view = LinearLayout(requireContext())
         view.setBackgroundColor(requireContext().backgroundColor)
         view.id = R.id.tag1

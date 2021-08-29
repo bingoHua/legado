@@ -16,8 +16,8 @@ import androidx.recyclerview.widget.RecyclerView
 import io.legado.app.R
 import io.legado.app.databinding.DialogFileChooserBinding
 import io.legado.app.lib.theme.primaryColor
-import io.legado.app.ui.document.FilePicker.Companion.DIRECTORY
-import io.legado.app.ui.document.FilePicker.Companion.FILE
+import io.legado.app.ui.document.HandleFileContract.Companion.DIR
+import io.legado.app.ui.document.HandleFileContract.Companion.FILE
 import io.legado.app.ui.document.adapter.FileAdapter
 import io.legado.app.ui.document.adapter.PathAdapter
 import io.legado.app.ui.widget.recycler.VerticalDivider
@@ -63,7 +63,7 @@ class FilePickerDialog : DialogFragment(),
     private val binding by viewBinding(DialogFileChooserBinding::bind)
     override var allowExtensions: Array<String>? = null
     override val isSelectDir: Boolean
-        get() = mode == DIRECTORY
+        get() = mode == DIR
     override var isShowHomeDir: Boolean = false
     override var isShowUpDir: Boolean = true
     override var isShowHideDir: Boolean = false
@@ -76,7 +76,7 @@ class FilePickerDialog : DialogFragment(),
 
     override fun onStart() {
         super.onStart()
-        val dm = requireActivity().getSize()
+        val dm = requireActivity().windowSize
         dialog?.window?.setLayout((dm.widthPixels * 0.9).toInt(), (dm.heightPixels * 0.8).toInt())
     }
 
@@ -159,7 +159,7 @@ class FilePickerDialog : DialogFragment(),
             refreshCurrentDirPath(fileItem.path)
         } else {
             fileItem?.path?.let { path ->
-                if (mode == DIRECTORY) {
+                if (mode == DIR) {
                     toastOnUi("这是文件夹选择,不能选择文件,点击右上角的确定选择文件夹")
                 } else if (allowExtensions.isNullOrEmpty() ||
                     allowExtensions?.contains(FileUtils.getExtension(path)) == true

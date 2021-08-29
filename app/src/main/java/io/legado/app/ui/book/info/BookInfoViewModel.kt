@@ -5,14 +5,17 @@ import android.content.Intent
 import androidx.lifecycle.MutableLiveData
 import io.legado.app.R
 import io.legado.app.base.BaseViewModel
+import io.legado.app.constant.EventBus
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookChapter
 import io.legado.app.data.entities.BookSource
 import io.legado.app.help.BookHelp
+import io.legado.app.model.ReadBook
 import io.legado.app.model.localBook.LocalBook
 import io.legado.app.model.webBook.WebBook
-import io.legado.app.service.help.ReadBook
+import io.legado.app.utils.postEvent
+import io.legado.app.utils.toastOnUi
 import kotlinx.coroutines.Dispatchers.IO
 
 class BookInfoViewModel(application: Application) : BaseViewModel(application) {
@@ -78,7 +81,7 @@ class BookInfoViewModel(application: Application) : BaseViewModel(application) {
                 loadChapter(book, changeDruChapterIndex)
             } else {
                 bookSource?.let { bookSource ->
-                    WebBook(bookSource).getBookInfo(this, book, canReName = canReName)
+                    WebBook.getBookInfo(this, bookSource, book, canReName = canReName)
                         .onSuccess(IO) {
                             bookData.postValue(book)
                             if (inBookshelf) {
@@ -86,11 +89,11 @@ class BookInfoViewModel(application: Application) : BaseViewModel(application) {
                             }
                             loadChapter(it, changeDruChapterIndex)
                         }.onError {
-                            toastOnUi(R.string.error_get_book_info)
+                            context.toastOnUi(R.string.error_get_book_info)
                         }
                 } ?: let {
                     chapterListData.postValue(emptyList())
-                    toastOnUi(R.string.error_no_source)
+                    context.toastOnUi(R.string.error_no_source)
                 }
             }
         }
@@ -109,7 +112,7 @@ class BookInfoViewModel(application: Application) : BaseViewModel(application) {
                 }
             } else {
                 bookSource?.let { bookSource ->
-                    WebBook(bookSource).getChapterList(this, book)
+                    WebBook.getChapterList(this, bookSource, book)
                         .onSuccess(IO) {
                             if (it.isNotEmpty()) {
                                 if (inBookshelf) {
@@ -122,19 +125,19 @@ class BookInfoViewModel(application: Application) : BaseViewModel(application) {
                                     changeDruChapterIndex(it)
                                 }
                             } else {
-                                toastOnUi(R.string.chapter_list_empty)
+                                context.toastOnUi(R.string.chapter_list_empty)
                             }
                         }.onError {
                             chapterListData.postValue(emptyList())
-                            toastOnUi(R.string.error_get_chapter_list)
+                            context.toastOnUi(R.string.error_get_chapter_list)
                         }
                 } ?: let {
                     chapterListData.postValue(emptyList())
-                    toastOnUi(R.string.error_no_source)
+                    context.toastOnUi(R.string.error_no_source)
                 }
             }
         }.onError {
-            toastOnUi("LoadTocError:${it.localizedMessage}")
+            context.toastOnUi("LoadTocError:${it.localizedMessage}")
         }
     }
 
@@ -166,6 +169,8 @@ class BookInfoViewModel(application: Application) : BaseViewModel(application) {
                     upChangeDurChapterIndex(newBook, oldTocSize, it)
                 }
             }
+        }.onFinally {
+            postEvent(EventBus.SOURCE_CHANGED, newBook.bookUrl)
         }
     }
 
@@ -191,6 +196,17 @@ class BookInfoViewModel(application: Application) : BaseViewModel(application) {
         }
     }
 
+    fun topBook() {
+        execute {
+            bookData.value?.let { book ->
+                val minOrder = appDb.bookDao.minOrder
+                book.order = minOrder - 1
+                book.durChapterTime = System.currentTimeMillis()
+                appDb.bookDao.update(book)
+            }
+        }
+    }
+
     fun saveBook(success: (() -> Unit)? = null) {
         execute {
             bookData.value?.let { book ->
@@ -201,7 +217,7 @@ class BookInfoViewModel(application: Application) : BaseViewModel(application) {
                     book.durChapterPos = it.durChapterPos
                     book.durChapterTitle = it.durChapterTitle
                 }
-                appDb.bookDao.insert(book)
+                book.save()
                 if (ReadBook.book?.name == book.name && ReadBook.book?.author == book.author) {
                     ReadBook.book = book
                 }
@@ -231,7 +247,7 @@ class BookInfoViewModel(application: Application) : BaseViewModel(application) {
                     book.durChapterPos = it.durChapterPos
                     book.durChapterTitle = it.durChapterTitle
                 }
-                appDb.bookDao.insert(book)
+                book.save()
             }
             chapterListData.value?.let {
                 appDb.bookChapterDao.insert(*it.toTypedArray())
@@ -260,9 +276,9 @@ class BookInfoViewModel(application: Application) : BaseViewModel(application) {
         execute {
             BookHelp.clearCache(bookData.value!!)
         }.onSuccess {
-            toastOnUi(R.string.clear_cache_success)
+            context.toastOnUi(R.string.clear_cache_success)
         }.onError {
-            toastOnUi(it.stackTraceToString())
+            context.toastOnUi(it.stackTraceToString())
         }
     }
 

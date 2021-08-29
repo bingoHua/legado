@@ -6,7 +6,6 @@ import android.content.Intent
 import android.os.Bundle
 import android.view.View
 import androidx.fragment.app.activityViewModels
-import androidx.lifecycle.LiveData
 import io.legado.app.R
 import io.legado.app.base.VMBaseFragment
 import io.legado.app.constant.EventBus
@@ -24,6 +23,8 @@ import io.legado.app.utils.observeEvent
 import io.legado.app.utils.viewbindingdelegate.viewBinding
 import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.Dispatchers.Main
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.min
@@ -31,15 +32,15 @@ import kotlin.math.min
 class ChapterListFragment : VMBaseFragment<TocViewModel>(R.layout.fragment_chapter_list),
     ChapterListAdapter.Callback,
     TocViewModel.ChapterListCallBack {
-    override val viewModel: TocViewModel by activityViewModels()
+    override val viewModel by activityViewModels<TocViewModel>()
     private val binding by viewBinding(FragmentChapterListBinding::bind)
     lateinit var adapter: ChapterListAdapter
     private var durChapterIndex = 0
     private lateinit var mLayoutManager: UpLinearLayoutManager
-    private var tocLiveData: LiveData<List<BookChapter>>? = null
+    private var tocFlowJob: Job? = null
     private var scrollToDurChapter = false
 
-    override fun onFragmentCreated(view: View, savedInstanceState: Bundle?) = with(binding) {
+    override fun onFragmentCreated(view: View, savedInstanceState: Bundle?) = binding.run {
         viewModel.chapterCallBack = this@ChapterListFragment
         val bbg = bottomBackground
         val btc = requireContext().getPrimaryTextColor(ColorUtils.isColorLight(bbg))
@@ -62,7 +63,7 @@ class ChapterListFragment : VMBaseFragment<TocViewModel>(R.layout.fragment_chapt
         binding.recyclerView.adapter = adapter
     }
 
-    private fun initView() = with(binding) {
+    private fun initView() = binding.run {
         ivChapterTop.setOnClickListener { mLayoutManager.scrollToPositionWithOffset(0, 0) }
         ivChapterBottom.setOnClickListener {
             if (adapter.itemCount > 0) {
@@ -77,24 +78,12 @@ class ChapterListFragment : VMBaseFragment<TocViewModel>(R.layout.fragment_chapt
     @SuppressLint("SetTextI18n")
     private fun initBook(book: Book) {
         launch {
-            initDoc()
+            upChapterList(null)
             durChapterIndex = book.durChapterIndex
             binding.tvCurrentChapterInfo.text =
                 "${book.durChapterTitle}(${book.durChapterIndex + 1}/${book.totalChapterNum})"
             initCacheFileNames(book)
         }
-    }
-
-    private fun initDoc() {
-        tocLiveData?.removeObservers(this@ChapterListFragment)
-        tocLiveData = appDb.bookChapterDao.observeByBook(viewModel.bookUrl)
-        tocLiveData?.observe(viewLifecycleOwner, {
-            adapter.setItems(it)
-            if (!scrollToDurChapter) {
-                mLayoutManager.scrollToPositionWithOffset(durChapterIndex, 0)
-                scrollToDurChapter = true
-            }
-        })
     }
 
     private fun initCacheFileNames(book: Book) {
@@ -117,15 +106,19 @@ class ChapterListFragment : VMBaseFragment<TocViewModel>(R.layout.fragment_chapt
         }
     }
 
-    override fun startChapterListSearch(newText: String?) {
-        if (newText.isNullOrBlank()) {
-            initDoc()
-        } else {
-            tocLiveData?.removeObservers(this)
-            tocLiveData = appDb.bookChapterDao.liveDataSearch(viewModel.bookUrl, newText)
-            tocLiveData?.observe(viewLifecycleOwner, {
+    override fun upChapterList(searchKey: String?) {
+        tocFlowJob?.cancel()
+        tocFlowJob = launch {
+            when {
+                searchKey.isNullOrBlank() -> appDb.bookChapterDao.flowByBook(viewModel.bookUrl)
+                else -> appDb.bookChapterDao.flowSearch(viewModel.bookUrl, searchKey)
+            }.collect {
                 adapter.setItems(it)
-            })
+                if (searchKey.isNullOrBlank() && !scrollToDurChapter) {
+                    mLayoutManager.scrollToPositionWithOffset(durChapterIndex, 0)
+                    scrollToDurChapter = true
+                }
+            }
         }
     }
 

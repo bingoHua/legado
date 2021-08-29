@@ -6,7 +6,7 @@ import io.legado.app.constant.AppPattern
 import io.legado.app.constant.BookType
 import io.legado.app.data.appDb
 import io.legado.app.help.AppConfig
-import io.legado.app.service.help.ReadBook
+import io.legado.app.model.ReadBook
 import io.legado.app.utils.GSON
 import io.legado.app.utils.MD5Utils
 import io.legado.app.utils.fromJsonObject
@@ -66,6 +66,10 @@ data class Book(
 
     fun isEpub(): Boolean {
         return originName.endsWith(".epub", true)
+    }
+
+    fun isUmd(): Boolean {
+        return originName.endsWith(".umd", true)
     }
 
     fun isOnLineTxt(): Boolean {
@@ -238,6 +242,14 @@ data class Book(
             bookName = name,
             bookAuthor = author,
         )
+    }
+
+    fun save() {
+        if (appDb.bookDao.has(bookUrl) == true) {
+            appDb.bookDao.update(this)
+        } else {
+            appDb.bookDao.insert(this)
+        }
     }
 
     companion object {

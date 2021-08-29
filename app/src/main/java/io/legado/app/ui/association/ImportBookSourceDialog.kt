@@ -9,7 +9,8 @@ import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
 import androidx.appcompat.widget.Toolbar
-import androidx.fragment.app.activityViewModels
+import androidx.fragment.app.FragmentManager
+import androidx.fragment.app.viewModels
 import androidx.recyclerview.widget.LinearLayoutManager
 import io.legado.app.R
 import io.legado.app.base.BaseDialogFragment
@@ -19,11 +20,12 @@ import io.legado.app.constant.AppPattern
 import io.legado.app.constant.PreferKey
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.BookSource
-import io.legado.app.databinding.DialogEditTextBinding
+import io.legado.app.databinding.DialogCustomGroupBinding
 import io.legado.app.databinding.DialogRecyclerViewBinding
 import io.legado.app.databinding.ItemSourceImportBinding
 import io.legado.app.help.AppConfig
 import io.legado.app.lib.dialogs.alert
+import io.legado.app.lib.theme.primaryColor
 import io.legado.app.ui.widget.dialog.WaitDialog
 import io.legado.app.utils.dp
 import io.legado.app.utils.putPrefBoolean
@@ -37,10 +39,26 @@ import io.legado.app.utils.visible
  */
 class ImportBookSourceDialog : BaseDialogFragment(), Toolbar.OnMenuItemClickListener {
 
-    private val binding by viewBinding(DialogRecyclerViewBinding::bind)
+    companion object {
 
-    val viewModel: ImportBookSourceViewModel by activityViewModels()
-    lateinit var adapter: SourcesAdapter
+        fun start(
+            fragmentManager: FragmentManager,
+            source: String,
+            finishOnDismiss: Boolean = false
+        ) {
+            ImportBookSourceDialog().apply {
+                arguments = Bundle().apply {
+                    putString("source", source)
+                    putBoolean("finishOnDismiss", finishOnDismiss)
+                }
+            }.show(fragmentManager, "importBookSource")
+        }
+
+    }
+
+    private val binding by viewBinding(DialogRecyclerViewBinding::bind)
+    private val viewModel by viewModels<ImportBookSourceViewModel>()
+    private lateinit var adapter: SourcesAdapter
 
     override fun onStart() {
         super.onStart()
@@ -58,13 +76,22 @@ class ImportBookSourceDialog : BaseDialogFragment(), Toolbar.OnMenuItemClickList
         return inflater.inflate(R.layout.dialog_recycler_view, container)
     }
 
+    override fun onDismiss(dialog: DialogInterface) {
+        super.onDismiss(dialog)
+        if (arguments?.getBoolean("finishOnDismiss") == true) {
+            activity?.finish()
+        }
+    }
+
+    @SuppressLint("NotifyDataSetChanged")
     override fun onFragmentCreated(view: View, savedInstanceState: Bundle?) {
+        binding.toolBar.setBackgroundColor(primaryColor)
         binding.toolBar.setTitle(R.string.import_book_source)
+        binding.rotateLoading.show()
         initMenu()
         adapter = SourcesAdapter(requireContext())
         binding.recyclerView.layoutManager = LinearLayoutManager(requireContext())
         binding.recyclerView.adapter = adapter
-        adapter.setItems(viewModel.allSources)
         binding.tvCancel.visible()
         binding.tvCancel.setOnClickListener {
             dismissAllowingStateLoss()
@@ -78,10 +105,9 @@ class ImportBookSourceDialog : BaseDialogFragment(), Toolbar.OnMenuItemClickList
                 dismissAllowingStateLoss()
             }
         }
-        upSelectText()
         binding.tvFooterLeft.visible()
         binding.tvFooterLeft.setOnClickListener {
-            val selectAll = viewModel.isSelectAll()
+            val selectAll = viewModel.isSelectAll
             viewModel.selectStatus.forEachIndexed { index, b ->
                 if (b != !selectAll) {
                     viewModel.selectStatus[index] = !selectAll
@@ -90,19 +116,44 @@ class ImportBookSourceDialog : BaseDialogFragment(), Toolbar.OnMenuItemClickList
             adapter.notifyDataSetChanged()
             upSelectText()
         }
+        viewModel.errorLiveData.observe(this, {
+            binding.rotateLoading.hide()
+            binding.tvMsg.apply {
+                text = it
+                visible()
+            }
+        })
+        viewModel.successLiveData.observe(this, {
+            binding.rotateLoading.hide()
+            if (it > 0) {
+                adapter.setItems(viewModel.allSources)
+                upSelectText()
+            } else {
+                binding.tvMsg.apply {
+                    setText(R.string.wrong_format)
+                    visible()
+                }
+            }
+        })
+        val source = arguments?.getString("source")
+        if (source.isNullOrEmpty()) {
+            dismiss()
+            return
+        }
+        viewModel.importSource(source)
     }
 
     private fun upSelectText() {
-        if (viewModel.isSelectAll()) {
+        if (viewModel.isSelectAll) {
             binding.tvFooterLeft.text = getString(
                 R.string.select_cancel_count,
-                viewModel.selectCount(),
+                viewModel.selectCount,
                 viewModel.allSources.size
             )
         } else {
             binding.tvFooterLeft.text = getString(
                 R.string.select_all_count,
-                viewModel.selectCount(),
+                viewModel.selectCount,
                 viewModel.allSources.size
             )
         }
@@ -118,28 +169,7 @@ class ImportBookSourceDialog : BaseDialogFragment(), Toolbar.OnMenuItemClickList
     @SuppressLint("InflateParams")
     override fun onMenuItemClick(item: MenuItem): Boolean {
         when (item.itemId) {
-            R.id.menu_new_group -> {
-                alert(R.string.diy_edit_source_group) {
-                    val alertBinding = DialogEditTextBinding.inflate(layoutInflater).apply {
-                        val groups = linkedSetOf<String>()
-                        appDb.bookSourceDao.allGroup.forEach { group ->
-                            groups.addAll(group.splitNotBlank(AppPattern.splitGroupRegex))
-                        }
-                        editView.setFilterValues(groups.toList())
-                        editView.dropDownHeight = 180.dp
-                    }
-                    customView {
-                        alertBinding.root
-                    }
-                    okButton {
-                        alertBinding.editView.text?.toString()?.let { group ->
-                            viewModel.groupName = group
-                            item.title = getString(R.string.diy_edit_source_group_title, group)
-                        }
-                    }
-                    noButton()
-                }.show()
-            }
+            R.id.menu_new_group -> alertCustomGroup(item)
             R.id.menu_Keep_original_name -> {
                 item.isChecked = !item.isChecked
                 putPrefBoolean(PreferKey.importKeepName, item.isChecked)
@@ -148,9 +178,36 @@ class ImportBookSourceDialog : BaseDialogFragment(), Toolbar.OnMenuItemClickList
         return false
     }
 
-    override fun onDismiss(dialog: DialogInterface) {
-        super.onDismiss(dialog)
-        activity?.finish()
+    private fun alertCustomGroup(item: MenuItem) {
+        alert(R.string.diy_edit_source_group) {
+            val alertBinding = DialogCustomGroupBinding.inflate(layoutInflater).apply {
+                val groups = linkedSetOf<String>()
+                appDb.bookSourceDao.allGroup.forEach { group ->
+                    groups.addAll(group.splitNotBlank(AppPattern.splitGroupRegex))
+                }
+                textInputLayout.setHint(R.string.group_name)
+                editView.setFilterValues(groups.toList())
+                editView.dropDownHeight = 180.dp
+            }
+            customView {
+                alertBinding.root
+            }
+            okButton {
+                viewModel.isAddGroup = alertBinding.swAddGroup.isChecked
+                viewModel.groupName = alertBinding.editView.text?.toString()
+                if (viewModel.groupName.isNullOrBlank()) {
+                    item.title = getString(R.string.diy_source_group)
+                } else {
+                    val group = getString(R.string.diy_edit_source_group_title, viewModel.groupName)
+                    if (viewModel.isAddGroup) {
+                        item.title = "+$group"
+                    } else {
+                        item.title = group
+                    }
+                }
+            }
+            noButton()
+        }.show()
     }
 
     inner class SourcesAdapter(context: Context) :

@@ -7,11 +7,8 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.net.Uri
 import android.os.Build
-import android.os.Handler
-import android.os.Looper
 import androidx.core.app.NotificationCompat
 import androidx.core.content.FileProvider
-import androidx.core.os.bundleOf
 import io.legado.app.R
 import io.legado.app.base.BaseService
 import io.legado.app.constant.AppConst
@@ -20,6 +17,10 @@ import io.legado.app.help.IntentHelp
 import io.legado.app.utils.RealPathUtil
 import io.legado.app.utils.msg
 import io.legado.app.utils.toastOnUi
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import splitties.systemservices.downloadManager
 import java.io.File
 
@@ -28,11 +29,7 @@ class DownloadService : BaseService() {
 
     private val downloads = hashMapOf<Long, String>()
     private val completeDownloads = hashSetOf<Long>()
-    private val handler = Handler(Looper.getMainLooper())
-    private val runnable = Runnable {
-        checkDownloadState()
-    }
-
+    private var upStateJob: Job? = null
     private val downloadReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             queryState()
@@ -42,11 +39,6 @@ class DownloadService : BaseService() {
     override fun onCreate() {
         super.onCreate()
         registerReceiver(downloadReceiver, IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE))
-    }
-
-    override fun onTaskRemoved(rootIntent: Intent?) {
-        super.onTaskRemoved(rootIntent)
-        stopSelf()
     }
 
     override fun onDestroy() {
@@ -84,9 +76,13 @@ class DownloadService : BaseService() {
     }
 
     private fun checkDownloadState() {
-        handler.removeCallbacks(runnable)
-        queryState()
-        handler.postDelayed(runnable, 1000)
+        upStateJob?.cancel()
+        upStateJob = launch {
+            while (isActive) {
+                queryState()
+                delay(1000)
+            }
+        }
     }
 
     //查询下载进度
@@ -157,27 +153,21 @@ class DownloadService : BaseService() {
             .setOngoing(true)
             .setContentTitle(getString(R.string.action_download))
         notificationBuilder.setContentIntent(
-            IntentHelp.servicePendingIntent<DownloadService>(
-                this,
-                IntentAction.play,
-                bundleOf("downloadId" to downloadId)
-            )
+            IntentHelp.servicePendingIntent<DownloadService>(this, IntentAction.play) {
+                putExtra("downloadId", downloadId)
+            }
         )
         notificationBuilder.addAction(
             R.drawable.ic_stop_black_24dp,
             getString(R.string.cancel),
-            IntentHelp.servicePendingIntent<DownloadService>(
-                this,
-                IntentAction.stop,
-                bundleOf("downloadId" to downloadId)
-            )
+            IntentHelp.servicePendingIntent<DownloadService>(this, IntentAction.stop) {
+                putExtra("downloadId", downloadId)
+            }
         )
         notificationBuilder.setDeleteIntent(
-            IntentHelp.servicePendingIntent<DownloadService>(
-                this,
-                IntentAction.stop,
-                bundleOf("downloadId" to downloadId)
-            )
+            IntentHelp.servicePendingIntent<DownloadService>(this, IntentAction.stop) {
+                putExtra("downloadId", downloadId)
+            }
         )
         notificationBuilder.setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
         notificationBuilder.setContentText(content)

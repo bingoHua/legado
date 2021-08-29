@@ -26,7 +26,7 @@ class ThemeListDialog : BaseDialogFragment(), Toolbar.OnMenuItemClickListener {
 
     override fun onStart() {
         super.onStart()
-        val dm = requireActivity().getSize()
+        val dm = requireActivity().windowSize
         dialog?.window?.setLayout((dm.widthPixels * 0.9).toInt(), (dm.heightPixels * 0.9).toInt())
     }
 
@@ -46,14 +46,14 @@ class ThemeListDialog : BaseDialogFragment(), Toolbar.OnMenuItemClickListener {
         initData()
     }
 
-    private fun initView() = with(binding) {
+    private fun initView() = binding.run {
         adapter = Adapter()
         recyclerView.layoutManager = LinearLayoutManager(requireContext())
         recyclerView.addItemDecoration(VerticalDivider(requireContext()))
         recyclerView.adapter = adapter
     }
 
-    private fun initMenu() = with(binding) {
+    private fun initMenu() = binding.run {
         toolBar.setOnMenuItemClickListener(this@ThemeListDialog)
         toolBar.inflateMenu(R.menu.theme_list)
         toolBar.menu.applyTint(requireContext())
