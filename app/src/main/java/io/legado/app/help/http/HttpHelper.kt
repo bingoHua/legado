@@ -29,6 +29,7 @@ val okHttpClient: OkHttpClient by lazy {
         .connectTimeout(15, TimeUnit.SECONDS)
         .writeTimeout(15, TimeUnit.SECONDS)
         .readTimeout(15, TimeUnit.SECONDS)
+        .callTimeout(60,TimeUnit.SECONDS)
         .sslSocketFactory(SSLHelper.unsafeSSLSocketFactory, SSLHelper.unsafeTrustManager)
         .retryOnConnectionFailure(true)
         .hostnameVerifier(SSLHelper.unsafeHostnameVerifier)
@@ -48,8 +49,6 @@ val okHttpClient: OkHttpClient by lazy {
         //提供CookieJar 用于同步Cookie
         builder.addInterceptor(CronetInterceptor(null))
     }
-
-
     builder.build()
 }
 

@@ -5,10 +5,6 @@ import android.app.PendingIntent
 import android.content.Context
 import android.net.Uri
 import androidx.documentfile.provider.DocumentFile
-import com.jayway.jsonpath.Configuration
-import com.jayway.jsonpath.JsonPath
-import com.jayway.jsonpath.Option
-import com.jayway.jsonpath.ParseContext
 import io.legado.app.BuildConfig
 import io.legado.app.R
 import io.legado.app.constant.AppConst.androidId
@@ -61,6 +57,8 @@ object Restore {
         PreferKey.defaultCover,
         PreferKey.defaultCoverDark
     )
+
+    //阅读配置
     private val readPrefKeys = arrayOf(
         PreferKey.readStyleSelect,
         PreferKey.shareLayout,
@@ -68,14 +66,6 @@ object Restore {
         PreferKey.hideNavigationBar,
         PreferKey.autoReadSpeed
     )
-
-    val jsonPath: ParseContext by lazy {
-        JsonPath.using(
-            Configuration.builder()
-                .options(Option.SUPPRESS_EXCEPTIONS)
-                .build()
-        )
-    }
 
     suspend fun restore(context: Context, path: String) {
         withContext(IO) {
@@ -104,7 +94,7 @@ object Restore {
                         }
                     }
                 } catch (e: Exception) {
-                    e.printStackTrace()
+                    e.printOnDebug()
                 }
             }
         }
@@ -125,6 +115,10 @@ object Restore {
             }
             fileToListT<BookSource>(path, "bookSource.json")?.let {
                 appDb.bookSourceDao.insert(*it.toTypedArray())
+            } ?: run {
+                val bookSourceFile = FileUtils.createFileIfNotExist(path + File.separator + "bookSource.json")
+                val json = bookSourceFile.readText()
+                ImportOldData.importOldSource(json)
             }
             fileToListT<RssSource>(path, "rssSources.json")?.let {
                 appDb.rssSourceDao.insert(*it.toTypedArray())
@@ -175,7 +169,7 @@ object Restore {
                     ThemeConfig.upConfig()
                 }
             } catch (e: Exception) {
-                e.printStackTrace()
+                e.printOnDebug()
             }
             if (!ignoreReadConfig) {
                 try {
@@ -187,7 +181,7 @@ object Restore {
                         ReadBookConfig.initConfigs()
                     }
                 } catch (e: Exception) {
-                    e.printStackTrace()
+                    e.printOnDebug()
                 }
                 try {
                     val file =
@@ -198,7 +192,7 @@ object Restore {
                         ReadBookConfig.initShareConfig()
                     }
                 } catch (e: Exception) {
-                    e.printStackTrace()
+                    e.printOnDebug()
                 }
             }
             Preferences.getSharedPreferences(appCtx, path, "config")?.all?.let { map ->
@@ -273,7 +267,7 @@ object Restore {
             val json = file.readText()
             return GSON.fromJsonArray(json)
         } catch (e: Exception) {
-            e.printStackTrace()
+            e.printOnDebug()
         }
         return null
     }

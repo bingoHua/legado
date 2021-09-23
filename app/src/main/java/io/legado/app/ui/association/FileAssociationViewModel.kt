@@ -5,8 +5,10 @@ import android.net.Uri
 import androidx.documentfile.provider.DocumentFile
 import androidx.lifecycle.MutableLiveData
 import io.legado.app.base.BaseViewModel
+import io.legado.app.model.NoStackTraceException
 import io.legado.app.model.localBook.LocalBook
 import io.legado.app.utils.isJson
+import io.legado.app.utils.printOnDebug
 import io.legado.app.utils.readText
 import java.io.File
 
@@ -18,7 +20,6 @@ class FileAssociationViewModel(application: Application) : BaseViewModel(applica
     val openBookLiveData = MutableLiveData<String>()
     val errorLiveData = MutableLiveData<String>()
 
-    @Suppress("BlockingMethodInNonBlockingContext")
     fun dispatchIndent(uri: Uri) {
         execute {
             //如果是普通的url，需要根据返回的内容判断是什么
@@ -48,12 +49,12 @@ class FileAssociationViewModel(application: Application) : BaseViewModel(applica
                     }
                     val book = LocalBook.importFile(uri)
                     openBookLiveData.postValue(book.bookUrl)
-                } ?: throw Exception("文件不存在")
+                } ?: throw NoStackTraceException("文件不存在")
             } else {
                 onLineImportLive.postValue(uri)
             }
         }.onError {
-            it.printStackTrace()
+            it.printOnDebug()
             errorLiveData.postValue(it.localizedMessage)
         }
     }

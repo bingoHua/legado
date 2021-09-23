@@ -9,7 +9,6 @@ import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
 import androidx.appcompat.widget.Toolbar
-import androidx.fragment.app.FragmentManager
 import androidx.fragment.app.viewModels
 import androidx.recyclerview.widget.LinearLayoutManager
 import io.legado.app.R
@@ -32,26 +31,18 @@ import io.legado.app.utils.splitNotBlank
 import io.legado.app.utils.viewbindingdelegate.viewBinding
 import io.legado.app.utils.visible
 
-class ImportReplaceRuleDialog : BaseDialogFragment(), Toolbar.OnMenuItemClickListener {
+class ImportReplaceRuleDialog() : BaseDialogFragment(), Toolbar.OnMenuItemClickListener {
 
-    companion object {
-        fun start(
-            fragmentManager: FragmentManager,
-            source: String,
-            finishOnDismiss: Boolean = false
-        ) {
-            ImportReplaceRuleDialog().apply {
-                arguments = Bundle().apply {
-                    putString("source", source)
-                    putBoolean("finishOnDismiss", finishOnDismiss)
-                }
-            }.show(fragmentManager, "importReplaceRule")
+    constructor(source: String, finishOnDismiss: Boolean = false) : this() {
+        arguments = Bundle().apply {
+            putString("source", source)
+            putBoolean("finishOnDismiss", finishOnDismiss)
         }
     }
 
     private val binding by viewBinding(DialogRecyclerViewBinding::bind)
     private val viewModel by viewModels<ImportReplaceRuleViewModel>()
-    lateinit var adapter: SourcesAdapter
+    private val adapter by lazy { SourcesAdapter(requireContext()) }
 
     override fun onStart() {
         super.onStart()
@@ -82,7 +73,6 @@ class ImportReplaceRuleDialog : BaseDialogFragment(), Toolbar.OnMenuItemClickLis
         binding.toolBar.setTitle(R.string.import_replace_rule)
         binding.rotateLoading.show()
         initMenu()
-        adapter = SourcesAdapter(requireContext())
         binding.recyclerView.layoutManager = LinearLayoutManager(requireContext())
         binding.recyclerView.adapter = adapter
         binding.tvCancel.visible()
@@ -156,7 +146,7 @@ class ImportReplaceRuleDialog : BaseDialogFragment(), Toolbar.OnMenuItemClickLis
         alert(R.string.diy_edit_source_group) {
             val alertBinding = DialogCustomGroupBinding.inflate(layoutInflater).apply {
                 val groups = linkedSetOf<String>()
-                appDb.bookSourceDao.allGroup.forEach { group ->
+                appDb.replaceRuleDao.allGroup.forEach { group ->
                     groups.addAll(group.splitNotBlank(AppPattern.splitGroupRegex))
                 }
                 textInputLayout.setHint(R.string.group_name)

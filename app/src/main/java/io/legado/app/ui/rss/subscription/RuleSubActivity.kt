@@ -16,6 +16,7 @@ import io.legado.app.ui.association.ImportBookSourceDialog
 import io.legado.app.ui.association.ImportReplaceRuleDialog
 import io.legado.app.ui.association.ImportRssSourceDialog
 import io.legado.app.ui.widget.recycler.ItemTouchCallback
+import io.legado.app.utils.showDialog
 import io.legado.app.utils.toastOnUi
 import io.legado.app.utils.viewbindingdelegate.viewBinding
 import kotlinx.coroutines.Dispatchers.IO
@@ -30,7 +31,7 @@ class RuleSubActivity : BaseActivity<ActivityRuleSubBinding>(),
     RuleSubAdapter.Callback {
 
     override val binding by viewBinding(ActivityRuleSubBinding::inflate)
-    private lateinit var adapter: RuleSubAdapter
+    private val adapter by lazy { RuleSubAdapter(this, this) }
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
         initView()
@@ -53,7 +54,6 @@ class RuleSubActivity : BaseActivity<ActivityRuleSubBinding>(),
     }
 
     private fun initView() {
-        adapter = RuleSubAdapter(this, this)
         binding.recyclerView.adapter = adapter
         val itemTouchCallback = ItemTouchCallback(adapter)
         itemTouchCallback.isCanDrag = true
@@ -71,15 +71,15 @@ class RuleSubActivity : BaseActivity<ActivityRuleSubBinding>(),
 
     override fun openSubscription(ruleSub: RuleSub) {
         when (ruleSub.type) {
-            0 -> {
-                ImportBookSourceDialog.start(supportFragmentManager, ruleSub.url)
-            }
-            1 -> {
-                ImportRssSourceDialog.start(supportFragmentManager, ruleSub.url)
-            }
-            2 -> {
-                ImportReplaceRuleDialog.start(supportFragmentManager, ruleSub.url)
-            }
+            0 -> supportFragmentManager.showDialog(
+                ImportBookSourceDialog(ruleSub.url)
+            )
+            1 -> supportFragmentManager.showDialog(
+                ImportRssSourceDialog(ruleSub.url)
+            )
+            2 -> supportFragmentManager.showDialog(
+                ImportReplaceRuleDialog(ruleSub.url)
+            )
         }
     }
 

@@ -143,9 +143,11 @@ class ReadMenu @JvmOverloads constructor(
         tvChapterUrl.setOnClickListener {
             context.openUrl(binding.tvChapterUrl.text.toString())
         }
+        //登录
         tvLogin.setOnClickListener {
             callBack.showLogin()
         }
+        //亮度跟随
         ivBrightnessAuto.setOnClickListener {
             context.putPrefBoolean("brightnessAuto", !brightnessAuto())
             upBrightnessState()
@@ -246,8 +248,10 @@ class ReadMenu @JvmOverloads constructor(
 
             override fun onAnimationEnd(animation: Animation) {
                 binding.vwMenuBg.setOnClickListener { runMenuOut() }
-                binding.vwNavigationBar.layoutParams = binding.vwNavigationBar.layoutParams.apply {
-                    height = activity!!.navigationBarHeight
+                binding.vwNavigationBar.run {
+                    layoutParams = layoutParams.apply {
+                        height = activity?.navigationBarHeight ?: 0
+                    }
                 }
                 if (!LocalConfig.readMenuHelpVersionIsLast) {
                     callBack.showReadMenuHelp()

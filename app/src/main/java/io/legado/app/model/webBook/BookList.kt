@@ -7,6 +7,7 @@ import io.legado.app.data.entities.SearchBook
 import io.legado.app.data.entities.rule.BookListRule
 import io.legado.app.help.BookHelp
 import io.legado.app.model.Debug
+import io.legado.app.model.NoStackTraceException
 import io.legado.app.model.analyzeRule.AnalyzeRule
 import io.legado.app.model.analyzeRule.AnalyzeUrl
 import io.legado.app.utils.HtmlFormatter
@@ -16,6 +17,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ensureActive
 import splitties.init.appCtx
 
+/**
+ * 获取书籍列表
+ */
 object BookList {
 
     @Throws(Exception::class)
@@ -28,7 +32,7 @@ object BookList {
         body: String?,
         isSearch: Boolean = true,
     ): ArrayList<SearchBook> {
-        body ?: throw Exception(
+        body ?: throw NoStackTraceException(
             appCtx.getString(
                 R.string.error_get_web_content,
                 analyzeUrl.ruleUrl

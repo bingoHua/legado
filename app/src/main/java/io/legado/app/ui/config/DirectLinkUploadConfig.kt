@@ -8,6 +8,7 @@ import io.legado.app.R
 import io.legado.app.base.BaseDialogFragment
 import io.legado.app.databinding.DialogDirectLinkUploadConfigBinding
 import io.legado.app.help.DirectLinkUpload
+import io.legado.app.lib.theme.primaryColor
 import io.legado.app.utils.toastOnUi
 import io.legado.app.utils.viewbindingdelegate.viewBinding
 import io.legado.app.utils.windowSize
@@ -35,17 +36,21 @@ class DirectLinkUploadConfig : BaseDialogFragment() {
     }
 
     override fun onFragmentCreated(view: View, savedInstanceState: Bundle?) {
+        binding.toolBar.setBackgroundColor(primaryColor)
         binding.editUploadUrl.setText(DirectLinkUpload.getUploadUrl())
         binding.editDownloadUrlRule.setText(DirectLinkUpload.getDownloadUrlRule())
+        binding.editSummary.setText(DirectLinkUpload.getSummary())
         binding.tvCancel.onClick {
             dismiss()
         }
         binding.tvFooterLeft.onClick {
             DirectLinkUpload.delete()
+            dismiss()
         }
         binding.tvOk.onClick {
             val uploadUrl = binding.editUploadUrl.text?.toString()
             val downloadUrlRule = binding.editDownloadUrlRule.text?.toString()
+            val summary = binding.editSummary.text?.toString()
             uploadUrl ?: let {
                 toastOnUi("上传Url不能为空")
                 return@onClick
@@ -56,6 +61,7 @@ class DirectLinkUploadConfig : BaseDialogFragment() {
             }
             DirectLinkUpload.putUploadUrl(uploadUrl)
             DirectLinkUpload.putDownloadUrlRule(downloadUrlRule)
+            DirectLinkUpload.putSummary(summary)
             dismiss()
         }
     }

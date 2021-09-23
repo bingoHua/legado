@@ -14,41 +14,57 @@ import io.legado.app.R
 import io.legado.app.base.BaseDialogFragment
 import io.legado.app.base.adapter.ItemViewHolder
 import io.legado.app.base.adapter.RecyclerAdapter
-import io.legado.app.constant.PreferKey
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.HttpTTS
 import io.legado.app.databinding.DialogEditTextBinding
 import io.legado.app.databinding.DialogHttpTtsEditBinding
 import io.legado.app.databinding.DialogRecyclerViewBinding
 import io.legado.app.databinding.ItemHttpTtsBinding
+import io.legado.app.help.AppConfig
+import io.legado.app.help.DirectLinkUpload
+import io.legado.app.lib.dialogs.SelectItem
 import io.legado.app.lib.dialogs.alert
+import io.legado.app.lib.dialogs.selector
 import io.legado.app.lib.theme.ATH
 import io.legado.app.lib.theme.primaryColor
-import io.legado.app.service.help.ReadAloud
+import io.legado.app.model.ReadAloud
 import io.legado.app.ui.document.HandleFileContract
 import io.legado.app.ui.widget.dialog.TextDialog
 import io.legado.app.utils.*
 import io.legado.app.utils.viewbindingdelegate.viewBinding
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
-import splitties.init.appCtx
 
 
 class SpeakEngineDialog : BaseDialogFragment(), Toolbar.OnMenuItemClickListener {
+
     private val binding by viewBinding(DialogRecyclerViewBinding::bind)
-    private val ttsUrlKey = "ttsUrlKey"
-    lateinit var adapter: Adapter
     private val viewModel: SpeakEngineViewModel by viewModels()
-    private var engineId = appCtx.getPrefLong(PreferKey.speakEngine)
+    private val ttsUrlKey = "ttsUrlKey"
+    private val adapter by lazy { Adapter(requireContext()) }
+    private var ttsEngine: String? = AppConfig.ttsEngine
     private val importDocResult = registerForActivityResult(HandleFileContract()) {
         it?.let {
             viewModel.importLocal(it)
         }
     }
-    private val exportDirResult = registerForActivityResult(HandleFileContract()) {
-        it?.let {
-            viewModel.export(it)
-        }
+    private val exportDirResult = registerForActivityResult(HandleFileContract()) { uri ->
+        uri ?: return@registerForActivityResult
+        alert(R.string.export_success) {
+            if (uri.toString().isAbsUrl()) {
+                DirectLinkUpload.getSummary()?.let { summary ->
+                    setMessage(summary)
+                }
+            }
+            val alertBinding = DialogEditTextBinding.inflate(layoutInflater).apply {
+                editView.hint = getString(R.string.path)
+                editView.setText(uri.toString())
+            }
+            customView { alertBinding.root }
+            okButton {
+                requireContext().sendToClip(uri.toString())
+            }
+        }.show()
     }
 
     override fun onStart() {
@@ -76,17 +92,15 @@ class SpeakEngineDialog : BaseDialogFragment(), Toolbar.OnMenuItemClickListener 
         toolBar.setTitle(R.string.speak_engine)
         ATH.applyEdgeEffectColor(recyclerView)
         recyclerView.layoutManager = LinearLayoutManager(requireContext())
-        adapter = Adapter(requireContext())
         recyclerView.adapter = adapter
         tvFooterLeft.setText(R.string.system_tts)
         tvFooterLeft.visible()
         tvFooterLeft.setOnClickListener {
-            removePref(PreferKey.speakEngine)
-            dismissAllowingStateLoss()
+            selectSysTts()
         }
         tvOk.visible()
         tvOk.setOnClickListener {
-            putPrefLong(PreferKey.speakEngine, engineId)
+            AppConfig.ttsEngine = ttsEngine
             dismissAllowingStateLoss()
         }
         tvCancel.visible()
@@ -118,9 +132,28 @@ class SpeakEngineDialog : BaseDialogFragment(), Toolbar.OnMenuItemClickListener 
                 allowExtensions = arrayOf("txt", "json")
             }
             R.id.menu_import_onLine -> importAlert()
-            R.id.menu_export -> exportDirResult.launch(null)
+            R.id.menu_export -> exportDirResult.launch {
+                mode = HandleFileContract.EXPORT
+                fileData = Triple(
+                    "httpTts.json",
+                    GSON.toJson(adapter.getItems()).toByteArray(),
+                    "application/json"
+                )
+            }
         }
         return true
+    }
+
+    private fun selectSysTts() {
+        val ttsItems = viewModel.tts.engines.map {
+            SelectItem(it.label, it.name)
+        }
+        context?.selector(R.string.system_tts, ttsItems) { _, item, _ ->
+            AppConfig.ttsEngine = GSON.toJson(item)
+            ttsEngine = null
+            adapter.notifyItemRangeChanged(0, adapter.itemCount)
+            dismissAllowingStateLoss()
+        }
     }
 
     private fun importAlert() {
@@ -192,23 +225,23 @@ class SpeakEngineDialog : BaseDialogFragment(), Toolbar.OnMenuItemClickListener 
         ) {
             binding.apply {
                 cbName.text = item.name
-                cbName.isChecked = item.id == engineId
+                cbName.isChecked = item.id.toString() == ttsEngine
             }
         }
 
         override fun registerListener(holder: ItemViewHolder, binding: ItemHttpTtsBinding) {
-            binding.apply {
+            binding.run {
                 cbName.setOnClickListener {
-                    getItem(holder.layoutPosition)?.let { httpTTS ->
-                        engineId = httpTTS.id
-                        notifyItemRangeChanged(0, itemCount)
+                    getItemByLayoutPosition(holder.layoutPosition)?.let { httpTTS ->
+                        ttsEngine = httpTTS.id.toString()
+                        notifyItemRangeChanged(getHeaderCount(), itemCount)
                     }
                 }
                 ivEdit.setOnClickListener {
-                    editHttpTTS(getItem(holder.layoutPosition))
+                    editHttpTTS(getItemByLayoutPosition(holder.layoutPosition))
                 }
                 ivMenuDelete.setOnClickListener {
-                    getItem(holder.layoutPosition)?.let { httpTTS ->
+                    getItemByLayoutPosition(holder.layoutPosition)?.let { httpTTS ->
                         appDb.httpTTSDao.delete(httpTTS)
                     }
                 }

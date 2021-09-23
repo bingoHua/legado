@@ -46,7 +46,7 @@ class ImportBookActivity : VMBaseActivity<ActivityImportBookBinding, ImportBookV
 
     private var rootDoc: DocumentFile? = null
     private val subDocs = arrayListOf<DocumentFile>()
-    private lateinit var adapter: ImportBookAdapter
+    private val adapter by lazy { ImportBookAdapter(this, this) }
     private var sdPath = FileUtils.getSdCardPath()
     private var path = sdPath
     private val selectFolder = registerForActivityResult(HandleFileContract()) { uri ->
@@ -111,7 +111,6 @@ class ImportBookActivity : VMBaseActivity<ActivityImportBookBinding, ImportBookV
     private fun initView() {
         binding.layTop.setBackgroundColor(backgroundColor)
         binding.recyclerView.layoutManager = LinearLayoutManager(this)
-        adapter = ImportBookAdapter(this, this)
         binding.recyclerView.adapter = adapter
         binding.selectActionBar.setMainActionText(R.string.add_to_shelf)
         binding.selectActionBar.inflateMenu(R.menu.import_book_sel)
@@ -281,6 +280,7 @@ class ImportBookActivity : VMBaseActivity<ActivityImportBookBinding, ImportBookV
 
     private fun alertImportFileName() {
         alert(R.string.import_file_name) {
+            setMessage("""使用js返回一个json结构,{"name":"xxx", "author":"yyy"}""")
             val alertBinding = DialogEditTextBinding.inflate(layoutInflater).apply {
                 editView.hint = "js"
                 editView.setText(AppConfig.bookImportFileName)

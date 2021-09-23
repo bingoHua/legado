@@ -203,9 +203,7 @@ class BookSourceEditActivity :
             add(EditEntity("header", source?.header, R.string.source_http_header))
             add(
                 EditEntity(
-                    "concurrentRate",
-                    source?.concurrentRate,
-                    R.string.source_concurrent_rate
+                    "concurrentRate", source?.concurrentRate, R.string.source_concurrent_rate
                 )
             )
         }
@@ -214,6 +212,7 @@ class BookSourceEditActivity :
         searchEntities.clear()
         searchEntities.apply {
             add(EditEntity("searchUrl", source?.searchUrl, R.string.r_search_url))
+            add(EditEntity("checkKeyWord", sr?.checkKeyWord, R.string.check_key_word))
             add(EditEntity("bookList", sr?.bookList, R.string.r_book_list))
             add(EditEntity("name", sr?.name, R.string.r_book_name))
             add(EditEntity("author", sr?.author, R.string.r_author))
@@ -223,6 +222,21 @@ class BookSourceEditActivity :
             add(EditEntity("intro", sr?.intro, R.string.rule_book_intro))
             add(EditEntity("coverUrl", sr?.coverUrl, R.string.rule_cover_url))
             add(EditEntity("bookUrl", sr?.bookUrl, R.string.r_book_url))
+        }
+        //发现
+        val er = source?.getExploreRule()
+        findEntities.clear()
+        findEntities.apply {
+            add(EditEntity("exploreUrl", source?.exploreUrl, R.string.r_find_url))
+            add(EditEntity("bookList", er?.bookList, R.string.r_book_list))
+            add(EditEntity("name", er?.name, R.string.r_book_name))
+            add(EditEntity("author", er?.author, R.string.r_author))
+            add(EditEntity("kind", er?.kind, R.string.rule_book_kind))
+            add(EditEntity("wordCount", er?.wordCount, R.string.rule_word_count))
+            add(EditEntity("lastChapter", er?.lastChapter, R.string.rule_last_chapter))
+            add(EditEntity("intro", er?.intro, R.string.rule_book_intro))
+            add(EditEntity("coverUrl", er?.coverUrl, R.string.rule_cover_url))
+            add(EditEntity("bookUrl", er?.bookUrl, R.string.r_book_url))
         }
         //详情页
         val ir = source?.getBookInfoRule()
@@ -246,8 +260,9 @@ class BookSourceEditActivity :
             add(EditEntity("chapterList", tr?.chapterList, R.string.rule_chapter_list))
             add(EditEntity("chapterName", tr?.chapterName, R.string.rule_chapter_name))
             add(EditEntity("chapterUrl", tr?.chapterUrl, R.string.rule_chapter_url))
-            add(EditEntity("isVip", tr?.isVip, R.string.rule_is_vip))
             add(EditEntity("updateTime", tr?.updateTime, R.string.rule_update_time))
+            add(EditEntity("isVip", tr?.isVip, R.string.rule_is_vip))
+            add(EditEntity("isPay", tr?.isPay, R.string.rule_is_pay))
             add(EditEntity("nextTocUrl", tr?.nextTocUrl, R.string.rule_next_toc_url))
         }
         //正文页
@@ -260,21 +275,6 @@ class BookSourceEditActivity :
             add(EditEntity("sourceRegex", cr?.sourceRegex, R.string.rule_source_regex))
             add(EditEntity("replaceRegex", cr?.replaceRegex, R.string.rule_replace_regex))
             add(EditEntity("imageStyle", cr?.imageStyle, R.string.rule_image_style))
-        }
-        //发现
-        val er = source?.getExploreRule()
-        findEntities.clear()
-        findEntities.apply {
-            add(EditEntity("exploreUrl", source?.exploreUrl, R.string.r_find_url))
-            add(EditEntity("bookList", er?.bookList, R.string.r_book_list))
-            add(EditEntity("name", er?.name, R.string.r_book_name))
-            add(EditEntity("author", er?.author, R.string.r_author))
-            add(EditEntity("kind", er?.kind, R.string.rule_book_kind))
-            add(EditEntity("wordCount", er?.wordCount, R.string.rule_word_count))
-            add(EditEntity("lastChapter", er?.lastChapter, R.string.rule_last_chapter))
-            add(EditEntity("intro", er?.intro, R.string.rule_book_intro))
-            add(EditEntity("coverUrl", er?.coverUrl, R.string.rule_cover_url))
-            add(EditEntity("bookUrl", er?.bookUrl, R.string.r_book_url))
         }
         binding.tabLayout.selectTab(binding.tabLayout.getTabAt(0))
         setEditEntities(0)
@@ -307,6 +307,7 @@ class BookSourceEditActivity :
         searchEntities.forEach {
             when (it.key) {
                 "searchUrl" -> source.searchUrl = it.value
+                "checkKeyWord" -> searchRule.checkKeyWord = it.value
                 "bookList" -> searchRule.bookList = it.value
                 "name" -> searchRule.name = it.value
                 "author" -> searchRule.author = it.value
@@ -354,9 +355,10 @@ class BookSourceEditActivity :
                 "chapterList" -> tocRule.chapterList = it.value
                 "chapterName" -> tocRule.chapterName = it.value
                 "chapterUrl" -> tocRule.chapterUrl = it.value
-                "nextTocUrl" -> tocRule.nextTocUrl = it.value
-                "isVip" -> tocRule.isVip = it.value
                 "updateTime" -> tocRule.updateTime = it.value
+                "isVip" -> tocRule.isVip = it.value
+                "isPay" -> tocRule.isPay = it.value
+                "nextTocUrl" -> tocRule.nextTocUrl = it.value
             }
         }
         contentEntities.forEach {

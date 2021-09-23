@@ -12,6 +12,7 @@ import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookChapter
 import io.legado.app.help.AppConfig
 import io.legado.app.help.ReadBookConfig
+import io.legado.app.model.ReadBook
 import io.legado.app.ui.book.read.page.entities.TextChapter
 import io.legado.app.ui.book.read.page.entities.TextChar
 import io.legado.app.ui.book.read.page.entities.TextLine
@@ -20,7 +21,9 @@ import io.legado.app.utils.*
 import splitties.init.appCtx
 import java.util.*
 
-
+/**
+ * 解析内容生成章节和页面
+ */
 @Suppress("DEPRECATION")
 object ChapterProvider {
     @JvmStatic
@@ -80,6 +83,7 @@ object ChapterProvider {
     fun getTextChapter(
         book: Book,
         bookChapter: BookChapter,
+        displayTitle: String,
         contents: List<String>,
         chapterSize: Int,
     ): TextChapter {
@@ -96,7 +100,7 @@ object ChapterProvider {
                 while (matcher.find()) {
                     matcher.group(1)?.let { src ->
                         srcList.add(src)
-                        ImageProvider.getImage(book, bookChapter.index, src)
+                        ImageProvider.getImage(book, bookChapter.index, src, ReadBook.bookSource)
                         matcher.appendReplacement(sb, srcReplaceChar)
                     }
                 }
@@ -153,12 +157,12 @@ object ChapterProvider {
             item.pageSize = textPages.size
             item.chapterIndex = bookChapter.index
             item.chapterSize = chapterSize
-            item.title = bookChapter.title
+            item.title = displayTitle
             item.upLinesPosition()
         }
 
         return TextChapter(
-            bookChapter.index, bookChapter.title,
+            bookChapter.index, displayTitle,
             bookChapter.getAbsoluteURL().substringBefore(",{"), //getAbsoluteURL已经格式过
             textPages, chapterSize
         )
@@ -173,7 +177,7 @@ object ChapterProvider {
         imageStyle: String?,
     ): Float {
         var durY = y
-        ImageProvider.getImage(book, chapter.index, src)?.let {
+        ImageProvider.getImage(book, chapter.index, src, ReadBook.bookSource)?.let {
             if (durY > visibleHeight) {
                 textPages.last().height = durY
                 textPages.add(TextPage())
@@ -549,6 +553,4 @@ object ChapterProvider {
         }
     }
 
-    val TextPaint.textHeight: Float
-        get() = fontMetrics.descent - fontMetrics.ascent + fontMetrics.leading
 }

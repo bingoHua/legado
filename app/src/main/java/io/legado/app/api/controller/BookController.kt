@@ -11,12 +11,12 @@ import io.legado.app.help.BookHelp
 import io.legado.app.help.ContentProcessor
 import io.legado.app.help.glide.ImageLoader
 import io.legado.app.help.storage.AppWebDav
+import io.legado.app.model.BookCover
 import io.legado.app.model.ReadBook
 import io.legado.app.model.localBook.EpubFile
 import io.legado.app.model.localBook.LocalBook
 import io.legado.app.model.localBook.UmdFile
 import io.legado.app.model.webBook.WebBook
-import io.legado.app.ui.widget.image.CoverImageView
 import io.legado.app.utils.*
 import kotlinx.coroutines.runBlocking
 import splitties.init.appCtx
@@ -52,7 +52,7 @@ object BookController {
         return try {
             returnData.setData(ftBitmap.get())
         } catch (e: Exception) {
-            returnData.setData(CoverImageView.defaultDrawable.toBitmap())
+            returnData.setData(BookCover.defaultDrawable.toBitmap())
         }
     }
 
@@ -73,11 +73,7 @@ object BookController {
                 appDb.bookChapterDao.delByBook(book.bookUrl)
                 appDb.bookChapterDao.insert(*toc.toTypedArray())
                 appDb.bookDao.update(book)
-                return if (toc.isEmpty()) {
-                    returnData.setErrorMsg(appCtx.getString(R.string.error_load_toc))
-                } else {
-                    returnData.setData(toc)
-                }
+                return returnData.setData(toc)
             } else {
                 val bookSource = appDb.bookSourceDao.getBookSource(book.origin)
                     ?: return returnData.setErrorMsg("未找到对应书源,请换源")
@@ -90,11 +86,7 @@ object BookController {
                 appDb.bookChapterDao.delByBook(book.bookUrl)
                 appDb.bookChapterDao.insert(*toc.toTypedArray())
                 appDb.bookDao.update(book)
-                return if (toc.isEmpty()) {
-                    returnData.setErrorMsg(appCtx.getString(R.string.error_load_toc))
-                } else {
-                    returnData.setData(toc)
-                }
+                return returnData.setData(toc)
             }
         } catch (e: Exception) {
             return returnData.setErrorMsg(e.localizedMessage ?: "refresh toc error")
@@ -140,7 +132,7 @@ object BookController {
             val contentProcessor = ContentProcessor.get(book.name, book.origin)
             saveBookReadIndex(book, index)
             return returnData.setData(
-                contentProcessor.getContent(book, chapter.title, content)
+                contentProcessor.getContent(book, chapter, content)
                     .joinToString("\n")
             )
         }
@@ -153,7 +145,7 @@ object BookController {
             val contentProcessor = ContentProcessor.get(book.name, book.origin)
             saveBookReadIndex(book, index)
             returnData.setData(
-                contentProcessor.getContent(book, chapter.title, content).joinToString("\n")
+                contentProcessor.getContent(book, chapter, content).joinToString("\n")
             )
         } catch (e: Exception) {
             returnData.setErrorMsg(e.msg)
@@ -216,7 +208,7 @@ object BookController {
             if (book.isUmd()) UmdFile.upBookInfo(book)
             appDb.bookDao.insert(book)
         } catch (e: Exception) {
-            e.printStackTrace()
+            e.printOnDebug()
             return returnData.setErrorMsg(
                 e.localizedMessage ?: appCtx.getString(R.string.unknown_error)
             )

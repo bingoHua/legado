@@ -48,6 +48,7 @@ class OtherConfigFragment : BasePreferenceFragment(),
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+        activity?.setTitle(R.string.other_setting)
         preferenceManager.sharedPreferences.registerOnSharedPreferenceChangeListener(this)
         ATH.applyEdgeEffectColor(listView)
     }
@@ -85,7 +86,7 @@ class OtherConfigFragment : BasePreferenceFragment(),
                     putPrefInt(PreferKey.webPort, it)
                 }
             PreferKey.cleanCache -> clearCache()
-
+            "uploadRule" -> DirectLinkUploadConfig().show(childFragmentManager, "uploadRuleConfig")
         }
         return super.onPreferenceTreeClick(preference)
     }

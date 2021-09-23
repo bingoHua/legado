@@ -24,8 +24,10 @@ class BookSourceDebugActivity : VMBaseActivity<ActivitySourceDebugBinding, BookS
     override val binding by viewBinding(ActivitySourceDebugBinding::inflate)
     override val viewModel by viewModels<BookSourceDebugModel>()
 
-    private lateinit var adapter: BookSourceDebugAdapter
-    private lateinit var searchView: SearchView
+    private val adapter by lazy { BookSourceDebugAdapter(this) }
+    private val searchView: SearchView by lazy {
+        binding.titleBar.findViewById(R.id.search_view)
+    }
     private val qrCodeResult = registerForActivityResult(QrCodeResult()) {
         it?.let {
             startSearch(it)
@@ -33,7 +35,6 @@ class BookSourceDebugActivity : VMBaseActivity<ActivitySourceDebugBinding, BookS
     }
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
-        searchView = binding.titleBar.findViewById(R.id.search_view)
         initRecyclerView()
         initSearchView()
         viewModel.init(intent.getStringExtra("key")) {
@@ -51,7 +52,6 @@ class BookSourceDebugActivity : VMBaseActivity<ActivitySourceDebugBinding, BookS
 
     private fun initRecyclerView() {
         ATH.applyEdgeEffectColor(binding.recyclerView)
-        adapter = BookSourceDebugAdapter(this)
         binding.recyclerView.adapter = adapter
         binding.rotateLoading.loadingColor = accentColor
     }
@@ -75,10 +75,16 @@ class BookSourceDebugActivity : VMBaseActivity<ActivitySourceDebugBinding, BookS
         searchView.setOnQueryTextFocusChangeListener { _, hasFocus ->
             openOrCloseHelp(hasFocus)
         }
+        openOrCloseHelp(true)
     }
 
     @SuppressLint("SetTextI18n")
     private fun initHelpView() {
+        viewModel.bookSource?.ruleSearch?.checkKeyWord?.let {
+            if (it.isNotBlank()) {
+                binding.textMy.text = it
+            }
+        }
         viewModel.bookSource?.exploreKinds?.firstOrNull {
             !it.url.isNullOrBlank()
         }?.let {

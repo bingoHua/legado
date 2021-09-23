@@ -143,7 +143,7 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
         get() = appCtx.getPrefBoolean(PreferKey.autoRefresh)
 
     var threadCount: Int
-        get() = appCtx.getPrefInt(PreferKey.threadCount, 8)
+        get() = appCtx.getPrefInt(PreferKey.threadCount, 16)
         set(value) {
             appCtx.putPrefInt(PreferKey.threadCount, value)
         }
@@ -220,6 +220,12 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
         get() = appCtx.getPrefBoolean(PreferKey.changeSourceCheckAuthor)
         set(value) {
             appCtx.putPrefBoolean(PreferKey.changeSourceCheckAuthor, value)
+        }
+
+    var ttsEngine: String?
+        get() = appCtx.getPrefString(PreferKey.ttsEngine)
+        set(value) {
+            appCtx.putPrefString(PreferKey.ttsEngine, value)
         }
 
     val autoChangeSource: Boolean

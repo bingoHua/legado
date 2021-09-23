@@ -6,7 +6,6 @@ import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
 import androidx.appcompat.widget.Toolbar
-import androidx.fragment.app.FragmentManager
 import androidx.fragment.app.viewModels
 import androidx.recyclerview.widget.GridLayoutManager
 import io.legado.app.R
@@ -18,29 +17,21 @@ import io.legado.app.utils.viewbindingdelegate.viewBinding
 import io.legado.app.utils.windowSize
 
 
-class ChangeCoverDialog : BaseDialogFragment(),
+class ChangeCoverDialog() : BaseDialogFragment(),
     Toolbar.OnMenuItemClickListener,
     CoverAdapter.CallBack {
 
-    companion object {
-        const val tag = "changeCoverDialog"
-
-        fun show(manager: FragmentManager, name: String, author: String) {
-            val fragment = (manager.findFragmentByTag(tag) as? ChangeCoverDialog)
-                ?: ChangeCoverDialog().apply {
-                    val bundle = Bundle()
-                    bundle.putString("name", name)
-                    bundle.putString("author", author)
-                    arguments = bundle
-                }
-            fragment.show(manager, tag)
+    constructor(name: String, author: String) : this() {
+        arguments = Bundle().apply {
+            putString("name", name)
+            putString("author", author)
         }
     }
 
     private val binding by viewBinding(DialogChangeCoverBinding::bind)
     private var callBack: CallBack? = null
     private val viewModel: ChangeCoverViewModel by viewModels()
-    lateinit var adapter: CoverAdapter
+    private val adapter by lazy { CoverAdapter(requireContext(), this) }
 
     override fun onStart() {
         super.onStart()
@@ -73,7 +64,6 @@ class ChangeCoverDialog : BaseDialogFragment(),
 
     private fun initView() {
         binding.recyclerView.layoutManager = GridLayoutManager(requireContext(), 3)
-        adapter = CoverAdapter(requireContext(), this)
         binding.recyclerView.adapter = adapter
         viewModel.loadDbSearchBook()
     }

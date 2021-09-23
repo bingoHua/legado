@@ -1,6 +1,7 @@
 package io.legado.app.ui.main.bookshelf
 
 import android.annotation.SuppressLint
+import android.view.Menu
 import android.view.MenuItem
 import androidx.fragment.app.activityViewModels
 import androidx.fragment.app.viewModels
@@ -12,7 +13,9 @@ import io.legado.app.data.entities.Book
 import io.legado.app.databinding.DialogBookshelfConfigBinding
 import io.legado.app.databinding.DialogEditTextBinding
 import io.legado.app.help.AppConfig
+import io.legado.app.help.DirectLinkUpload
 import io.legado.app.lib.dialogs.alert
+import io.legado.app.ui.about.AppLogDialog
 import io.legado.app.ui.book.arrange.ArrangeBookActivity
 import io.legado.app.ui.book.cache.CacheActivity
 import io.legado.app.ui.book.group.GroupManageDialog
@@ -32,11 +35,33 @@ abstract class BaseBookshelfFragment(layoutId: Int) : VMBaseFragment<BookshelfVi
             viewModel.importBookshelf(text, groupId)
         }
     }
-
+    private val exportResult = registerForActivityResult(HandleFileContract()) {
+        it?.let { uri ->
+            alert(R.string.export_success) {
+                if (uri.toString().isAbsUrl()) {
+                    DirectLinkUpload.getSummary()?.let { summary ->
+                        setMessage(summary)
+                    }
+                }
+                val alertBinding = DialogEditTextBinding.inflate(layoutInflater).apply {
+                    editView.hint = getString(R.string.path)
+                    editView.setText(uri.toString())
+                }
+                customView { alertBinding.root }
+                okButton {
+                    requireContext().sendToClip(uri.toString())
+                }
+            }.show()
+        }
+    }
     abstract val groupId: Long
     abstract val books: List<Book>
 
     abstract fun gotoTop()
+
+    override fun onCompatCreateOptionsMenu(menu: Menu) {
+        menuInflater.inflate(R.menu.main_bookshelf, menu)
+    }
 
     override fun onCompatOptionsItemSelected(item: MenuItem) {
         super.onCompatOptionsItemSelected(item)
@@ -44,8 +69,7 @@ abstract class BaseBookshelfFragment(layoutId: Int) : VMBaseFragment<BookshelfVi
             R.id.menu_search -> startActivity<SearchActivity>()
             R.id.menu_update_toc -> activityViewModel.upToc(books)
             R.id.menu_bookshelf_layout -> configBookshelf()
-            R.id.menu_group_manage -> GroupManageDialog()
-                .show(childFragmentManager, "groupManageDialog")
+            R.id.menu_group_manage -> childFragmentManager.showDialog<GroupManageDialog>()
             R.id.menu_add_local -> startActivity<ImportBookActivity>()
             R.id.menu_add_url -> addBookByUrl()
             R.id.menu_arrange_bookshelf -> startActivity<ArrangeBookActivity> {
@@ -55,9 +79,17 @@ abstract class BaseBookshelfFragment(layoutId: Int) : VMBaseFragment<BookshelfVi
                 putExtra("groupId", groupId)
             }
             R.id.menu_export_bookshelf -> viewModel.exportBookshelf(books) {
-
+                exportResult.launch {
+                    mode = HandleFileContract.EXPORT
+                    fileData = Triple(
+                        "bookshelf.json",
+                        it.toByteArray(),
+                        "application/json"
+                    )
+                }
             }
             R.id.menu_import_bookshelf -> importBookshelfAlert(groupId)
+            R.id.menu_log -> childFragmentManager.showDialog<AppLogDialog>()
         }
     }
 

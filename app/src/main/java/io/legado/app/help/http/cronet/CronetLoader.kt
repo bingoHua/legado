@@ -10,6 +10,7 @@ import com.google.android.gms.net.CronetProviderInstaller
 import io.legado.app.BuildConfig
 import io.legado.app.help.AppConfig
 import io.legado.app.help.coroutine.Coroutine
+import io.legado.app.utils.printOnDebug
 import org.chromium.net.CronetEngine
 import org.json.JSONObject
 import splitties.init.appCtx
@@ -22,9 +23,9 @@ import java.util.*
 
 
 object CronetLoader : CronetEngine.Builder.LibraryLoader() {
-    //https://storage.googleapis.com/chromium-cronet/android/92.0.4515.127/Release/cronet/libs/arm64-v8a/libcronet.92.0.4515.159.so
-    //https://cdn.jsdelivr.net/gh/ag2s20150909/cronet-repo@92.0.4515.127/cronet/92.0.4515.127/arm64-v8a/libcronet.92.0.4515.159.so.js
+    //https://storage.googleapis.com/chromium-cronet/android/92.0.4515.159/Release/cronet/libs/arm64-v8a/libcronet.92.0.4515.159.so
     private const val TAG = "CronetLoader"
+
     private const val soVersion = BuildConfig.Cronet_Version
     private const val soName = "libcronet.$soVersion.so"
     private val soUrl: String
@@ -33,6 +34,7 @@ object CronetLoader : CronetEngine.Builder.LibraryLoader() {
     private var cpuAbi: String? = null
     private var md5: String
     var download = false
+    private var cacheInstall = false
 
     init {
         soUrl = ("https://storage.googleapis.com/chromium-cronet/android/"
@@ -48,18 +50,33 @@ object CronetLoader : CronetEngine.Builder.LibraryLoader() {
         Log.e(TAG, "soUrl:$soUrl")
     }
 
+
+    /**
+     * 判断Cronet是否安装完成
+     * @return
+     */
+
     fun install(): Boolean {
+        if (cacheInstall) {
+            return true
+        }
         if (AppConfig.isGooglePlay) {
             //检查GMS的Cronet服务是否安装
-            return CronetProviderInstaller.isInstalled()
+            cacheInstall = CronetProviderInstaller.isInstalled()
+            return cacheInstall
         }
         if (md5.length != 32 || !soFile.exists() || md5 != getFileMD5(soFile)) {
-            return false
+            cacheInstall =  false
+            return cacheInstall
         }
-        return soFile.exists()
+        cacheInstall = soFile.exists()
+        return cacheInstall
     }
 
 
+    /**
+     * 预加载Cronet
+     */
     fun preDownload() {
         if (AppConfig.isGooglePlay) {
             CronetProviderInstaller.installProvider(appCtx)
@@ -161,9 +178,9 @@ object CronetLoader : CronetEngine.Builder.LibraryLoader() {
             val appInfo = context.applicationInfo
             val abiField = ApplicationInfo::class.java.getDeclaredField("primaryCpuAbi")
             abiField.isAccessible = true
-            cpuAbi = abiField[appInfo] as String
+            cpuAbi = abiField.get(appInfo) as String?
         } catch (e: Exception) {
-            e.printStackTrace()
+            e.printOnDebug()
         }
         if (TextUtils.isEmpty(cpuAbi)) {
             cpuAbi = Build.SUPPORTED_ABIS[0]
@@ -214,7 +231,7 @@ object CronetLoader : CronetEngine.Builder.LibraryLoader() {
             }
             return true
         } catch (e: Throwable) {
-            e.printStackTrace()
+            e.printOnDebug()
             if (destFile.exists() && !destFile.delete()) {
                 destFile.deleteOnExit()
             }
@@ -223,14 +240,14 @@ object CronetLoader : CronetEngine.Builder.LibraryLoader() {
                 try {
                     inputStream.close()
                 } catch (e: IOException) {
-                    e.printStackTrace()
+                    e.printOnDebug()
                 }
             }
             if (outputStream != null) {
                 try {
                     outputStream.close()
                 } catch (e: IOException) {
-                    e.printStackTrace()
+                    e.printOnDebug()
                 }
             }
         }
@@ -268,6 +285,7 @@ object CronetLoader : CronetEngine.Builder.LibraryLoader() {
             Log.e(TAG, "download success, copy to $destSuccessFile")
             //下载成功拷贝文件
             copyFile(downloadTempFile, destSuccessFile)
+            cacheInstall=false
             val parentFile = downloadTempFile.parentFile
             @Suppress("SameParameterValue")
             deleteHistoryFile(parentFile!!, null)
@@ -303,20 +321,20 @@ object CronetLoader : CronetEngine.Builder.LibraryLoader() {
             }
             return true
         } catch (e: Exception) {
-            e.printStackTrace()
+            e.printOnDebug()
         } finally {
             if (fileInputStream != null) {
                 try {
                     fileInputStream.close()
                 } catch (e: Exception) {
-                    e.printStackTrace()
+                    e.printOnDebug()
                 }
             }
             if (os != null) {
                 try {
                     os.close()
                 } catch (e: Exception) {
-                    e.printStackTrace()
+                    e.printOnDebug()
                 }
             }
         }
@@ -338,15 +356,15 @@ object CronetLoader : CronetEngine.Builder.LibraryLoader() {
             }
             return String.format("%032x", BigInteger(1, md5.digest())).lowercase()
         } catch (e: Exception) {
-            e.printStackTrace()
+            e.printOnDebug()
         } catch (e: OutOfMemoryError) {
-            e.printStackTrace()
+            e.printOnDebug()
         } finally {
             if (fileInputStream != null) {
                 try {
                     fileInputStream.close()
                 } catch (e: Exception) {
-                    e.printStackTrace()
+                    e.printOnDebug()
                 }
             }
         }

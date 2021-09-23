@@ -4,7 +4,6 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import androidx.fragment.app.FragmentManager
 import androidx.fragment.app.viewModels
 import io.legado.app.R
 import io.legado.app.base.BaseDialogFragment
@@ -16,18 +15,12 @@ import io.legado.app.utils.*
 import io.legado.app.utils.viewbindingdelegate.viewBinding
 import splitties.views.onClick
 
-class GroupEditDialog : BaseDialogFragment() {
+class GroupEditDialog() : BaseDialogFragment() {
 
-    companion object {
-
-        fun start(fragmentManager: FragmentManager, bookGroup: BookGroup? = null) {
-            GroupEditDialog().apply {
-                arguments = Bundle().apply {
-                    putParcelable("group", bookGroup)
-                }
-            }.show(fragmentManager, "bookGroupEdit")
+    constructor(bookGroup: BookGroup? = null) : this() {
+        arguments = Bundle().apply {
+            putParcelable("group", bookGroup)
         }
-
     }
 
     private val binding by viewBinding(DialogBookGroupEditBinding::bind)
@@ -84,12 +77,12 @@ class GroupEditDialog : BaseDialogFragment() {
                 } else {
                     bookGroup?.let {
                         it.groupName = groupName
-                        it.cover = binding.ivCover.path
+                        it.cover = binding.ivCover.bitmapPath
                         viewModel.upGroup(it) {
                             dismiss()
                         }
                     } ?: let {
-                        viewModel.addGroup(groupName, binding.ivCover.path) {
+                        viewModel.addGroup(groupName, binding.ivCover.bitmapPath) {
                             dismiss()
                         }
                     }

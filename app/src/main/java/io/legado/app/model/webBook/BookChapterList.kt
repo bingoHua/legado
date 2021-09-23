@@ -7,6 +7,8 @@ import io.legado.app.data.entities.BookChapter
 import io.legado.app.data.entities.BookSource
 import io.legado.app.data.entities.rule.TocRule
 import io.legado.app.model.Debug
+import io.legado.app.model.NoStackTraceException
+import io.legado.app.model.TocEmptyException
 import io.legado.app.model.analyzeRule.AnalyzeRule
 import io.legado.app.model.analyzeRule.AnalyzeUrl
 import kotlinx.coroutines.CoroutineScope
@@ -16,8 +18,12 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import splitties.init.appCtx
 
-@Suppress("BlockingMethodInNonBlockingContext")
+/**
+ * 获取目录
+ */
 object BookChapterList {
+
+    private val falseRegex = "\\s*(?i)(null|false|0)\\s*".toRegex()
 
     suspend fun analyzeChapterList(
         scope: CoroutineScope,
@@ -27,7 +33,7 @@ object BookChapterList {
         baseUrl: String,
         body: String?
     ): List<BookChapter> {
-        body ?: throw Exception(
+        body ?: throw NoStackTraceException(
             appCtx.getString(R.string.error_get_web_content, baseUrl)
         )
         val chapterList = ArrayList<BookChapter>()
@@ -61,7 +67,7 @@ object BookChapterList {
                         book = book,
                         source = bookSource,
                         headerMapF = bookSource.getHeaderMap()
-                    ).getStrResponse(bookSource.bookSourceUrl).body?.let { nextBody ->
+                    ).getStrResponse().body?.let { nextBody ->
                         chapterData = analyzeChapterList(
                             scope, book, nextUrl, nextUrl,
                             nextBody, tocRule, listRule, bookSource
@@ -84,7 +90,7 @@ object BookChapterList {
                                 source = bookSource,
                                 headerMapF = bookSource.getHeaderMap()
                             )
-                            val res = analyzeUrl.getStrResponse(bookSource.bookSourceUrl)
+                            val res = analyzeUrl.getStrResponse()
                             analyzeChapterList(
                                 this, book, urlStr, res.url,
                                 res.body!!, tocRule, listRule, bookSource, false
@@ -96,6 +102,9 @@ object BookChapterList {
                     }
                 }
             }
+        }
+        if (chapterList.isEmpty()) {
+            throw TocEmptyException(appCtx.getString(R.string.chapter_list_empty))
         }
         //去重
         if (!reverse) {
@@ -166,8 +175,10 @@ object BookChapterList {
             val nameRule = analyzeRule.splitSourceRule(tocRule.chapterName)
             val urlRule = analyzeRule.splitSourceRule(tocRule.chapterUrl)
             val vipRule = analyzeRule.splitSourceRule(tocRule.isVip)
-            val update = analyzeRule.splitSourceRule(tocRule.updateTime)
+            val payRule = analyzeRule.splitSourceRule(tocRule.isPay)
+            val upTimeRule = analyzeRule.splitSourceRule(tocRule.updateTime)
             var isVip: String?
+            var isPay: String?
             for (item in elements) {
                 scope.ensureActive()
                 analyzeRule.setContent(item)
@@ -175,14 +186,18 @@ object BookChapterList {
                 analyzeRule.chapter = bookChapter
                 bookChapter.title = analyzeRule.getString(nameRule)
                 bookChapter.url = analyzeRule.getString(urlRule)
-                bookChapter.tag = analyzeRule.getString(update)
+                bookChapter.tag = analyzeRule.getString(upTimeRule)
                 isVip = analyzeRule.getString(vipRule)
+                isPay = analyzeRule.getString(payRule)
                 if (bookChapter.url.isEmpty()) {
                     bookChapter.url = baseUrl
                 }
                 if (bookChapter.title.isNotEmpty()) {
-                    if (isVip.isNotEmpty() && isVip != "null" && isVip != "false" && isVip != "0") {
-                        bookChapter.title = "\uD83D\uDD12" + bookChapter.title
+                    if (isVip.isNotEmpty() && !isVip.matches(falseRegex)) {
+                        bookChapter.isVip = true
+                    }
+                    if (isPay.isNotEmpty() && !isPay.matches(falseRegex)) {
+                        bookChapter.isPay = true
                     }
                     chapterList.add(bookChapter)
                 }

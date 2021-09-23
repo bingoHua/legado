@@ -34,7 +34,10 @@ object DatabaseMigrations {
             migration_34_35,
             migration_35_36,
             migration_36_37,
-            migration_37_38
+            migration_37_38,
+            migration_38_39,
+            migration_39_40,
+            migration_40_41
         )
     }
 
@@ -294,13 +297,36 @@ object DatabaseMigrations {
         override fun migrate(database: SupportSQLiteDatabase) {
             database.execSQL("ALTER TABLE `rssSources` ADD `loginUrl` TEXT")
             database.execSQL("ALTER TABLE `rssSources` ADD `loginUi` TEXT")
-            database.execSQL("ALTER TABLE `rssSources` ADD`loginCheckJs` TEXT")
+            database.execSQL("ALTER TABLE `rssSources` ADD `loginCheckJs` TEXT")
         }
     }
 
     private val migration_37_38 = object : Migration(37, 38) {
         override fun migrate(database: SupportSQLiteDatabase) {
             database.execSQL("ALTER TABLE `book_sources` ADD `respondTime` INTEGER NOT NULL DEFAULT 180000")
+        }
+    }
+
+    private val migration_38_39 = object : Migration(38, 39) {
+        override fun migrate(database: SupportSQLiteDatabase) {
+            database.execSQL("ALTER TABLE `rssSources` ADD `concurrentRate` TEXT")
+        }
+    }
+
+    private val migration_39_40 = object : Migration(39, 40) {
+        override fun migrate(database: SupportSQLiteDatabase) {
+            database.execSQL("ALTER TABLE `chapters` ADD `isVip` INTEGER NOT NULL DEFAULT 0")
+            database.execSQL("ALTER TABLE `chapters` ADD `isPay` INTEGER NOT NULL DEFAULT 0")
+        }
+    }
+
+    private val migration_40_41 = object : Migration(40, 41) {
+        override fun migrate(database: SupportSQLiteDatabase) {
+            database.execSQL("ALTER TABLE `httpTTS` ADD `loginUrl` TEXT")
+            database.execSQL("ALTER TABLE `httpTTS` ADD `loginUi` TEXT")
+            database.execSQL("ALTER TABLE `httpTTS` ADD `loginCheckJs` TEXT")
+            database.execSQL("ALTER TABLE `httpTTS` ADD `header` TEXT")
+            database.execSQL("ALTER TABLE `httpTTS` ADD `concurrentRate` TEXT")
         }
     }
 }

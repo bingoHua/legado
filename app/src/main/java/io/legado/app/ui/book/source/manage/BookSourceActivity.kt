@@ -10,7 +10,6 @@ import androidx.activity.viewModels
 import androidx.appcompat.widget.PopupMenu
 import androidx.appcompat.widget.SearchView
 import androidx.core.os.bundleOf
-import androidx.documentfile.provider.DocumentFile
 import androidx.recyclerview.widget.ItemTouchHelper
 import com.google.android.material.snackbar.Snackbar
 import io.legado.app.R
@@ -21,13 +20,13 @@ import io.legado.app.data.appDb
 import io.legado.app.data.entities.BookSource
 import io.legado.app.databinding.ActivityBookSourceBinding
 import io.legado.app.databinding.DialogEditTextBinding
-import io.legado.app.help.AppConfig
+import io.legado.app.help.DirectLinkUpload
 import io.legado.app.help.LocalConfig
 import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.theme.ATH
 import io.legado.app.lib.theme.primaryTextColor
+import io.legado.app.model.CheckSource
 import io.legado.app.model.Debug
-import io.legado.app.service.help.CheckSource
 import io.legado.app.ui.association.ImportBookSourceDialog
 import io.legado.app.ui.book.source.debug.BookSourceDebugActivity
 import io.legado.app.ui.book.source.edit.BookSourceEditActivity
@@ -42,8 +41,6 @@ import io.legado.app.utils.*
 import io.legado.app.utils.viewbindingdelegate.viewBinding
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
-import java.io.File
-import kotlin.math.min
 
 class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceViewModel>(),
     PopupMenu.OnMenuItemClickListener,
@@ -53,8 +50,10 @@ class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceV
     override val binding by viewBinding(ActivityBookSourceBinding::inflate)
     override val viewModel by viewModels<BookSourceViewModel>()
     private val importRecordKey = "bookSourceRecordKey"
-    private lateinit var adapter: BookSourceAdapter
-    private lateinit var searchView: SearchView
+    private val adapter by lazy { BookSourceAdapter(this, this) }
+    private val searchView: SearchView by lazy {
+        binding.titleBar.findViewById(R.id.search_view)
+    }
     private var sourceFlowJob: Job? = null
     private val groups = linkedSetOf<String>()
     private var groupMenu: SubMenu? = null
@@ -63,13 +62,13 @@ class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceV
     private var snackBar: Snackbar? = null
     private val qrResult = registerForActivityResult(QrCodeResult()) {
         it ?: return@registerForActivityResult
-        ImportBookSourceDialog.start(supportFragmentManager, it)
+        supportFragmentManager.showDialog(ImportBookSourceDialog(it))
     }
     private val importDoc = registerForActivityResult(HandleFileContract()) { uri ->
         uri ?: return@registerForActivityResult
         try {
             uri.readText(this)?.let {
-                ImportBookSourceDialog.start(supportFragmentManager, it)
+                supportFragmentManager.showDialog(ImportBookSourceDialog(it))
             }
         } catch (e: Exception) {
             toastOnUi("readTextError:${e.localizedMessage}")
@@ -77,19 +76,24 @@ class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceV
     }
     private val exportDir = registerForActivityResult(HandleFileContract()) { uri ->
         uri ?: return@registerForActivityResult
-        if (uri.isContentScheme()) {
-            DocumentFile.fromTreeUri(this, uri)?.let {
-                viewModel.exportSelection(adapter.selection, it)
+        alert(R.string.export_success) {
+            if (uri.toString().isAbsUrl()) {
+                DirectLinkUpload.getSummary()?.let { summary ->
+                    setMessage(summary)
+                }
             }
-        } else {
-            uri.path?.let {
-                viewModel.exportSelection(adapter.selection, File(it))
+            val alertBinding = DialogEditTextBinding.inflate(layoutInflater).apply {
+                editView.hint = getString(R.string.path)
+                editView.setText(uri.toString())
             }
-        }
+            customView { alertBinding.root }
+            okButton {
+                sendToClip(uri.toString())
+            }
+        }.show()
     }
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
-        searchView = binding.titleBar.findViewById(R.id.search_view)
         initRecyclerView()
         initSearchView()
         upBookSource()
@@ -182,7 +186,6 @@ class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceV
     private fun initRecyclerView() {
         ATH.applyEdgeEffectColor(binding.recyclerView)
         binding.recyclerView.addItemDecoration(VerticalDivider(this))
-        adapter = BookSourceAdapter(this, this)
         binding.recyclerView.adapter = adapter
         // When this page is opened, it is in selection mode
         val dragSelectTouchHelper =
@@ -331,7 +334,14 @@ class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceV
             R.id.menu_bottom_sel -> viewModel.bottomSource(*adapter.selection.toTypedArray())
             R.id.menu_add_group -> selectionAddToGroups()
             R.id.menu_remove_group -> selectionRemoveFromGroups()
-            R.id.menu_export_selection -> exportDir.launch(null)
+            R.id.menu_export_selection -> exportDir.launch {
+                mode = HandleFileContract.EXPORT
+                fileData = Triple(
+                    "bookSource.json",
+                    GSON.toJson(adapter.selection).toByteArray(),
+                    "application/json"
+                )
+            }
         }
         return true
     }
@@ -430,7 +440,7 @@ class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceV
                         cacheUrls.add(0, it)
                         aCache.put(importRecordKey, cacheUrls.joinToString(","))
                     }
-                    ImportBookSourceDialog.start(supportFragmentManager, it)
+                    supportFragmentManager.showDialog(ImportBookSourceDialog(it))
                 }
             }
             cancelButton()
@@ -457,7 +467,7 @@ class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceV
             snackBar?.dismiss()
             snackBar = null
             groups.map { group ->
-                if (group.contains("失效")) {
+                if (group.contains("失效") && searchView.query.isEmpty()) {
                     searchView.setQuery("失效", true)
                     toastOnUi("发现有失效书源，已为您自动筛选！")
                 }
@@ -478,8 +488,12 @@ class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceV
                     delay(300L)
                 }
             }.collect {
-                adapter.notifyItemRangeChanged(firstIndex, lastIndex + 1, bundleOf(Pair("checkSourceMessage", null)))
-                if (!Debug.isChecking || (refreshCount > (600 * (lastIndex + 1 - firstIndex) / min(AppConfig.threadCount,8)))) {
+                adapter.notifyItemRangeChanged(
+                    firstIndex,
+                    lastIndex + 1,
+                    bundleOf(Pair("checkSourceMessage", null))
+                )
+                if (!Debug.isChecking) {
                     Debug.finishChecking()
                     this.cancel()
                 }

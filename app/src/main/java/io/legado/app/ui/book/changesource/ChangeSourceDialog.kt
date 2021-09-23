@@ -5,7 +5,6 @@ import android.view.*
 import androidx.appcompat.widget.SearchView
 import androidx.appcompat.widget.Toolbar
 import androidx.core.os.bundleOf
-import androidx.fragment.app.FragmentManager
 import androidx.fragment.app.viewModels
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -16,6 +15,7 @@ import io.legado.app.constant.EventBus
 import io.legado.app.constant.PreferKey
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.Book
+import io.legado.app.data.entities.BookSource
 import io.legado.app.data.entities.SearchBook
 import io.legado.app.databinding.DialogChangeSourceBinding
 import io.legado.app.help.AppConfig
@@ -28,22 +28,14 @@ import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 
 
-class ChangeSourceDialog : BaseDialogFragment(),
+class ChangeSourceDialog() : BaseDialogFragment(),
     Toolbar.OnMenuItemClickListener,
     ChangeSourceAdapter.CallBack {
 
-    companion object {
-        const val tag = "changeSourceDialog"
-
-        fun show(manager: FragmentManager, name: String, author: String) {
-            val fragment = (manager.findFragmentByTag(tag) as? ChangeSourceDialog)
-                ?: ChangeSourceDialog().apply {
-                    val bundle = Bundle()
-                    bundle.putString("name", name)
-                    bundle.putString("author", author)
-                    arguments = bundle
-                }
-            fragment.show(manager, tag)
+    constructor(name: String, author: String) : this() {
+        arguments = Bundle().apply {
+            putString("name", name)
+            putString("author", author)
         }
     }
 
@@ -51,7 +43,7 @@ class ChangeSourceDialog : BaseDialogFragment(),
     private val groups = linkedSetOf<String>()
     private var callBack: CallBack? = null
     private val viewModel: ChangeSourceViewModel by viewModels()
-    lateinit var adapter: ChangeSourceAdapter
+    private val adapter by lazy { ChangeSourceAdapter(requireContext(), viewModel, this) }
 
     override fun onStart() {
         super.onStart()
@@ -97,7 +89,6 @@ class ChangeSourceDialog : BaseDialogFragment(),
     }
 
     private fun initRecyclerView() {
-        adapter = ChangeSourceAdapter(requireContext(), viewModel, this)
         binding.recyclerView.layoutManager = LinearLayoutManager(context)
         binding.recyclerView.addItemDecoration(VerticalDivider(requireContext()))
         binding.recyclerView.adapter = adapter
@@ -229,11 +220,16 @@ class ChangeSourceDialog : BaseDialogFragment(),
     }
 
     private fun changeSource(searchBook: SearchBook) {
-        val book = searchBook.toBook()
-        book.upInfoFromOld(callBack?.oldBook)
-        callBack?.changeTo(book)
-        searchBook.time = System.currentTimeMillis()
-        viewModel.updateSource(searchBook)
+        try {
+            val book = searchBook.toBook()
+            book.upInfoFromOld(callBack?.oldBook)
+            val source = appDb.bookSourceDao.getBookSource(book.origin)
+            callBack?.changeTo(source!!, book)
+            searchBook.time = System.currentTimeMillis()
+            viewModel.updateSource(searchBook)
+        } catch (e: Exception) {
+            toastOnUi("换源失败\n${e.localizedMessage}")
+        }
     }
 
     /**
@@ -273,7 +269,7 @@ class ChangeSourceDialog : BaseDialogFragment(),
 
     interface CallBack {
         val oldBook: Book?
-        fun changeTo(book: Book)
+        fun changeTo(source: BookSource, book: Book)
     }
 
 }

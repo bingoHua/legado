@@ -3,7 +3,6 @@
 package io.legado.app.ui.main.bookshelf.style1
 
 import android.os.Bundle
-import android.view.Menu
 import android.view.View
 import android.view.ViewGroup
 import androidx.appcompat.widget.SearchView
@@ -38,8 +37,10 @@ class BookshelfFragment1 : BaseBookshelfFragment(R.layout.fragment_bookshelf),
     SearchView.OnQueryTextListener {
 
     private val binding by viewBinding(FragmentBookshelfBinding::bind)
-    private lateinit var adapter: FragmentStatePagerAdapter
-    private lateinit var tabLayout: TabLayout
+    private val adapter by lazy { TabFragmentPageAdapter(childFragmentManager) }
+    private val tabLayout: TabLayout by lazy {
+        binding.titleBar.findViewById(R.id.tab_layout)
+    }
     private val bookGroups = mutableListOf<BookGroup>()
     private val fragmentMap = hashMapOf<Long, BooksFragment>()
 
@@ -52,14 +53,9 @@ class BookshelfFragment1 : BaseBookshelfFragment(R.layout.fragment_bookshelf),
         }
 
     override fun onFragmentCreated(view: View, savedInstanceState: Bundle?) {
-        tabLayout = binding.titleBar.findViewById(R.id.tab_layout)
         setSupportToolbar(binding.titleBar.toolbar)
         initView()
         initBookGroupData()
-    }
-
-    override fun onCompatCreateOptionsMenu(menu: Menu) {
-        menuInflater.inflate(R.menu.main_bookshelf, menu)
     }
 
     private val selectedGroup: BookGroup
@@ -72,7 +68,6 @@ class BookshelfFragment1 : BaseBookshelfFragment(R.layout.fragment_bookshelf),
         tabLayout.setSelectedTabIndicatorColor(requireContext().accentColor)
         tabLayout.setupWithViewPager(binding.viewPagerBookshelf)
         binding.viewPagerBookshelf.offscreenPageLimit = 1
-        adapter = TabFragmentPageAdapter(childFragmentManager)
         binding.viewPagerBookshelf.adapter = adapter
     }
 
@@ -143,7 +138,7 @@ class BookshelfFragment1 : BaseBookshelfFragment(R.layout.fragment_bookshelf),
 
         override fun getItem(position: Int): Fragment {
             val group = bookGroups[position]
-            return BooksFragment.newInstance(position, group.groupId)
+            return BooksFragment(position, group.groupId)
         }
 
         override fun getCount(): Int {

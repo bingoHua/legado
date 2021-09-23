@@ -10,7 +10,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.appcompat.widget.PopupMenu
 import androidx.appcompat.widget.SearchView
-import androidx.documentfile.provider.DocumentFile
 import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.LinearLayoutManager
 import io.legado.app.R
@@ -21,6 +20,7 @@ import io.legado.app.data.entities.ReplaceRule
 import io.legado.app.databinding.ActivityReplaceRuleBinding
 import io.legado.app.databinding.DialogEditTextBinding
 import io.legado.app.help.ContentProcessor
+import io.legado.app.help.DirectLinkUpload
 import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.theme.ATH
@@ -39,7 +39,6 @@ import io.legado.app.utils.viewbindingdelegate.viewBinding
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
-import java.io.File
 
 /**
  * 替换规则管理
@@ -52,15 +51,19 @@ class ReplaceRuleActivity : VMBaseActivity<ActivityReplaceRuleBinding, ReplaceRu
     override val binding by viewBinding(ActivityReplaceRuleBinding::inflate)
     override val viewModel by viewModels<ReplaceRuleViewModel>()
     private val importRecordKey = "replaceRuleRecordKey"
-    private lateinit var adapter: ReplaceRuleAdapter
-    private lateinit var searchView: SearchView
+    private val adapter by lazy { ReplaceRuleAdapter(this, this) }
+    private val searchView: SearchView by lazy {
+        binding.titleBar.findViewById(R.id.search_view)
+    }
     private var groups = hashSetOf<String>()
     private var groupMenu: SubMenu? = null
     private var replaceRuleFlowJob: Job? = null
     private var dataInit = false
     private val qrCodeResult = registerForActivityResult(QrCodeResult()) {
         it ?: return@registerForActivityResult
-        ImportReplaceRuleDialog.start(supportFragmentManager, it)
+        supportFragmentManager.showDialog(
+            ImportReplaceRuleDialog(it)
+        )
     }
     private val editActivity =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
@@ -71,27 +74,34 @@ class ReplaceRuleActivity : VMBaseActivity<ActivityReplaceRuleBinding, ReplaceRu
     private val importDoc = registerForActivityResult(HandleFileContract()) { uri ->
         kotlin.runCatching {
             uri?.readText(this)?.let {
-                ImportReplaceRuleDialog.start(supportFragmentManager, it)
+                supportFragmentManager.showDialog(
+                    ImportReplaceRuleDialog(it)
+                )
             }
         }.onFailure {
             toastOnUi("readTextError:${it.localizedMessage}")
         }
     }
-    private val exportDir = registerForActivityResult(HandleFileContract()) { uri ->
+    private val exportResult = registerForActivityResult(HandleFileContract()) { uri ->
         uri ?: return@registerForActivityResult
-        if (uri.isContentScheme()) {
-            DocumentFile.fromTreeUri(this, uri)?.let {
-                viewModel.exportSelection(adapter.selection, it)
+        alert(R.string.export_success) {
+            if (uri.toString().isAbsUrl()) {
+                DirectLinkUpload.getSummary()?.let { summary ->
+                    setMessage(summary)
+                }
             }
-        } else {
-            uri.path?.let {
-                viewModel.exportSelection(adapter.selection, File(it))
+            val alertBinding = DialogEditTextBinding.inflate(layoutInflater).apply {
+                editView.hint = getString(R.string.path)
+                editView.setText(uri.toString())
             }
-        }
+            customView { alertBinding.root }
+            okButton {
+                sendToClip(uri.toString())
+            }
+        }.show()
     }
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
-        searchView = binding.titleBar.findViewById(R.id.search_view)
         initRecyclerView()
         initSearchView()
         initSelectActionView()
@@ -113,7 +123,6 @@ class ReplaceRuleActivity : VMBaseActivity<ActivityReplaceRuleBinding, ReplaceRu
     private fun initRecyclerView() {
         ATH.applyEdgeEffectColor(binding.recyclerView)
         binding.recyclerView.layoutManager = LinearLayoutManager(this)
-        adapter = ReplaceRuleAdapter(this, this)
         binding.recyclerView.adapter = adapter
         binding.recyclerView.addItemDecoration(VerticalDivider(this))
         val itemTouchCallback = ItemTouchCallback(adapter)
@@ -231,7 +240,14 @@ class ReplaceRuleActivity : VMBaseActivity<ActivityReplaceRuleBinding, ReplaceRu
             R.id.menu_disable_selection -> viewModel.disableSelection(adapter.selection)
             R.id.menu_top_sel -> viewModel.topSelect(adapter.selection)
             R.id.menu_bottom_sel -> viewModel.bottomSelect(adapter.selection)
-            R.id.menu_export_selection -> exportDir.launch(null)
+            R.id.menu_export_selection -> exportResult.launch {
+                mode = HandleFileContract.EXPORT
+                fileData = Triple(
+                    "exportReplaceRule.json",
+                    GSON.toJson(adapter.selection).toByteArray(),
+                    "application/json"
+                )
+            }
         }
         return false
     }
@@ -267,7 +283,9 @@ class ReplaceRuleActivity : VMBaseActivity<ActivityReplaceRuleBinding, ReplaceRu
                         cacheUrls.add(0, it)
                         aCache.put(importRecordKey, cacheUrls.joinToString(","))
                     }
-                    ImportReplaceRuleDialog.start(supportFragmentManager, it)
+                    supportFragmentManager.showDialog(
+                        ImportReplaceRuleDialog(it)
+                    )
                 }
             }
             cancelButton()

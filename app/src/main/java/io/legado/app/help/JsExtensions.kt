@@ -4,6 +4,7 @@ import android.net.Uri
 import android.util.Base64
 import androidx.annotation.Keep
 import io.legado.app.constant.AppConst.dateFormat
+import io.legado.app.data.entities.BaseSource
 import io.legado.app.help.http.*
 import io.legado.app.model.Debug
 import io.legado.app.model.analyzeRule.AnalyzeUrl
@@ -33,16 +34,18 @@ import java.util.zip.ZipInputStream
 @Suppress("unused")
 interface JsExtensions {
 
+    fun getSource(): BaseSource?
+
     /**
      * 访问网络,返回String
      */
     fun ajax(urlStr: String): String? {
         return runBlocking {
             kotlin.runCatching {
-                val analyzeUrl = AnalyzeUrl(urlStr)
-                analyzeUrl.getStrResponse(urlStr).body
+                val analyzeUrl = AnalyzeUrl(urlStr, source = getSource())
+                analyzeUrl.getStrResponse().body
             }.onFailure {
-                it.printStackTrace()
+                it.printOnDebug()
             }.getOrElse {
                 it.msg
             }
@@ -57,8 +60,8 @@ interface JsExtensions {
             val asyncArray = Array(urlList.size) {
                 async(IO) {
                     val url = urlList[it]
-                    val analyzeUrl = AnalyzeUrl(url)
-                    analyzeUrl.getStrResponse(url)
+                    val analyzeUrl = AnalyzeUrl(url, source = getSource())
+                    analyzeUrl.getStrResponse()
                 }
             }
             val resArray = Array<StrResponse?>(urlList.size) {
@@ -73,15 +76,41 @@ interface JsExtensions {
      */
     fun connect(urlStr: String): StrResponse {
         return runBlocking {
-            val analyzeUrl = AnalyzeUrl(urlStr)
+            val analyzeUrl = AnalyzeUrl(urlStr, source = getSource())
             kotlin.runCatching {
-                analyzeUrl.getStrResponse(urlStr)
+                analyzeUrl.getStrResponse()
             }.onFailure {
-                it.printStackTrace()
+                it.printOnDebug()
             }.getOrElse {
                 StrResponse(analyzeUrl.url, it.localizedMessage)
             }
         }
+    }
+
+    fun connect(urlStr: String, header: String?): StrResponse {
+        return runBlocking {
+            val headerMap = GSON.fromJsonObject<Map<String, String>>(header)
+            val analyzeUrl = AnalyzeUrl(urlStr, headerMapF = headerMap, source = getSource())
+            kotlin.runCatching {
+                analyzeUrl.getStrResponse()
+            }.onFailure {
+                it.printOnDebug()
+            }.getOrElse {
+                StrResponse(analyzeUrl.url, it.localizedMessage)
+            }
+        }
+    }
+
+    /**
+     * 使用webView访问网络
+     * @param html 直接用webView载入的html, 如果html为空直接访问url
+     * @param url html内如果有相对路径的资源不传入url访问不了
+     * @param js 用来取返回值的js语句, 没有就返回整个源代码
+     * @return 返回js获取的内容
+     */
+    fun webView(html: String?, url: String?, js: String?): String {
+        //TODO
+        return ""
     }
 
     /**
@@ -91,7 +120,7 @@ interface JsExtensions {
      * @return 相对路径
      */
     fun downloadFile(content: String, url: String): String {
-        val type = AnalyzeUrl(url).type ?: return ""
+        val type = AnalyzeUrl(url, source = getSource()).type ?: return ""
         val zipPath = FileUtils.getPath(
             FileUtils.createFolderIfNotExist(FileUtils.getCachePath()),
             "${MD5Utils.md5Encode16(url)}.${type}"
@@ -427,7 +456,9 @@ interface JsExtensions {
      * 输出调试日志
      */
     fun log(msg: String): String {
-        Debug.log(msg)
+        getSource()?.let {
+            Debug.log(it.getKey(), msg)
+        } ?: Debug.log(msg)
         return msg
     }
 
@@ -441,12 +472,18 @@ interface JsExtensions {
     fun aesDecodeToByteArray(
         str: String, key: String, transformation: String, iv: String
     ): ByteArray? {
-        return EncoderUtils.decryptAES(
-            data = str.encodeToByteArray(),
-            key = key.encodeToByteArray(),
-            transformation,
-            iv.encodeToByteArray()
-        )
+        return try {
+            EncoderUtils.decryptAES(
+                data = str.encodeToByteArray(),
+                key = key.encodeToByteArray(),
+                transformation,
+                iv.encodeToByteArray()
+            )
+        } catch (e: java.lang.Exception) {
+            e.printOnDebug()
+            log(e.localizedMessage ?: "aesDecodeToByteArrayERROR")
+            null
+        }
     }
 
     /**
@@ -474,12 +511,18 @@ interface JsExtensions {
     fun aesBase64DecodeToByteArray(
         str: String, key: String, transformation: String, iv: String
     ): ByteArray? {
-        return EncoderUtils.decryptBase64AES(
-            str.encodeToByteArray(),
-            key.encodeToByteArray(),
-            transformation,
-            iv.encodeToByteArray()
-        )
+        return try {
+            EncoderUtils.decryptBase64AES(
+                str.encodeToByteArray(),
+                key.encodeToByteArray(),
+                transformation,
+                iv.encodeToByteArray()
+            )
+        } catch (e: Exception) {
+            e.printOnDebug()
+            log(e.localizedMessage ?: "aesDecodeToByteArrayERROR")
+            null
+        }
     }
 
     /**
@@ -506,12 +549,18 @@ interface JsExtensions {
     fun aesEncodeToByteArray(
         data: String, key: String, transformation: String, iv: String
     ): ByteArray? {
-        return EncoderUtils.encryptAES(
-            data.encodeToByteArray(),
-            key = key.encodeToByteArray(),
-            transformation,
-            iv.encodeToByteArray()
-        )
+        return try {
+            EncoderUtils.encryptAES(
+                data.encodeToByteArray(),
+                key = key.encodeToByteArray(),
+                transformation,
+                iv.encodeToByteArray()
+            )
+        } catch (e: Exception) {
+            e.printOnDebug()
+            log(e.localizedMessage ?: "aesEncodeToByteArrayERROR")
+            null
+        }
     }
 
     /**
@@ -537,12 +586,18 @@ interface JsExtensions {
     fun aesEncodeToBase64ByteArray(
         data: String, key: String, transformation: String, iv: String
     ): ByteArray? {
-        return EncoderUtils.encryptAES2Base64(
-            data.encodeToByteArray(),
-            key.encodeToByteArray(),
-            transformation,
-            iv.encodeToByteArray()
-        )
+        return try {
+            EncoderUtils.encryptAES2Base64(
+                data.encodeToByteArray(),
+                key.encodeToByteArray(),
+                transformation,
+                iv.encodeToByteArray()
+            )
+        } catch (e: Exception) {
+            e.printOnDebug()
+            log(e.localizedMessage ?: "aesEncodeToBase64ByteArrayERROR")
+            null
+        }
     }
 
     /**

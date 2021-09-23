@@ -11,6 +11,7 @@ import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.lib.dialogs.selector
 import io.legado.app.lib.webdav.HttpAuth
 import io.legado.app.lib.webdav.WebDav
+import io.legado.app.model.NoStackTraceException
 import io.legado.app.utils.*
 import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.Dispatchers.Main
@@ -38,7 +39,8 @@ object AppWebDav {
             return url
         }
 
-    private suspend fun initWebDav(): Boolean {
+    @Throws(Exception::class)
+    suspend fun initWebDav(): Boolean {
         val account = appCtx.getPrefString(PreferKey.webDavAccount)
         val password = appCtx.getPrefString(PreferKey.webDavPassword)
         if (!account.isNullOrBlank() && !password.isNullOrBlank()) {
@@ -64,7 +66,7 @@ object AppWebDav {
                 }
             }
         } else {
-            error("webDav没有配置")
+            throw NoStackTraceException("webDav没有配置")
         }
         return names
     }
@@ -87,7 +89,7 @@ object AppWebDav {
                 }
             }
         } else {
-            throw Exception("Web dav no back up file")
+            throw NoStackTraceException("Web dav no back up file")
         }
     }
 

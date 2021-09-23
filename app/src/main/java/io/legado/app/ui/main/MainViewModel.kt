@@ -1,34 +1,36 @@
 package io.legado.app.ui.main
 
 import android.app.Application
+import androidx.lifecycle.viewModelScope
 import io.legado.app.base.BaseViewModel
+import io.legado.app.constant.AppConst
+import io.legado.app.constant.AppLog
 import io.legado.app.constant.BookType
 import io.legado.app.constant.EventBus
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookSource
 import io.legado.app.help.AppConfig
-import io.legado.app.help.BookHelp
 import io.legado.app.help.DefaultData
 import io.legado.app.help.LocalConfig
+import io.legado.app.model.CacheBook
 import io.legado.app.model.webBook.WebBook
-import io.legado.app.service.help.CacheBook
+import io.legado.app.service.CacheBookService
 import io.legado.app.utils.postEvent
-import kotlinx.coroutines.asCoroutineDispatcher
-import kotlinx.coroutines.delay
-import java.util.concurrent.ConcurrentHashMap
+import io.legado.app.utils.printOnDebug
+import kotlinx.coroutines.*
 import java.util.concurrent.CopyOnWriteArraySet
 import java.util.concurrent.Executors
 import kotlin.math.min
 
 class MainViewModel(application: Application) : BaseViewModel(application) {
     private var threadCount = AppConfig.threadCount
-    private var upTocPool = Executors.newFixedThreadPool(min(threadCount,8)).asCoroutineDispatcher()
-    val updateList = CopyOnWriteArraySet<String>()
-    private val bookMap = ConcurrentHashMap<String, Book>()
-
-    @Volatile
-    private var usePoolCount = 0
+    private var upTocPool =
+        Executors.newFixedThreadPool(min(threadCount, AppConst.MAX_THREAD)).asCoroutineDispatcher()
+    private val waitUpTocBooks = arrayListOf<String>()
+    private val onUpTocBooks = CopyOnWriteArraySet<String>()
+    private var upTocJob: Job? = null
+    private var cacheBookJob: Job? = null
 
     override fun onCleared() {
         super.onCleared()
@@ -38,12 +40,17 @@ class MainViewModel(application: Application) : BaseViewModel(application) {
     fun upPool() {
         threadCount = AppConfig.threadCount
         upTocPool.close()
-        upTocPool = Executors.newFixedThreadPool(min(threadCount,8)).asCoroutineDispatcher()
+        upTocPool = Executors
+            .newFixedThreadPool(min(threadCount, AppConst.MAX_THREAD)).asCoroutineDispatcher()
+    }
+
+    fun isUpdate(bookUrl: String): Boolean {
+        return onUpTocBooks.contains(bookUrl)
     }
 
     fun upAllBookToc() {
         execute {
-            upToc(appDb.bookDao.hasUpdateBooks)
+            addToWaitUp(appDb.bookDao.hasUpdateBooks)
         }
     }
 
@@ -51,13 +58,38 @@ class MainViewModel(application: Application) : BaseViewModel(application) {
         execute(context = upTocPool) {
             books.filter {
                 it.origin != BookType.local && it.canUpdate
-            }.forEach {
-                bookMap[it.bookUrl] = it
+            }.let {
+                addToWaitUp(it)
             }
-            for (i in 0 until threadCount) {
-                if (usePoolCount < threadCount) {
-                    usePoolCount++
-                    updateToc()
+        }
+    }
+
+    @Synchronized
+    private fun addToWaitUp(books: List<Book>) {
+        books.forEach { book ->
+            if (!waitUpTocBooks.contains(book.bookUrl) && !onUpTocBooks.contains(book.bookUrl)) {
+                waitUpTocBooks.add(book.bookUrl)
+            }
+        }
+        if (upTocJob == null) {
+            startUpTocJob()
+        }
+    }
+
+    private fun startUpTocJob() {
+        upTocJob = viewModelScope.launch(upTocPool) {
+            while (isActive) {
+                when {
+                    waitUpTocBooks.isEmpty() -> {
+                        upTocJob?.cancel()
+                        upTocJob = null
+                    }
+                    onUpTocBooks.size < threadCount -> {
+                        updateToc()
+                    }
+                    else -> {
+                        delay(500)
+                    }
                 }
             }
         }
@@ -65,78 +97,93 @@ class MainViewModel(application: Application) : BaseViewModel(application) {
 
     @Synchronized
     private fun updateToc() {
-        var update = false
-        bookMap.forEach { bookEntry ->
-            if (!updateList.contains(bookEntry.key)) {
-                update = true
-                val book = bookEntry.value
-                synchronized(this) {
-                    updateList.add(book.bookUrl)
-                    postEvent(EventBus.UP_BOOKSHELF, book.bookUrl)
-                }
-                appDb.bookSourceDao.getBookSource(book.origin)?.let { bookSource ->
-                    execute(context = upTocPool) {
-                        if (book.tocUrl.isBlank()) {
-                            WebBook.getBookInfoAwait(this, bookSource, book)
-                        }
-                        val toc = WebBook.getChapterListAwait(this, bookSource, book)
-                        appDb.bookDao.update(book)
-                        appDb.bookChapterDao.delByBook(book.bookUrl)
-                        appDb.bookChapterDao.insert(*toc.toTypedArray())
-                        cacheBook(bookSource, book)
-                    }.onError(upTocPool) {
-                        it.printStackTrace()
-                    }.onFinally(upTocPool) {
-                        synchronized(this) {
-                            bookMap.remove(bookEntry.key)
-                            updateList.remove(book.bookUrl)
-                            postEvent(EventBus.UP_BOOKSHELF, book.bookUrl)
-                            upNext()
-                        }
-                    }
-                } ?: synchronized(this) {
-                    bookMap.remove(bookEntry.key)
-                    updateList.remove(book.bookUrl)
-                    postEvent(EventBus.UP_BOOKSHELF, book.bookUrl)
-                    upNext()
-                }
-                return
-            }
+        val bookUrl = waitUpTocBooks.firstOrNull() ?: return
+        if (onUpTocBooks.contains(bookUrl)) {
+            waitUpTocBooks.remove(bookUrl)
+            return
         }
-        if (!update) {
-            usePoolCount--
+        val book = appDb.bookDao.getBook(bookUrl)
+        if (book == null) {
+            waitUpTocBooks.remove(bookUrl)
+            return
+        }
+        val source = appDb.bookSourceDao.getBookSource(book.origin)
+        if (source == null) {
+            waitUpTocBooks.remove(book.bookUrl)
+            return
+        }
+        waitUpTocBooks.remove(book.bookUrl)
+        onUpTocBooks.add(book.bookUrl)
+        postEvent(EventBus.UP_BOOKSHELF, book.bookUrl)
+        execute(context = upTocPool) {
+            if (book.tocUrl.isBlank()) {
+                WebBook.getBookInfoAwait(this, source, book)
+            }
+            val toc = WebBook.getChapterListAwait(this, source, book)
+            appDb.bookDao.update(book)
+            appDb.bookChapterDao.delByBook(book.bookUrl)
+            appDb.bookChapterDao.insert(*toc.toTypedArray())
+            addDownload(source, book)
+        }.onError(upTocPool) {
+            AppLog.addLog("${book.name} 更新目录失败\n${it.localizedMessage}", it)
+            it.printOnDebug()
+        }.onCancel(upTocPool) {
+            upTocCancel(book.bookUrl)
+        }.onFinally(upTocPool) {
+            upTocFinally(book.bookUrl)
         }
     }
 
-    private fun cacheBook(bookSource: BookSource, book: Book) {
-        execute {
-            if (book.totalChapterNum > book.durChapterIndex) {
-                val downloadToIndex =
-                    min(book.totalChapterNum, book.durChapterIndex.plus(AppConfig.preDownloadNum))
-                for (i in book.durChapterIndex until downloadToIndex) {
-                    appDb.bookChapterDao.getChapter(book.bookUrl, i)?.let { chapter ->
-                        if (!BookHelp.hasContent(book, chapter)) {
-                            var addToCache = false
-                            while (!addToCache) {
-                                if (CacheBook.downloadCount() < 10) {
-                                    CacheBook.download(this, bookSource, book, chapter)
-                                    addToCache = true
-                                } else {
-                                    delay(100)
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+    @Synchronized
+    private fun upTocCancel(bookUrl: String) {
+        onUpTocBooks.remove(bookUrl)
+        waitUpTocBooks.add(bookUrl)
+    }
+
+    @Synchronized
+    private fun upTocFinally(bookUrl: String) {
+        waitUpTocBooks.remove(bookUrl)
+        onUpTocBooks.remove(bookUrl)
+        postEvent(EventBus.UP_BOOKSHELF, bookUrl)
+    }
+
+    @Synchronized
+    private fun addDownload(source: BookSource, book: Book) {
+        val endIndex = min(
+            book.totalChapterNum - 1,
+            book.durChapterIndex.plus(AppConfig.preDownloadNum)
+        )
+        val cacheBook = CacheBook.getOrCreate(source, book)
+        cacheBook.addDownload(book.durChapterIndex, endIndex)
+        if (cacheBookJob == null && !CacheBookService.isRun) {
+            cacheBook()
         }
     }
 
-    private fun upNext() {
-        if (bookMap.size > updateList.size) {
-            updateToc()
-        } else {
-            usePoolCount--
+    /**
+     * 缓存书籍
+     */
+    private fun cacheBook() {
+        cacheBookJob?.cancel()
+        cacheBookJob = viewModelScope.launch(upTocPool) {
+            while (isActive) {
+                if (CacheBookService.isRun) {
+                    cacheBookJob?.cancel()
+                    cacheBookJob = null
+                    return@launch
+                }
+                if (!CacheBook.isRun) {
+                    cacheBookJob?.cancel()
+                    cacheBookJob = null
+                    return@launch
+                }
+                CacheBook.cacheBookMap.forEach {
+                    while (CacheBook.onDownloadCount > threadCount) {
+                        delay(100)
+                    }
+                    it.value.download(this, upTocPool)
+                }
+            }
         }
     }
 

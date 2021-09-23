@@ -39,7 +39,7 @@ class BgTextConfigDialog : BaseDialogFragment() {
 
     private val binding by viewBinding(DialogReadBgTextBinding::bind)
     private val configFileName = "readConfig.zip"
-    private lateinit var adapter: BgAdapter
+    private val adapter by lazy { BgAdapter(requireContext(), secondaryTextColor) }
     private var primaryTextColor = 0
     private var secondaryTextColor = 0
     private val importFormNet = "网络导入"
@@ -111,7 +111,6 @@ class BgTextConfigDialog : BaseDialogFragment() {
         ivExport.setColorFilter(primaryTextColor)
         ivDelete.setColorFilter(primaryTextColor)
         tvBgImage.setTextColor(primaryTextColor)
-        adapter = BgAdapter(requireContext(), secondaryTextColor)
         recyclerView.adapter = adapter
         adapter.addHeaderView {
             ItemBgImageBinding.inflate(layoutInflater, it, false).apply {
@@ -156,7 +155,7 @@ class BgTextConfigDialog : BaseDialogFragment() {
         binding.tvRestore.setOnClickListener {
             val defaultConfigs = DefaultData.readConfigs
             val layoutNames = defaultConfigs.map { it.name }
-            selector("选择预设布局", layoutNames) { _, i ->
+            context?.selector("选择预设布局", layoutNames) { _, i ->
                 if (i >= 0) {
                     ReadBookConfig.durConfig = defaultConfigs[i]
                     initData()
@@ -282,7 +281,7 @@ class BgTextConfigDialog : BaseDialogFragment() {
         }.onSuccess {
             toastOnUi("导出成功, 文件名为 $exportFileName")
         }.onError {
-            it.printStackTrace()
+            it.printOnDebug()
             longToast("导出失败:${it.localizedMessage}")
         }
     }
@@ -319,7 +318,7 @@ class BgTextConfigDialog : BaseDialogFragment() {
             @Suppress("BlockingMethodInNonBlockingContext")
             importConfig(uri.readBytes(requireContext())!!)
         }.onError {
-            it.printStackTrace()
+            it.printOnDebug()
             longToast("导入失败:${it.localizedMessage}")
         }
     }
@@ -333,7 +332,7 @@ class BgTextConfigDialog : BaseDialogFragment() {
             postEvent(EventBus.UP_CONFIG, true)
             toastOnUi("导入成功")
         }.onError {
-            it.printStackTrace()
+            it.printOnDebug()
             longToast("导入失败:${it.localizedMessage}")
         }
     }

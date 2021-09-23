@@ -6,6 +6,7 @@ import io.legado.app.constant.EventBus
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookChapter
+import io.legado.app.data.entities.BookSource
 import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.model.analyzeRule.AnalyzeUrl
 import io.legado.app.model.localBook.LocalBook
@@ -20,6 +21,7 @@ import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 
+@Suppress("unused")
 object BookHelp {
     private const val cacheFolderName = "book_cache"
     private const val cacheImageFolderName = "images"
@@ -77,7 +79,12 @@ object BookHelp {
         return file
     }
 
-    suspend fun saveContent(book: Book, bookChapter: BookChapter, content: String) {
+    suspend fun saveContent(
+        bookSource: BookSource,
+        book: Book,
+        bookChapter: BookChapter,
+        content: String
+    ) {
         if (content.isEmpty()) return
         //保存文本
         FileUtils.createFileIfNotExist(
@@ -92,14 +99,14 @@ object BookHelp {
             if (matcher.find()) {
                 matcher.group(1)?.let { src ->
                     val mSrc = NetworkUtils.getAbsoluteURL(bookChapter.url, src)
-                    saveImage(book, mSrc)
+                    saveImage(bookSource, book, mSrc)
                 }
             }
         }
         postEvent(EventBus.SAVE_CONTENT, bookChapter)
     }
 
-    suspend fun saveImage(book: Book, src: String) {
+    suspend fun saveImage(bookSource: BookSource?, book: Book, src: String) {
         while (downloadImages.contains(src)) {
             delay(100)
         }
@@ -107,9 +114,9 @@ object BookHelp {
             return
         }
         downloadImages.add(src)
-        val analyzeUrl = AnalyzeUrl(src)
+        val analyzeUrl = AnalyzeUrl(src, source = bookSource)
         try {
-            analyzeUrl.getByteArray(book.origin).let {
+            analyzeUrl.getByteArray().let {
                 FileUtils.createFileIfNotExist(
                     downloadDir,
                     cacheFolderName,
@@ -119,7 +126,7 @@ object BookHelp {
                 ).writeBytes(it)
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            e.printOnDebug()
         } finally {
             downloadImages.remove(src)
         }
@@ -157,7 +164,9 @@ object BookHelp {
         return fileNameList
     }
 
-    // 检测该章节是否下载
+    /**
+     * 检测该章节是否下载
+     */
     fun hasContent(book: Book, bookChapter: BookChapter): Boolean {
         return if (book.isLocalTxt()) {
             true
@@ -171,6 +180,9 @@ object BookHelp {
         }
     }
 
+    /**
+     * 检测图片是否下载
+     */
     fun hasImageContent(book: Book, bookChapter: BookChapter): Boolean {
         if (!hasContent(book, bookChapter)) {
             return false
@@ -189,6 +201,9 @@ object BookHelp {
         return true
     }
 
+    /**
+     * 读取章节内容
+     */
     fun getContent(book: Book, bookChapter: BookChapter): String? {
         if (book.isLocalTxt() || book.isUmd()) {
             return LocalBook.getContext(book, bookChapter)
@@ -217,6 +232,9 @@ object BookHelp {
         return null
     }
 
+    /**
+     * 反转章节内容
+     */
     fun reverseContent(book: Book, bookChapter: BookChapter) {
         if (!book.isLocalBook()) {
             val file = FileUtils.getFile(
@@ -236,6 +254,9 @@ object BookHelp {
         }
     }
 
+    /**
+     * 删除章节内容
+     */
     fun delContent(book: Book, bookChapter: BookChapter) {
         if (book.isLocalTxt()) {
             return
@@ -249,12 +270,18 @@ object BookHelp {
         }
     }
 
+    /**
+     * 格式化书名
+     */
     fun formatBookName(name: String): String {
         return name
             .replace(AppPattern.nameRegex, "")
             .trim { it <= ' ' }
     }
 
+    /**
+     * 格式化作者
+     */
     fun formatBookAuthor(author: String): String {
         return author
             .replace(AppPattern.authorRegex, "")

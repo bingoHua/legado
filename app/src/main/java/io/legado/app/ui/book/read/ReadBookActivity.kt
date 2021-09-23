@@ -20,6 +20,7 @@ import io.legado.app.constant.Status
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookChapter
 import io.legado.app.data.entities.BookProgress
+import io.legado.app.data.entities.BookSource
 import io.legado.app.help.ReadBookConfig
 import io.legado.app.help.ReadTipConfig
 import io.legado.app.help.storage.AppWebDav
@@ -27,10 +28,10 @@ import io.legado.app.help.storage.Backup
 import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.dialogs.selector
 import io.legado.app.lib.theme.accentColor
+import io.legado.app.model.ReadAloud
 import io.legado.app.model.ReadBook
 import io.legado.app.receiver.TimeBatteryReceiver
 import io.legado.app.service.BaseReadAloudService
-import io.legado.app.service.help.ReadAloud
 import io.legado.app.ui.book.changesource.ChangeSourceDialog
 import io.legado.app.ui.book.info.BookInfoActivity
 import io.legado.app.ui.book.read.config.*
@@ -51,11 +52,8 @@ import io.legado.app.ui.replace.ReplaceRuleActivity
 import io.legado.app.ui.replace.edit.ReplaceEditActivity
 import io.legado.app.ui.widget.dialog.TextDialog
 import io.legado.app.utils.*
+import kotlinx.coroutines.*
 import kotlinx.coroutines.Dispatchers.IO
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
-import kotlinx.coroutines.launch
 
 class ReadBookActivity : ReadBookBaseActivity(),
     View.OnTouchListener,
@@ -77,7 +75,7 @@ class ReadBookActivity : ReadBookBaseActivity(),
             }
         }
     private val sourceEditActivity =
-        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        registerForActivityResult(StartActivityForResult(BookSourceEditActivity::class.java)) {
             it ?: return@registerForActivityResult
             if (it.resultCode == RESULT_OK) {
                 viewModel.upBookSource {
@@ -210,6 +208,13 @@ class ReadBookActivity : ReadBookBaseActivity(),
                     }
                 }
             }
+            launch {
+                menu.findItem(R.id.menu_get_progress)?.isVisible =
+                    withContext(IO) {
+                        runCatching { AppWebDav.initWebDav() }
+                            .getOrElse { false }
+                    }
+            }
         }
     }
 
@@ -221,7 +226,7 @@ class ReadBookActivity : ReadBookBaseActivity(),
             R.id.menu_change_source -> {
                 binding.readMenu.runMenuOut()
                 ReadBook.book?.let {
-                    ChangeSourceDialog.show(supportFragmentManager, it.name, it.author)
+                    supportFragmentManager.showDialog(ChangeSourceDialog(it.name, it.author))
                 }
             }
             R.id.menu_refresh -> {
@@ -246,7 +251,7 @@ class ReadBookActivity : ReadBookBaseActivity(),
                         chapterName = page.title
                         bookText = page.text.trim()
                     }
-                    BookmarkDialog.start(supportFragmentManager, bookmark)
+                    supportFragmentManager.showDialog(BookmarkDialog(bookmark))
                 }
             }
             R.id.menu_copy_text ->
@@ -273,9 +278,8 @@ class ReadBookActivity : ReadBookBaseActivity(),
                     putExtra("author", it.author)
                 }
             }
-            R.id.menu_toc_regex -> TocRegexDialog.show(
-                supportFragmentManager,
-                ReadBook.book?.tocUrl
+            R.id.menu_toc_regex -> supportFragmentManager.showDialog(
+                TocRegexDialog(ReadBook.book?.tocUrl)
             )
             R.id.menu_reverse_content -> ReadBook.book?.let {
                 viewModel.reverseContent(it)
@@ -508,7 +512,7 @@ class ReadBookActivity : ReadBookBaseActivity(),
                 if (bookmark == null) {
                     toastOnUi(R.string.create_bookmark_error)
                 } else {
-                    BookmarkDialog.start(supportFragmentManager, bookmark)
+                    supportFragmentManager.showDialog(BookmarkDialog(bookmark))
                 }
                 return true
             }
@@ -535,7 +539,7 @@ class ReadBookActivity : ReadBookBaseActivity(),
                 return true
             }
             R.id.menu_dict -> {
-                DictDialog.dict(supportFragmentManager, selectedText)
+                supportFragmentManager.showDialog(DictDialog(selectedText))
                 return true
             }
         }
@@ -638,21 +642,15 @@ class ReadBookActivity : ReadBookBaseActivity(),
     override val oldBook: Book?
         get() = ReadBook.book
 
-    override fun changeTo(book: Book) {
-        viewModel.changeTo(book)
+    override fun changeTo(source: BookSource, book: Book) {
+        viewModel.changeTo(source, book)
     }
 
     override fun showActionMenu() {
         when {
-            BaseReadAloudService.isRun -> {
-                showReadAloudDialog()
-            }
-            isAutoPage -> {
-                AutoReadDialog().show(supportFragmentManager, "autoRead")
-            }
-            else -> {
-                binding.readMenu.runMenuIn()
-            }
+            BaseReadAloudService.isRun -> showReadAloudDialog()
+            isAutoPage -> supportFragmentManager.showDialog<AutoReadDialog>()
+            else -> binding.readMenu.runMenuIn()
         }
     }
 
@@ -665,7 +663,7 @@ class ReadBookActivity : ReadBookBaseActivity(),
      * 显示朗读菜单
      */
     override fun showReadAloudDialog() {
-        ReadAloudDialog().show(supportFragmentManager, "readAloud")
+        supportFragmentManager.showDialog<ReadAloudDialog>()
     }
 
     /**
@@ -728,9 +726,9 @@ class ReadBookActivity : ReadBookBaseActivity(),
 
     override fun openSourceEditActivity() {
         ReadBook.bookSource?.let {
-            sourceEditActivity.launch(Intent(this, BookSourceEditActivity::class.java).apply {
+            sourceEditActivity.launch {
                 putExtra("data", it.bookSourceUrl)
-            })
+            }
         }
     }
 
@@ -766,14 +764,14 @@ class ReadBookActivity : ReadBookBaseActivity(),
      * 显示阅读样式配置
      */
     override fun showReadStyle() {
-        ReadStyleDialog().show(supportFragmentManager, "readStyle")
+        supportFragmentManager.showDialog<ReadStyleDialog>()
     }
 
     /**
      * 显示更多设置
      */
     override fun showMoreSetting() {
-        MoreConfigDialog().show(supportFragmentManager, "moreConfig")
+        supportFragmentManager.showDialog<MoreConfigDialog>()
     }
 
     /**
@@ -956,9 +954,9 @@ class ReadBookActivity : ReadBookBaseActivity(),
             launch(IO) {
                 if (BaseReadAloudService.isPlay()) {
                     ReadBook.curTextChapter?.let { textChapter ->
-                        val pageStart = chapterStart - ReadBook.durChapterPos
+                        val aloudSpanStart = chapterStart - ReadBook.durChapterPos
                         textChapter.getPageByReadPos(ReadBook.durChapterPos)
-                            ?.upPageAloudSpan(pageStart)
+                            ?.upPageAloudSpan(aloudSpanStart)
                         upContent()
                     }
                 }

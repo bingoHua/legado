@@ -11,10 +11,10 @@ import io.legado.app.databinding.DialogReadAloudBinding
 import io.legado.app.help.AppConfig
 import io.legado.app.lib.theme.bottomBackground
 import io.legado.app.lib.theme.getPrimaryTextColor
+import io.legado.app.model.ReadAloud
 import io.legado.app.model.ReadBook
 import io.legado.app.service.BaseReadAloudService
 import io.legado.app.service.help.CacheAudio
-import io.legado.app.service.help.ReadAloud
 import io.legado.app.ui.book.read.ReadBookActivity
 import io.legado.app.ui.widget.seekbar.SeekBarChangeListener
 import io.legado.app.utils.ColorUtils
@@ -126,6 +126,8 @@ class ReadAloudDialog : BaseDialogFragment() {
             seekTtsSpeechRate.isEnabled = !isChecked
             upTtsSpeechRate()
         }
+        //设置保存的默认值
+        seekTtsSpeechRate.progress=AppConfig.ttsSpeechRate
         seekTtsSpeechRate.setOnSeekBarChangeListener(object : SeekBarChangeListener {
             override fun onStopTrackingTouch(seekBar: SeekBar) {
                 AppConfig.ttsSpeechRate = seekBar.progress
@@ -146,8 +148,10 @@ class ReadAloudDialog : BaseDialogFragment() {
     private fun upPlayState() {
         if (!BaseReadAloudService.pause) {
             binding.ivPlayPause.setImageResource(R.drawable.ic_pause_24dp)
+            binding.ivPlayPause.contentDescription = getString(R.string.pause)
         } else {
             binding.ivPlayPause.setImageResource(R.drawable.ic_play_24dp)
+            binding.ivPlayPause.contentDescription = getString(R.string.audio_play)
         }
         val bg = requireContext().bottomBackground
         val isLight = ColorUtils.isColorLight(bg)

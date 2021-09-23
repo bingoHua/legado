@@ -24,9 +24,9 @@ import io.legado.app.help.BookHelp
 import io.legado.app.lib.dialogs.SelectItem
 import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.dialogs.selector
-import io.legado.app.service.help.CacheBook
+import io.legado.app.model.CacheBook
+import io.legado.app.ui.about.AppLogDialog
 import io.legado.app.ui.document.HandleFileContract
-import io.legado.app.ui.widget.dialog.TextListDialog
 import io.legado.app.utils.*
 import io.legado.app.utils.viewbindingdelegate.viewBinding
 import kotlinx.coroutines.Dispatchers
@@ -35,8 +35,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.CopyOnWriteArraySet
 
 class CacheActivity : VMBaseActivity<ActivityCacheBookBinding, CacheViewModel>(),
     CacheAdapter.CallBack {
@@ -46,7 +44,7 @@ class CacheActivity : VMBaseActivity<ActivityCacheBookBinding, CacheViewModel>()
 
     private val exportBookPathKey = "exportBookPath"
     private val exportTypes = arrayListOf("txt", "epub")
-    lateinit var adapter: CacheAdapter
+    private val adapter by lazy { CacheAdapter(this, this) }
     private var booksFlowJob: Job? = null
     private var menu: Menu? = null
     private var exportPosition = -1
@@ -113,7 +111,7 @@ class CacheActivity : VMBaseActivity<ActivityCacheBookBinding, CacheViewModel>()
     override fun onCompatOptionsItemSelected(item: MenuItem): Boolean {
         when (item.itemId) {
             R.id.menu_download -> {
-                if (adapter.downloadMap.isNullOrEmpty()) {
+                if (!CacheBook.isRun) {
                     adapter.getItems().forEach { book ->
                         CacheBook.start(
                             this@CacheActivity,
@@ -137,8 +135,7 @@ class CacheActivity : VMBaseActivity<ActivityCacheBookBinding, CacheViewModel>()
             R.id.menu_export_file_name -> alertExportFileName()
             R.id.menu_export_type -> showExportTypeConfig()
             R.id.menu_export_charset -> showCharsetConfig()
-            R.id.menu_log ->
-                TextListDialog.show(supportFragmentManager, getString(R.string.log), CacheBook.logs)
+            R.id.menu_log -> supportFragmentManager.showDialog<AppLogDialog>()
             else -> if (item.groupId == R.id.menu_group) {
                 binding.titleBar.subtitle = item.title
                 groupId = appDb.bookGroupDao.getByName(item.title.toString())?.groupId ?: 0
@@ -150,7 +147,6 @@ class CacheActivity : VMBaseActivity<ActivityCacheBookBinding, CacheViewModel>()
 
     private fun initRecyclerView() {
         binding.recyclerView.layoutManager = LinearLayoutManager(this)
-        adapter = CacheAdapter(this, this)
         binding.recyclerView.adapter = adapter
     }
 
@@ -212,15 +208,20 @@ class CacheActivity : VMBaseActivity<ActivityCacheBookBinding, CacheViewModel>()
     }
 
     override fun observeLiveBus() {
-        observeEvent<ConcurrentHashMap<String, CopyOnWriteArraySet<BookChapter>>>(EventBus.UP_DOWNLOAD) {
-            if (it.isEmpty()) {
-                menu?.findItem(R.id.menu_download)?.setIcon(R.drawable.ic_play_24dp)
+        observeEvent<String>(EventBus.UP_DOWNLOAD) {
+            if (!CacheBook.isRun) {
+                menu?.findItem(R.id.menu_download)?.let { item ->
+                    item.setIcon(R.drawable.ic_play_24dp)
+                    item.setTitle(R.string.download_start)
+                }
                 menu?.applyTint(this)
             } else {
-                menu?.findItem(R.id.menu_download)?.setIcon(R.drawable.ic_stop_black_24dp)
+                menu?.findItem(R.id.menu_download)?.let { item ->
+                    item.setIcon(R.drawable.ic_stop_black_24dp)
+                    item.setTitle(R.string.stop)
+                }
                 menu?.applyTint(this)
             }
-            adapter.downloadMap = it
             adapter.notifyItemRangeChanged(0, adapter.itemCount, true)
         }
         observeEvent<BookChapter>(EventBus.SAVE_CONTENT) {
@@ -249,7 +250,7 @@ class CacheActivity : VMBaseActivity<ActivityCacheBookBinding, CacheViewModel>()
     }
 
     private fun selectExportFolder() {
-        val default = arrayListOf<SelectItem>()
+        val default = arrayListOf<SelectItem<Int>>()
         val path = ACache.get(this@CacheActivity).getAsString(exportBookPathKey)
         if (!path.isNullOrEmpty()) {
             default.add(SelectItem(path, -1))
@@ -305,10 +306,10 @@ class CacheActivity : VMBaseActivity<ActivityCacheBookBinding, CacheViewModel>()
     @SuppressLint("SetTextI18n")
     private fun alertExportFileName() {
         alert(R.string.export_file_name) {
+            setMessage("js内有name和author变量,返回书名")
             val alertBinding = DialogEditTextBinding.inflate(layoutInflater).apply {
                 editView.hint = "file name js"
                 editView.setText(AppConfig.bookExportFileName)
-                tvSummary.text = """使用js返回一个json结构,{"name":"xxx", "author":"yyy"}"""
             }
             customView { alertBinding.root }
             okButton {

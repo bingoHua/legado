@@ -15,11 +15,8 @@ import io.legado.app.help.SourceHelp
 import io.legado.app.help.http.newCall
 import io.legado.app.help.http.okHttpClient
 import io.legado.app.help.http.text
-import io.legado.app.help.storage.Restore
-import io.legado.app.utils.isAbsUrl
-import io.legado.app.utils.isJsonArray
-import io.legado.app.utils.isJsonObject
-import io.legado.app.utils.splitNotBlank
+import io.legado.app.model.NoStackTraceException
+import io.legado.app.utils.*
 
 class ImportBookSourceViewModel(app: Application) : BaseViewModel(app) {
     var isAddGroup = false
@@ -107,9 +104,9 @@ class ImportBookSourceViewModel(app: Application) : BaseViewModel(app) {
                     }
                 }
                 mText.isJsonArray() -> {
-                    val items: List<Map<String, Any>> = Restore.jsonPath.parse(mText).read("$")
+                    val items: List<Map<String, Any>> = jsonPath.parse(mText).read("$")
                     for (item in items) {
-                        val jsonItem = Restore.jsonPath.parse(item)
+                        val jsonItem = jsonPath.parse(item)
                         BookSourceAnalyzer.jsonToBookSource(jsonItem.jsonString())?.let {
                             allSources.add(it)
                         }
@@ -118,10 +115,10 @@ class ImportBookSourceViewModel(app: Application) : BaseViewModel(app) {
                 mText.isAbsUrl() -> {
                     importSourceUrl(mText)
                 }
-                else -> throw Exception(context.getString(R.string.wrong_format))
+                else -> throw NoStackTraceException(context.getString(R.string.wrong_format))
             }
         }.onError {
-            it.printStackTrace()
+            it.printOnDebug()
             errorLiveData.postValue(it.localizedMessage ?: "")
         }.onSuccess {
             comparisonSource()
@@ -134,9 +131,9 @@ class ImportBookSourceViewModel(app: Application) : BaseViewModel(app) {
         }.text("utf-8").let { body ->
             when {
                 body.isJsonArray() -> {
-                    val items: List<Map<String, Any>> = Restore.jsonPath.parse(body).read("$")
+                    val items: List<Map<String, Any>> = jsonPath.parse(body).read("$")
                     for (item in items) {
-                        val jsonItem = Restore.jsonPath.parse(item)
+                        val jsonItem = jsonPath.parse(item)
                         BookSourceAnalyzer.jsonToBookSource(jsonItem.jsonString())?.let { source ->
                             allSources.add(source)
                         }
@@ -148,7 +145,7 @@ class ImportBookSourceViewModel(app: Application) : BaseViewModel(app) {
                     }
                 }
                 else -> {
-                    throw Exception(context.getString(R.string.wrong_format))
+                    throw NoStackTraceException(context.getString(R.string.wrong_format))
                 }
             }
         }

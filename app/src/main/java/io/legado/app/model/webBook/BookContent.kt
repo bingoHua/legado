@@ -7,7 +7,9 @@ import io.legado.app.data.entities.BookChapter
 import io.legado.app.data.entities.BookSource
 import io.legado.app.data.entities.rule.ContentRule
 import io.legado.app.help.BookHelp
+import io.legado.app.model.ContentEmptyException
 import io.legado.app.model.Debug
+import io.legado.app.model.NoStackTraceException
 import io.legado.app.model.analyzeRule.AnalyzeRule
 import io.legado.app.model.analyzeRule.AnalyzeUrl
 import io.legado.app.utils.HtmlFormatter
@@ -19,7 +21,9 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import splitties.init.appCtx
 
-@Suppress("BlockingMethodInNonBlockingContext")
+/**
+ * 获取正文
+ */
 object BookContent {
 
     @Throws(Exception::class)
@@ -33,7 +37,7 @@ object BookContent {
         body: String?,
         nextChapterUrl: String? = null
     ): String {
-        body ?: throw Exception(
+        body ?: throw NoStackTraceException(
             appCtx.getString(R.string.error_get_web_content, baseUrl)
         )
         Debug.log(bookSource.bookSourceUrl, "≡获取成功:${baseUrl}")
@@ -68,7 +72,7 @@ object BookContent {
                     book = book,
                     source = bookSource,
                     headerMapF = bookSource.getHeaderMap()
-                ).getStrResponse(bookSource.bookSourceUrl)
+                ).getStrResponse()
                 res.body?.let { nextBody ->
                     contentData = analyzeContent(
                         book, nextUrl, res.url, nextBody, contentRule,
@@ -92,7 +96,7 @@ object BookContent {
                             source = bookSource,
                             headerMapF = bookSource.getHeaderMap()
                         )
-                        val res = analyzeUrl.getStrResponse(bookSource.bookSourceUrl)
+                        val res = analyzeUrl.getStrResponse()
                         analyzeContent(
                             book, urlStr, res.url, res.body!!, contentRule,
                             bookChapter, bookSource, mNextChapterUrl, false
@@ -114,9 +118,10 @@ object BookContent {
         Debug.log(bookSource.bookSourceUrl, "└${bookChapter.title}")
         Debug.log(bookSource.bookSourceUrl, "┌获取正文内容")
         Debug.log(bookSource.bookSourceUrl, "└\n$contentStr")
-        if (contentStr.isNotBlank()) {
-            BookHelp.saveContent(book, bookChapter, contentStr)
+        if (contentStr.isBlank()) {
+            throw ContentEmptyException("内容为空")
         }
+        BookHelp.saveContent(bookSource, book, bookChapter, contentStr)
         return contentStr
     }
 

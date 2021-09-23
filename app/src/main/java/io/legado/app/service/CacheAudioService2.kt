@@ -7,6 +7,7 @@ import androidx.core.app.NotificationCompat
 import io.legado.app.R
 import io.legado.app.base.BaseService
 import io.legado.app.constant.AppConst
+import io.legado.app.constant.AppLog
 import io.legado.app.constant.IntentAction
 import io.legado.app.constant.PreferKey
 import io.legado.app.data.appDb
@@ -15,11 +16,9 @@ import io.legado.app.data.entities.BookChapter
 import io.legado.app.help.AppConfig
 import io.legado.app.help.BookHelp
 import io.legado.app.help.ContentProcessor
-import io.legado.app.help.IntentHelp
+import io.legado.app.model.ReadAloud
 import io.legado.app.model.ReadBook
 import io.legado.app.model.analyzeRule.AnalyzeUrl
-import io.legado.app.service.help.CacheBook
-import io.legado.app.service.help.ReadAloud
 import io.legado.app.ui.book.read.page.entities.TextChapter
 import io.legado.app.ui.book.read.page.provider.ChapterProvider
 import io.legado.app.utils.*
@@ -54,7 +53,7 @@ class CacheAudioService2 : BaseService() {
         builder.addAction(
             R.drawable.ic_stop_black_24dp,
             getString(R.string.cancel),
-            IntentHelp.servicePendingIntent<CacheAudioService2>(this, IntentAction.stop)
+            servicePendingIntent<CacheAudioService2>(IntentAction.stop)
         )
         builder.setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
     }
@@ -118,7 +117,7 @@ class CacheAudioService2 : BaseService() {
                                 val splitContents =
                                     contentProcessor.getContent(
                                         book,
-                                        bookChapter.title,
+                                        bookChapter,
                                         chapterContent
                                     )
                                 splitContents.forEach { _ ->
@@ -150,13 +149,21 @@ class CacheAudioService2 : BaseService() {
                                 val splitContents =
                                     contentProcessor.getContent(
                                         book,
-                                        bookChapter.title,
+                                        bookChapter,
                                         chapterContent
                                     )
                                 splitContents.forEach { paragraph ->
                                     LogUtils.d(TAG, "startDownload.$paragraph")
+                                    val displayTitle = bookChapter.getDisplayTitle(
+                                        contentProcessor.getReplaceRules(),
+                                        book.getUseReplaceRule()
+                                    )
                                     val textChapter = ChapterProvider.getTextChapter(
-                                        book, bookChapter, splitContents, ReadBook.chapterSize
+                                        book,
+                                        bookChapter,
+                                        displayTitle,
+                                        splitContents,
+                                        ReadBook.chapterSize
                                     )
                                     val fileName =
                                         md5SpeakFileName(
@@ -176,7 +183,7 @@ class CacheAudioService2 : BaseService() {
                             }
                         }
                     } else {
-                        CacheBook.addLog("${getBook(bookUrl)?.name} is empty")
+                        AppLog.addLog("${getBook(bookUrl)?.name} is empty")
                     }
                 }
             }
@@ -227,7 +234,7 @@ class CacheAudioService2 : BaseService() {
     private fun downloadTask(fileName: String, paragraph: String): Runnable {
         return Runnable {
             if (!hasSpeakFile(fileName)) { //已经下载好的语音缓存
-                if (appCtx.getPrefLong(PreferKey.speakEngine) == -30L) {
+                if (appCtx.getPrefLong(PreferKey.ttsEngine) == -30L) {
                     try {
                         microAloudDownloader.download(
                             paragraph,

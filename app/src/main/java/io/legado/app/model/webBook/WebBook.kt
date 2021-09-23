@@ -23,19 +23,19 @@ object WebBook {
         bookSources: List<BookSource>,
         name: String,
         author: String
-    ): Book? {
-        bookSources.forEach { bookSource ->
+    ): Pair<BookSource, Book>? {
+        bookSources.forEach { source ->
             kotlin.runCatching {
                 if (!scope.isActive) return null
-                searchBookAwait(scope, bookSource, name).firstOrNull {
+                searchBookAwait(scope, source, name).firstOrNull {
                     it.name == name && it.author == author
-                }?.let {
-                    return if (it.tocUrl.isBlank()) {
-                        if (!scope.isActive) return null
-                        getBookInfoAwait(scope, bookSource, it.toBook())
-                    } else {
-                        it.toBook()
+                }?.let { searchBook ->
+                    if (!scope.isActive) return null
+                    var book = searchBook.toBook()
+                    if (book.tocUrl.isBlank()) {
+                        book = getBookInfoAwait(scope, source, book)
                     }
+                    return Pair(source, book)
                 }
             }
         }
@@ -74,7 +74,7 @@ object WebBook {
                 book = variableBook,
                 source = bookSource
             )
-            var res = analyzeUrl.getStrResponse(bookSource.bookSourceUrl)
+            var res = analyzeUrl.getStrResponse()
             //检测书源是否已登录
             bookSource.loginCheckJs?.let { checkJs ->
                 if (checkJs.isNotBlank()) {
@@ -124,11 +124,11 @@ object WebBook {
             source = bookSource,
             headerMapF = bookSource.getHeaderMap(true)
         )
-        var res = analyzeUrl.getStrResponse(bookSource.bookSourceUrl)
+        var res = analyzeUrl.getStrResponse()
         //检测书源是否已登录
         bookSource.loginCheckJs?.let { checkJs ->
             if (checkJs.isNotBlank()) {
-                res = analyzeUrl.evalJS(checkJs) as StrResponse
+                res = analyzeUrl.evalJS(checkJs, result = res) as StrResponse
             }
         }
         return BookList.analyzeBookList(
@@ -182,11 +182,11 @@ object WebBook {
                 source = bookSource,
                 headerMapF = bookSource.getHeaderMap(true)
             )
-            var res = analyzeUrl.getStrResponse(bookSource.bookSourceUrl)
+            var res = analyzeUrl.getStrResponse()
             //检测书源是否已登录
             bookSource.loginCheckJs?.let { checkJs ->
                 if (checkJs.isNotBlank()) {
-                    res = analyzeUrl.evalJS(checkJs) as StrResponse
+                    res = analyzeUrl.evalJS(checkJs, result = res) as StrResponse
                 }
             }
             BookInfo.analyzeBookInfo(
@@ -239,11 +239,11 @@ object WebBook {
                 source = bookSource,
                 headerMapF = bookSource.getHeaderMap(true)
             )
-            var res = analyzeUrl.getStrResponse(bookSource.bookSourceUrl)
+            var res = analyzeUrl.getStrResponse()
             //检测书源是否已登录
             bookSource.loginCheckJs?.let { checkJs ->
                 if (checkJs.isNotBlank()) {
-                    res = analyzeUrl.evalJS(checkJs) as StrResponse
+                    res = analyzeUrl.evalJS(checkJs, result = res) as StrResponse
                 }
             }
             BookChapterList.analyzeChapterList(
@@ -278,7 +278,7 @@ object WebBook {
         bookSource: BookSource,
         book: Book,
         bookChapter: BookChapter,
-        nextChapterUrl: String? = null,
+        nextChapterUrl: String? = null
     ): String {
         if (bookSource.getContentRule().content.isNullOrEmpty()) {
             Debug.log(bookSource.bookSourceUrl, "⇒正文规则为空,使用章节链接:${bookChapter.url}")
@@ -305,14 +305,13 @@ object WebBook {
                 headerMapF = bookSource.getHeaderMap(true)
             )
             var res = analyzeUrl.getStrResponse(
-                bookSource.bookSourceUrl,
                 jsStr = bookSource.getContentRule().webJs,
                 sourceRegex = bookSource.getContentRule().sourceRegex
             )
             //检测书源是否已登录
             bookSource.loginCheckJs?.let { checkJs ->
                 if (checkJs.isNotBlank()) {
-                    res = analyzeUrl.evalJS(checkJs) as StrResponse
+                    res = analyzeUrl.evalJS(checkJs, result = res) as StrResponse
                 }
             }
             BookContent.analyzeContent(

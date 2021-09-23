@@ -13,6 +13,7 @@ import io.legado.app.data.entities.Bookmark
 import io.legado.app.databinding.FragmentBookmarkBinding
 import io.legado.app.lib.theme.ATH
 import io.legado.app.ui.widget.recycler.VerticalDivider
+import io.legado.app.utils.showDialog
 import io.legado.app.utils.viewbindingdelegate.viewBinding
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.collect
@@ -24,7 +25,7 @@ class BookmarkFragment : VMBaseFragment<TocViewModel>(R.layout.fragment_bookmark
     TocViewModel.BookmarkCallBack {
     override val viewModel by activityViewModels<TocViewModel>()
     private val binding by viewBinding(FragmentBookmarkBinding::bind)
-    private lateinit var adapter: BookmarkAdapter
+    private val adapter by lazy { BookmarkAdapter(requireContext(), this) }
     private var bookmarkFlowJob: Job? = null
 
     override fun onFragmentCreated(view: View, savedInstanceState: Bundle?) {
@@ -37,7 +38,6 @@ class BookmarkFragment : VMBaseFragment<TocViewModel>(R.layout.fragment_bookmark
 
     private fun initRecyclerView() {
         ATH.applyEdgeEffectColor(binding.recyclerView)
-        adapter = BookmarkAdapter(requireContext(), this)
         binding.recyclerView.layoutManager = LinearLayoutManager(requireContext())
         binding.recyclerView.addItemDecoration(VerticalDivider(requireContext()))
         binding.recyclerView.adapter = adapter
@@ -68,6 +68,6 @@ class BookmarkFragment : VMBaseFragment<TocViewModel>(R.layout.fragment_bookmark
     }
 
     override fun onLongClick(bookmark: Bookmark) {
-        BookmarkDialog.start(childFragmentManager, bookmark)
+        childFragmentManager.showDialog(BookmarkDialog(bookmark))
     }
 }

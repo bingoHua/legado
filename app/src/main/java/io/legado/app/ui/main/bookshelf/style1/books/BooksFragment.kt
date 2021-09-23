@@ -37,18 +37,14 @@ import kotlin.math.max
 /**
  * 书架界面
  */
-class BooksFragment : BaseFragment(R.layout.fragment_books),
+class BooksFragment() : BaseFragment(R.layout.fragment_books),
     BaseBooksAdapter.CallBack {
 
-    companion object {
-        fun newInstance(position: Int, groupId: Long): BooksFragment {
-            return BooksFragment().apply {
-                val bundle = Bundle()
-                bundle.putInt("position", position)
-                bundle.putLong("groupId", groupId)
-                arguments = bundle
-            }
-        }
+    constructor(position: Int, groupId: Long) : this() {
+        val bundle = Bundle()
+        bundle.putInt("position", position)
+        bundle.putLong("groupId", groupId)
+        arguments = bundle
     }
 
     private val binding by viewBinding(FragmentBooksBinding::bind)
@@ -163,7 +159,7 @@ class BooksFragment : BaseFragment(R.layout.fragment_books),
     }
 
     override fun isUpdate(bookUrl: String): Boolean {
-        return bookUrl in activityViewModel.updateList
+        return activityViewModel.isUpdate(bookUrl)
     }
 
     @SuppressLint("NotifyDataSetChanged")

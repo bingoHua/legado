@@ -16,17 +16,13 @@ import androidx.media.AudioFocusRequestCompat
 import io.legado.app.R
 import io.legado.app.base.BaseService
 import io.legado.app.constant.*
-import io.legado.app.help.IntentDataHelp
-import io.legado.app.help.IntentHelp
 import io.legado.app.help.MediaHelp
+import io.legado.app.model.ReadAloud
 import io.legado.app.model.ReadBook
 import io.legado.app.receiver.MediaButtonReceiver
-import io.legado.app.service.help.ReadAloud
 import io.legado.app.ui.book.read.ReadBookActivity
 import io.legado.app.ui.book.read.page.entities.TextChapter
-import io.legado.app.utils.getPrefBoolean
-import io.legado.app.utils.postEvent
-import io.legado.app.utils.toastOnUi
+import io.legado.app.utils.*
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -37,8 +33,11 @@ abstract class BaseReadAloudService : BaseService(),
 
     companion object {
         var isRun = false
+            private set
         var timeMinute: Int = 0
+            private set
         var pause = true
+            private set
 
         fun isPlay(): Boolean {
             return isRun && !pause
@@ -49,8 +48,6 @@ abstract class BaseReadAloudService : BaseService(),
     private var mFocusRequest: AudioFocusRequestCompat? = null
     private var broadcastReceiver: BroadcastReceiver? = null
     private lateinit var mediaSessionCompat: MediaSessionCompat
-    private var title: String = ""
-    private var subtitle: String = ""
     internal val contentList = arrayListOf<String>()
     internal var nowSpeak: Int = 0
     internal var readAloudNumber: Int = 0
@@ -87,11 +84,9 @@ abstract class BaseReadAloudService : BaseService(),
         intent?.action?.let { action ->
             when (action) {
                 IntentAction.play -> {
-                    title = intent.getStringExtra("title") ?: ""
-                    subtitle = intent.getStringExtra("subtitle") ?: ""
-                    pageIndex = intent.getIntExtra("pageIndex", 0)
+                    textChapter = ReadBook.curTextChapter
+                    pageIndex = ReadBook.durPageIndex()
                     newReadAloud(
-                        intent.getStringExtra("dataKey"),
                         intent.getBooleanExtra("play", true)
                     )
                 }
@@ -109,29 +104,26 @@ abstract class BaseReadAloudService : BaseService(),
     }
 
     @CallSuper
-    open fun newReadAloud(dataKey: String?, play: Boolean) {
-        dataKey?.let {
-            textChapter = IntentDataHelp.getData<TextChapter>(dataKey)
-            textChapter?.let { textChapter ->
-                nowSpeak = 0
-                readAloudNumber = textChapter.getReadLength(pageIndex)
-                contentList.clear()
-                if (getPrefBoolean(PreferKey.readAloudByPage)) {
-                    for (index in pageIndex..textChapter.lastIndex) {
-                        textChapter.page(index)?.text?.split("\n")?.let {
-                            contentList.addAll(it)
-                        }
-                    }
-                } else {
-                    textChapter.getUnRead(pageIndex).split("\n").forEach {
-                        if (it.isNotEmpty()) {
-                            contentList.add(it)
-                        }
+    open fun newReadAloud(play: Boolean) {
+        textChapter?.let { textChapter ->
+            nowSpeak = 0
+            readAloudNumber = textChapter.getReadLength(pageIndex)
+            contentList.clear()
+            if (getPrefBoolean(PreferKey.readAloudByPage)) {
+                for (index in pageIndex..textChapter.lastIndex) {
+                    textChapter.page(index)?.text?.split("\n")?.let {
+                        contentList.addAll(it)
                     }
                 }
-                if (play) play()
-            } ?: stopSelf()
-        } ?: stopSelf()
+            } else {
+                textChapter.getUnRead(pageIndex).split("\n").forEach {
+                    if (it.isNotEmpty()) {
+                        contentList.add(it)
+                    }
+                }
+            }
+            if (play) play()
+        }
     }
 
     open fun play() {
@@ -156,6 +148,7 @@ abstract class BaseReadAloudService : BaseService(),
     open fun resumeReadAloud() {
         pause = false
         upMediaSessionPlaybackState(PlaybackStateCompat.STATE_PLAYING)
+        postEvent(EventBus.ALOUD_STATE, Status.PLAY)
     }
 
     abstract fun upSpeechRate(reset: Boolean = false)
@@ -256,10 +249,7 @@ abstract class BaseReadAloudService : BaseService(),
             }
         })
         mediaSessionCompat.setMediaButtonReceiver(
-            IntentHelp.broadcastPendingIntent<MediaButtonReceiver>(
-                this,
-                Intent.ACTION_MEDIA_BUTTON
-            )
+            broadcastPendingIntent<MediaButtonReceiver>(Intent.ACTION_MEDIA_BUTTON)
         )
         mediaSessionCompat.isActive = true
     }
@@ -313,9 +303,9 @@ abstract class BaseReadAloudService : BaseService(),
             )
             else -> getString(R.string.read_aloud_t)
         }
-        nTitle += ": $title"
-        var nSubtitle = subtitle
-        if (subtitle.isEmpty())
+        nTitle += ": ${ReadBook.book?.name}"
+        var nSubtitle = ReadBook.curTextChapter?.title
+        if (nSubtitle.isNullOrBlank())
             nSubtitle = getString(R.string.read_aloud_s)
         val builder = NotificationCompat.Builder(this, AppConst.channelIdReadAloud)
             .setSmallIcon(R.drawable.ic_volume_up)
@@ -324,7 +314,7 @@ abstract class BaseReadAloudService : BaseService(),
             .setContentTitle(nTitle)
             .setContentText(nSubtitle)
             .setContentIntent(
-                IntentHelp.activityPendingIntent<ReadBookActivity>(this, "activity")
+                activityPendingIntent<ReadBookActivity>("activity")
             )
         if (pause) {
             builder.addAction(

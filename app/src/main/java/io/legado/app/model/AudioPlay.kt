@@ -1,4 +1,4 @@
-package io.legado.app.service.help
+package io.legado.app.model
 
 import android.content.Context
 import android.content.Intent
@@ -22,33 +22,37 @@ object AudioPlay {
     var book: Book? = null
     var durChapter: BookChapter? = null
     var inBookshelf = false
-    var durChapterIndex = 0
-    var durChapterPos = 0
     var bookSource: BookSource? = null
     val loadingChapters = arrayListOf<Int>()
 
-    fun headers(): Map<String, String>? {
-        return bookSource?.getHeaderMap()
+    fun headers(hasLoginHeader: Boolean): Map<String, String>? {
+        return bookSource?.getHeaderMap(hasLoginHeader)
     }
 
+    /**
+     * 播放当前章节
+     */
     fun play(context: Context) {
         book?.let {
             if (durChapter == null) {
                 upDurChapter(it)
             }
             durChapter?.let {
-                val intent = Intent(context, AudioPlayService::class.java)
-                intent.action = IntentAction.play
-                context.startService(intent)
+                context.startService<AudioPlayService> {
+                    action = IntentAction.play
+                }
             }
         }
     }
 
+    /**
+     * 更新当前章节
+     */
     fun upDurChapter(book: Book) {
-        durChapter = appDb.bookChapterDao.getChapter(book.bookUrl, durChapterIndex)
+        durChapter = appDb.bookChapterDao.getChapter(book.bookUrl, book.durChapterIndex)
         postEvent(EventBus.AUDIO_SUB_TITLE, durChapter?.title ?: "")
         postEvent(EventBus.AUDIO_SIZE, durChapter?.end?.toInt() ?: 0)
-        postEvent(EventBus.AUDIO_PROGRESS, durChapterPos)
+        postEvent(EventBus.AUDIO_PROGRESS, book.durChapterPos)
     }
 
     fun pause(context: Context) {
@@ -96,8 +100,8 @@ object AudioPlay {
     fun skipTo(context: Context, index: Int) {
         Coroutine.async {
             book?.let { book ->
-                durChapterIndex = index
-                durChapterPos = 0
+                book.durChapterIndex = index
+                book.durChapterPos = 0
                 durChapter = null
                 saveRead(book)
                 play(context)
@@ -111,8 +115,8 @@ object AudioPlay {
                 if (book.durChapterIndex <= 0) {
                     return@let
                 }
-                durChapterIndex--
-                durChapterPos = 0
+                book.durChapterIndex = book.durChapterIndex - 1
+                book.durChapterPos = 0
                 durChapter = null
                 saveRead(book)
                 play(context)
@@ -125,8 +129,8 @@ object AudioPlay {
             if (book.durChapterIndex >= book.totalChapterNum) {
                 return@let
             }
-            durChapterIndex++
-            durChapterPos = 0
+            book.durChapterIndex = book.durChapterIndex + 1
+            book.durChapterPos = 0
             durChapter = null
             saveRead(book)
             play(context)
@@ -142,8 +146,6 @@ object AudioPlay {
     fun saveRead(book: Book) {
         book.lastCheckCount = 0
         book.durChapterTime = System.currentTimeMillis()
-        book.durChapterIndex = durChapterIndex
-        book.durChapterPos = durChapterPos
         Coroutine.async {
             appDb.bookChapterDao.getChapter(book.bookUrl, book.durChapterIndex)?.let {
                 book.durChapterTitle = it.title
@@ -152,11 +154,14 @@ object AudioPlay {
         }
     }
 
+    /**
+     * 保存章节长度
+     */
     fun saveDurChapter(audioSize: Long) {
         Coroutine.async {
             durChapter?.let {
                 it.end = audioSize
-                appDb.bookChapterDao.insert(it)
+                appDb.bookChapterDao.upDate(it)
             }
         }
     }

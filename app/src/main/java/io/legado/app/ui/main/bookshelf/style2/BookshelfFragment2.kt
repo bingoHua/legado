@@ -2,7 +2,6 @@ package io.legado.app.ui.main.bookshelf.style2
 
 import android.annotation.SuppressLint
 import android.os.Bundle
-import android.view.Menu
 import android.view.View
 import androidx.appcompat.widget.SearchView
 import androidx.core.view.isGone
@@ -27,10 +26,7 @@ import io.legado.app.ui.book.info.BookInfoActivity
 import io.legado.app.ui.book.read.ReadBookActivity
 import io.legado.app.ui.book.search.SearchActivity
 import io.legado.app.ui.main.bookshelf.BaseBookshelfFragment
-import io.legado.app.utils.cnCompare
-import io.legado.app.utils.getPrefInt
-import io.legado.app.utils.observeEvent
-import io.legado.app.utils.startActivity
+import io.legado.app.utils.*
 import io.legado.app.utils.viewbindingdelegate.viewBinding
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.collect
@@ -56,10 +52,6 @@ class BookshelfFragment2 : BaseBookshelfFragment(R.layout.fragment_bookshelf1),
         initRecyclerView()
         initGroupData()
         initBooksData()
-    }
-
-    override fun onCompatCreateOptionsMenu(menu: Menu) {
-        menuInflater.inflate(R.menu.main_bookshelf, menu)
     }
 
     private fun initRecyclerView() {
@@ -200,12 +192,12 @@ class BookshelfFragment2 : BaseBookshelfFragment(R.layout.fragment_bookshelf1),
                 putExtra("name", item.name)
                 putExtra("author", item.author)
             }
-            is BookGroup -> GroupEditDialog.start(childFragmentManager, item)
+            is BookGroup -> childFragmentManager.showDialog(GroupEditDialog(item))
         }
     }
 
     override fun isUpdate(bookUrl: String): Boolean {
-        return bookUrl in activityViewModel.updateList
+        return activityViewModel.isUpdate(bookUrl)
     }
 
     override fun getItemCount(): Int {

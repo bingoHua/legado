@@ -9,7 +9,6 @@ import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
 import androidx.appcompat.widget.Toolbar
-import androidx.fragment.app.FragmentManager
 import androidx.fragment.app.viewModels
 import androidx.recyclerview.widget.LinearLayoutManager
 import io.legado.app.R
@@ -36,26 +35,18 @@ import io.legado.app.utils.visible
 /**
  * 导入rss源弹出窗口
  */
-class ImportRssSourceDialog : BaseDialogFragment(), Toolbar.OnMenuItemClickListener {
+class ImportRssSourceDialog() : BaseDialogFragment(), Toolbar.OnMenuItemClickListener {
 
-    companion object {
-        fun start(
-            fragmentManager: FragmentManager,
-            source: String,
-            finishOnDismiss: Boolean = false
-        ) {
-            ImportRssSourceDialog().apply {
-                arguments = Bundle().apply {
-                    putString("source", source)
-                    putBoolean("finishOnDismiss", finishOnDismiss)
-                }
-            }.show(fragmentManager, "importRssSource")
+    constructor(source: String, finishOnDismiss: Boolean = false) : this() {
+        arguments = Bundle().apply {
+            putString("source", source)
+            putBoolean("finishOnDismiss", finishOnDismiss)
         }
     }
 
     private val binding by viewBinding(DialogRecyclerViewBinding::bind)
     private val viewModel by viewModels<ImportRssSourceViewModel>()
-    lateinit var adapter: SourcesAdapter
+    private val adapter by lazy { SourcesAdapter(requireContext()) }
 
     override fun onStart() {
         super.onStart()
@@ -86,7 +77,6 @@ class ImportRssSourceDialog : BaseDialogFragment(), Toolbar.OnMenuItemClickListe
         binding.toolBar.setTitle(R.string.import_rss_source)
         binding.rotateLoading.show()
         initMenu()
-        adapter = SourcesAdapter(requireContext())
         binding.recyclerView.layoutManager = LinearLayoutManager(requireContext())
         binding.recyclerView.adapter = adapter
         binding.tvCancel.visible()

@@ -1,12 +1,15 @@
 package io.legado.app.help
 
 import com.github.liuyueyi.quick.transfer.ChineseUtils
+import io.legado.app.constant.AppLog
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.Book
+import io.legado.app.data.entities.BookChapter
 import io.legado.app.data.entities.ReplaceRule
 import io.legado.app.utils.toastOnUi
 import splitties.init.appCtx
 import java.lang.ref.WeakReference
+import java.util.regex.Pattern
 
 class ContentProcessor private constructor(
     private val bookName: String,
@@ -34,7 +37,7 @@ class ContentProcessor private constructor(
 
     }
 
-    private var replaceRules = arrayListOf<ReplaceRule>()
+    private val replaceRules = arrayListOf<ReplaceRule>()
 
     init {
         upReplaceRules()
@@ -47,22 +50,46 @@ class ContentProcessor private constructor(
     }
 
     @Synchronized
+    fun getReplaceRules(): Array<ReplaceRule> {
+        return replaceRules.toTypedArray()
+    }
+
     fun getContent(
         book: Book,
-        title: String, //已经经过简繁转换
+        chapter: BookChapter, //已经经过简繁转换
         content: String,
-        isRead: Boolean = true,
-        useReplace: Boolean = book.getUseReplaceRule()
+        includeTitle: Boolean = true,
+        useReplace: Boolean = true,
+        chineseConvert: Boolean = true,
+        reSegment: Boolean = true
     ): List<String> {
-        var content1 = content
-        if (useReplace) {
-            replaceRules.forEach { item ->
+        var mContent = content
+        if (includeTitle) {
+            //去除重复标题
+            try {
+                val name = Pattern.quote(book.name)
+                val title = Pattern.quote(chapter.title)
+                val titleRegex = "^(\\s|\\p{P}|${name})*${title}(\\s|\\p{P})+".toRegex()
+                mContent = mContent.replace(titleRegex, "")
+            } catch (e: Exception) {
+                AppLog.addLog("去除重复标题出错\n${e.localizedMessage}", e)
+            }
+            //重新添加标题
+            mContent = chapter.getDisplayTitle() + "\n" + mContent
+        }
+        if (reSegment && book.getReSegment()) {
+            //重新分段
+            mContent = ContentHelp.reSegment(mContent, chapter.title)
+        }
+        if (useReplace && book.getUseReplaceRule()) {
+            //替换
+            getReplaceRules().forEach { item ->
                 if (item.pattern.isNotEmpty()) {
                     try {
-                        content1 = if (item.isRegex) {
-                            content1.replace(item.pattern.toRegex(), item.replacement)
+                        mContent = if (item.isRegex) {
+                            mContent.replace(item.pattern.toRegex(), item.replacement)
                         } else {
-                            content1.replace(item.pattern, item.replacement)
+                            mContent.replace(item.pattern, item.replacement)
                         }
                     } catch (e: Exception) {
                         appCtx.toastOnUi("${item.name}替换出错")
@@ -70,29 +97,28 @@ class ContentProcessor private constructor(
                 }
             }
         }
-        if (isRead) {
-            if (book.getReSegment()) {
-                content1 = ContentHelp.reSegment(content1, title)
-            }
+        if (chineseConvert) {
+            //简繁转换
             try {
                 when (AppConfig.chineseConverterType) {
-                    1 -> content1 = ChineseUtils.t2s(content1)
-                    2 -> content1 = ChineseUtils.s2t(content1)
+                    1 -> mContent = ChineseUtils.t2s(mContent)
+                    2 -> mContent = ChineseUtils.s2t(mContent)
                 }
             } catch (e: Exception) {
                 appCtx.toastOnUi("简繁转换出错")
             }
         }
         val contents = arrayListOf<String>()
-        content1.split("\n").forEach { str ->
-            val paragraph = str.replace("^[\\n\\r]+".toRegex(), "").trim()
-            if (contents.isEmpty()) {
-                contents.add(title)
-                if (paragraph != title && paragraph.isNotEmpty()) {
+        mContent.split("\n").forEach { str ->
+            val paragraph = str.trim {
+                it.code <= 0x20 || it == '　'
+            }
+            if (paragraph.isNotEmpty()) {
+                if (contents.isEmpty()) {
+                    contents.add(paragraph)
+                } else {
                     contents.add("${ReadBookConfig.paragraphIndent}$paragraph")
                 }
-            } else if (paragraph.isNotEmpty()) {
-                contents.add("${ReadBookConfig.paragraphIndent}$paragraph")
             }
         }
         return contents

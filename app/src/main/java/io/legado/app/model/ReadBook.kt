@@ -1,21 +1,23 @@
 package io.legado.app.model
 
 import androidx.lifecycle.MutableLiveData
-import com.github.liuyueyi.quick.transfer.ChineseUtils
+import io.legado.app.constant.AppLog
 import io.legado.app.constant.BookType
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.*
-import io.legado.app.help.*
+import io.legado.app.help.AppConfig
+import io.legado.app.help.BookHelp
+import io.legado.app.help.ContentProcessor
+import io.legado.app.help.ReadBookConfig
 import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.help.storage.AppWebDav
 import io.legado.app.model.webBook.WebBook
 import io.legado.app.service.BaseReadAloudService
-import io.legado.app.service.help.CacheBook
-import io.legado.app.service.help.ReadAloud
 import io.legado.app.ui.book.read.page.entities.TextChapter
 import io.legado.app.ui.book.read.page.provider.ChapterProvider
 import io.legado.app.ui.book.read.page.provider.ImageProvider
 import io.legado.app.utils.msg
+import io.legado.app.utils.printOnDebug
 import io.legado.app.utils.toastOnUi
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers.IO
@@ -47,6 +49,7 @@ object ReadBook : CoroutineScope by MainScope() {
         ReadBook.book = book
         readRecord.bookName = book.name
         readRecord.readTime = appDb.readRecordDao.getReadTime(book.name) ?: 0
+        chapterSize = appDb.bookChapterDao.getChapterCount(book.bookUrl)
         durChapterIndex = book.durChapterIndex
         durChapterPos = book.durChapterPos
         isLocalBook = book.origin == BookType.local
@@ -138,14 +141,6 @@ object ReadBook : CoroutineScope by MainScope() {
             saveRead()
             callBack?.upView()
             curPageChanged()
-            Coroutine.async {
-                //预下载
-                val maxChapterIndex = durChapterIndex + AppConfig.preDownloadNum
-                for (i in durChapterIndex.plus(2)..maxChapterIndex) {
-                    delay(1000)
-                    download(i)
-                }
-            }
             return true
         } else {
             return false
@@ -171,14 +166,6 @@ object ReadBook : CoroutineScope by MainScope() {
             saveRead()
             callBack?.upView()
             curPageChanged()
-            Coroutine.async {
-                //预下载
-                val minChapterIndex = durChapterIndex - 5
-                for (i in durChapterIndex.minus(2) downTo minChapterIndex) {
-                    delay(1000)
-                    download(i)
-                }
-            }
             return true
         } else {
             return false
@@ -209,22 +196,22 @@ object ReadBook : CoroutineScope by MainScope() {
             readAloud(!BaseReadAloudService.pause)
         }
         upReadStartTime()
+        preDownload()
+        ImageProvider.clearOut(durChapterIndex)
     }
 
     /**
      * 朗读
      */
     fun readAloud(play: Boolean = true) {
-        val book = book
-        val textChapter = curTextChapter
-        if (book != null && textChapter != null) {
-            val key = IntentDataHelp.putData(textChapter)
-            ReadAloud.play(
-                appCtx, book.name, textChapter.title, durPageIndex(), key, play
-            )
+        book?.let {
+            ReadAloud.play(appCtx, play)
         }
     }
 
+    /**
+     * 当前页数
+     */
     fun durPageIndex(): Int {
         curTextChapter?.let {
             return it.getPageIndexByCharIndex(durChapterPos)
@@ -261,20 +248,20 @@ object ReadBook : CoroutineScope by MainScope() {
         resetPageOffset: Boolean = false,
         success: (() -> Unit)? = null
     ) {
-        book?.let { book ->
-            if (addLoading(index)) {
-                Coroutine.async {
-                    appDb.bookChapterDao.getChapter(book.bookUrl, index)?.let { chapter ->
-                        BookHelp.getContent(book, chapter)?.let {
-                            contentLoadFinish(book, chapter, it, upContent, resetPageOffset) {
-                                success?.invoke()
-                            }
-                            removeLoading(chapter.index)
-                        } ?: download(this, chapter, resetPageOffset = resetPageOffset)
-                    } ?: removeLoading(index)
-                }.onError {
-                    removeLoading(index)
-                }
+        if (addLoading(index)) {
+            Coroutine.async {
+                val book = book!!
+                appDb.bookChapterDao.getChapter(book.bookUrl, index)?.let { chapter ->
+                    BookHelp.getContent(book, chapter)?.let {
+                        contentLoadFinish(book, chapter, it, upContent, resetPageOffset) {
+                            success?.invoke()
+                        }
+                        removeLoading(chapter.index)
+                    } ?: download(this, chapter, resetPageOffset = resetPageOffset)
+                } ?: removeLoading(index)
+            }.onError {
+                removeLoading(index)
+                AppLog.addLog("加载正文出错\n${it.localizedMessage}")
             }
         }
     }
@@ -312,7 +299,7 @@ object ReadBook : CoroutineScope by MainScope() {
         val book = book
         val bookSource = bookSource
         if (book != null && bookSource != null) {
-            CacheBook.download(scope, bookSource, book, chapter)
+            CacheBook.getOrCreate(bookSource, book).download(scope, chapter)
         } else if (book != null) {
             contentLoadFinish(
                 book, chapter, "没有书源", resetPageOffset = resetPageOffset
@@ -351,17 +338,16 @@ object ReadBook : CoroutineScope by MainScope() {
         success: (() -> Unit)? = null
     ) {
         Coroutine.async {
-            ImageProvider.clearOut(durChapterIndex)
+            removeLoading(chapter.index)
             if (chapter.index in durChapterIndex - 1..durChapterIndex + 1) {
-                chapter.title = when (AppConfig.chineseConverterType) {
-                    1 -> ChineseUtils.t2s(chapter.title)
-                    2 -> ChineseUtils.s2t(chapter.title)
-                    else -> chapter.title
-                }
-                val contents = ContentProcessor.get(book.name, book.origin)
-                    .getContent(book, chapter.title, content)
+                val contentProcessor = ContentProcessor.get(book.name, book.origin)
+                val displayTitle = chapter.getDisplayTitle(
+                    contentProcessor.getReplaceRules(),
+                    book.getUseReplaceRule()
+                )
+                val contents = contentProcessor.getContent(book, chapter, content)
                 val textChapter = ChapterProvider
-                    .getTextChapter(book, chapter, contents, chapterSize)
+                    .getTextChapter(book, chapter, displayTitle, contents, chapterSize)
                 when (val offset = chapter.index - durChapterIndex) {
                     0 -> {
                         curTextChapter = textChapter
@@ -381,7 +367,7 @@ object ReadBook : CoroutineScope by MainScope() {
                 }
             }
         }.onError {
-            it.printStackTrace()
+            it.printOnDebug()
             appCtx.toastOnUi("ChapterProvider ERROR:\n${it.msg}")
         }.onSuccess {
             success?.invoke()
@@ -434,6 +420,25 @@ object ReadBook : CoroutineScope by MainScope() {
                     book.durChapterTitle = it.title
                 }
                 appDb.bookDao.update(book)
+            }
+        }
+    }
+
+    /**
+     * 预下载
+     */
+    private fun preDownload() {
+        Coroutine.async {
+            //预下载
+            val maxChapterIndex = durChapterIndex + AppConfig.preDownloadNum
+            for (i in durChapterIndex.plus(2)..maxChapterIndex) {
+                delay(1000)
+                download(i)
+            }
+            val minChapterIndex = durChapterIndex - 5
+            for (i in durChapterIndex.minus(2) downTo minChapterIndex) {
+                delay(1000)
+                download(i)
             }
         }
     }

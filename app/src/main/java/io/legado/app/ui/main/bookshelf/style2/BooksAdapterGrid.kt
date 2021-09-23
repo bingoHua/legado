@@ -71,11 +71,7 @@ class BooksAdapterGrid(context: Context, callBack: CallBack) :
             bundle.keySet().forEach {
                 when (it) {
                     "name" -> tvName.text = item.name
-                    "cover" -> ivCover.load(
-                        item.getDisplayCover(),
-                        item.name,
-                        item.author
-                    )
+                    "cover" -> ivCover.load(item.getDisplayCover(), item.name, item.author)
                     "refresh" -> upRefresh(this, item)
                 }
             }

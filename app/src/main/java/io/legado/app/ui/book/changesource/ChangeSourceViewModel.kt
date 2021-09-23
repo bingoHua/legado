@@ -5,6 +5,7 @@ import android.os.Bundle
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.viewModelScope
 import io.legado.app.base.BaseViewModel
+import io.legado.app.constant.AppConst
 import io.legado.app.constant.AppPattern
 import io.legado.app.constant.PreferKey
 import io.legado.app.data.appDb
@@ -16,6 +17,7 @@ import io.legado.app.help.coroutine.CompositeCoroutine
 import io.legado.app.model.webBook.WebBook
 import io.legado.app.utils.getPrefBoolean
 import io.legado.app.utils.getPrefString
+import io.legado.app.utils.printOnDebug
 import kotlinx.coroutines.*
 import kotlinx.coroutines.Dispatchers.IO
 import splitties.init.appCtx
@@ -53,7 +55,8 @@ class ChangeSourceViewModel(application: Application) : BaseViewModel(applicatio
     }
 
     private fun initSearchPool() {
-        searchPool = Executors.newFixedThreadPool(min(threadCount,8)).asCoroutineDispatcher()
+        searchPool = Executors
+            .newFixedThreadPool(min(threadCount, AppConst.MAX_THREAD)).asCoroutineDispatcher()
         searchIndex = -1
     }
 
@@ -182,20 +185,18 @@ class ChangeSourceViewModel(application: Application) : BaseViewModel(applicatio
                     searchFinish(searchBook)
                 }
             }.onError {
-                it.printStackTrace()
+                it.printOnDebug()
             }
     }
 
     private fun loadBookToc(source: BookSource, book: Book) {
         WebBook.getChapterList(viewModelScope, source, book)
             .onSuccess(IO) { chapters ->
-                if (chapters.isNotEmpty()) {
-                    book.latestChapterTitle = chapters.last().title
-                    val searchBook: SearchBook = book.toSearchBook()
-                    searchFinish(searchBook)
-                }
+                book.latestChapterTitle = chapters.last().title
+                val searchBook: SearchBook = book.toSearchBook()
+                searchFinish(searchBook)
             }.onError {
-                it.printStackTrace()
+                it.printOnDebug()
             }
     }
 

@@ -439,6 +439,9 @@
     <string name="r_content">内容规则(regraConteúdo)</string>
     <string name="r_style">样式(formato)</string>
     <string name="r_link">链接规则(regraLink)</string>
+    <string name="check_key_word">校验关键字(checkKeyWord)</string>
+    <string name="rule_actions">操作(actions)</string>
+    <string name="rule_is_pay">购买标识(isPay)</string>
     <!-- source end-->
 
     <!--error string start-->
@@ -544,7 +547,7 @@
     <string name="fast_forward">Avançar rápido</string>
     <string name="skip_previous">Anterior</string>
     <string name="skip_next">Próximo</string>
-    <string name="music">Musica</string>
+    <string name="music">Música</string>
     <string name="audio">Áudio</string>
     <string name="is_enable">Ativar</string>
     <string name="enable_js">Ativar js</string>
@@ -867,5 +870,21 @@
     <string name="upload_url">上传URL</string>
     <string name="download_url_rule">下载URL规则</string>
     <string name="sort_by_respondTime">Classificar por tempo de resposta</string>
+    <string name="export_success">导出成功</string>
+    <string name="path">路径</string>
+    <string name="direct_link_upload_rule">直链上传规则</string>
+    <string name="direct_link_upload_rule_summary">用于导出书源书单时生成直链url</string>
+    <string name="copy_play_url">拷贝播放Url</string>
+    <string name="set_source_variable">设置源变量</string>
+    <string name="set_book_variable">设置书籍变量</string>
+    <string name="summary">注释</string>
+    <string name="cover_config">封面设置</string>
+    <string name="cover_config_summary">设置默认封面样式</string>
+    <string name="cover_show_name">显示书名</string>
+    <string name="cover_show_name_summary">封面上显示书名</string>
+    <string name="cover_show_author">显示作者</string>
+    <string name="cover_show_author_summary">封面上显示作者</string>
+    <string name="read_aloud_prev_paragraph">朗读上一段</string>
+    <string name="read_aloud_next_paragraph">朗读下一段</string>
 
 </resources>

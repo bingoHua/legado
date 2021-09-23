@@ -2,6 +2,7 @@ package io.legado.app.model.localBook
 
 import android.net.Uri
 import androidx.documentfile.provider.DocumentFile
+import io.legado.app.R
 import io.legado.app.constant.AppConst
 import io.legado.app.constant.AppPattern
 import io.legado.app.data.appDb
@@ -9,6 +10,7 @@ import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookChapter
 import io.legado.app.help.AppConfig
 import io.legado.app.help.BookHelp
+import io.legado.app.model.TocEmptyException
 import io.legado.app.utils.*
 import splitties.init.appCtx
 import java.io.File
@@ -22,8 +24,9 @@ object LocalBook {
         FileUtils.createFolderIfNotExist(appCtx.externalFiles, folderName)
     }
 
+    @Throws(Exception::class)
     fun getChapterList(book: Book): ArrayList<BookChapter> {
-        return when {
+        val chapters = when {
             book.isEpub() -> {
                 EpubFile.getChapterList(book)
             }
@@ -34,6 +37,10 @@ object LocalBook {
                 TextFile().analyze(book)
             }
         }
+        if (chapters.isEmpty()) {
+            throw TocEmptyException(appCtx.getString(R.string.chapter_list_empty))
+        }
+        return chapters
     }
 
     fun getContext(book: Book, chapter: BookChapter): String? {

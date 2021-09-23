@@ -2,7 +2,6 @@ package io.legado.app.ui.book.info
 
 import android.annotation.SuppressLint
 import android.content.Intent
-import android.graphics.drawable.Drawable
 import android.os.Bundle
 import android.view.Menu
 import android.view.MenuItem
@@ -10,7 +9,6 @@ import android.widget.CheckBox
 import android.widget.LinearLayout
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
-import com.bumptech.glide.RequestBuilder
 import com.bumptech.glide.load.resource.drawable.DrawableTransitionOptions
 import com.bumptech.glide.request.RequestOptions.bitmapTransform
 import io.legado.app.R
@@ -20,13 +18,17 @@ import io.legado.app.constant.Theme
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookChapter
+import io.legado.app.data.entities.BookSource
 import io.legado.app.databinding.ActivityBookInfoBinding
+import io.legado.app.databinding.DialogEditTextBinding
 import io.legado.app.help.BlurTransformation
 import io.legado.app.help.glide.ImageLoader
 import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.theme.backgroundColor
 import io.legado.app.lib.theme.bottomBackground
 import io.legado.app.lib.theme.getPrimaryTextColor
+import io.legado.app.model.BookCover
+import io.legado.app.ui.about.AppLogDialog
 import io.legado.app.ui.book.audio.AudioPlayActivity
 import io.legado.app.ui.book.changecover.ChangeCoverDialog
 import io.legado.app.ui.book.changesource.ChangeSourceDialog
@@ -37,7 +39,6 @@ import io.legado.app.ui.book.search.SearchActivity
 import io.legado.app.ui.book.source.edit.BookSourceEditActivity
 import io.legado.app.ui.book.toc.TocActivityResult
 import io.legado.app.ui.login.SourceLoginActivity
-import io.legado.app.ui.widget.image.CoverImageView
 import io.legado.app.utils.*
 import io.legado.app.utils.viewbindingdelegate.viewBinding
 import kotlinx.coroutines.Dispatchers.IO
@@ -84,7 +85,7 @@ class BookInfoActivity :
         }
     }
     private val infoEditResult = registerForActivityResult(
-        ActivityResultContracts.StartActivityForResult()
+        StartActivityForResult(BookInfoEditActivity::class.java)
     ) {
         if (it.resultCode == RESULT_OK) {
             viewModel.upEditBook()
@@ -119,6 +120,10 @@ class BookInfoActivity :
             viewModel.bookData.value?.canUpdate ?: true
         menu.findItem(R.id.menu_login)?.isVisible =
             !viewModel.bookSource?.loginUrl.isNullOrBlank()
+        menu.findItem(R.id.menu_set_source_variable)?.isVisible =
+            viewModel.bookSource != null
+        menu.findItem(R.id.menu_set_book_variable)?.isVisible =
+            viewModel.bookSource != null
         return super.onMenuOpened(featureId, menu)
     }
 
@@ -127,10 +132,9 @@ class BookInfoActivity :
             R.id.menu_edit -> {
                 if (viewModel.inBookshelf) {
                     viewModel.bookData.value?.let {
-                        infoEditResult.launch(
-                            Intent(this, BookInfoEditActivity::class.java)
-                                .putExtra("bookUrl", it.bookUrl)
-                        )
+                        infoEditResult.launch {
+                            putExtra("bookUrl", it.bookUrl)
+                        }
                     }
                 } else {
                     toastOnUi(R.string.after_add_bookshelf)
@@ -158,6 +162,8 @@ class BookInfoActivity :
                 }
             }
             R.id.menu_top -> viewModel.topBook()
+            R.id.menu_set_source_variable -> setSourceVariable()
+            R.id.menu_set_book_variable -> setBookVariable()
             R.id.menu_copy_book_url -> viewModel.bookData.value?.bookUrl?.let {
                 sendToClip(it)
             } ?: toastOnUi(R.string.no_book)
@@ -175,6 +181,7 @@ class BookInfoActivity :
                 }
             }
             R.id.menu_clear_cache -> viewModel.clearCache()
+            R.id.menu_log -> supportFragmentManager.showDialog<AppLogDialog>()
         }
         return super.onCompatOptionsItemSelected(item)
     }
@@ -201,14 +208,9 @@ class BookInfoActivity :
         binding.ivCover.load(book.getDisplayCover(), book.name, book.author)
         ImageLoader.load(this, book.getDisplayCover())
             .transition(DrawableTransitionOptions.withCrossFade(1500))
-            .thumbnail(defaultCover())
+            .thumbnail(BookCover.getBlurDefaultCover(this))
             .apply(bitmapTransform(BlurTransformation(this, 25)))
             .into(binding.bgBook)  //模糊、渐变、缩小效果
-    }
-
-    private fun defaultCover(): RequestBuilder<Drawable> {
-        return ImageLoader.load(this, CoverImageView.defaultDrawable)
-            .apply(bitmapTransform(BlurTransformation(this, 25)))
     }
 
     private fun upLoading(isLoading: Boolean, chapterList: List<BookChapter>? = null) {
@@ -253,7 +255,9 @@ class BookInfoActivity :
     private fun initOnClick() = binding.run {
         ivCover.setOnClickListener {
             viewModel.bookData.value?.let {
-                ChangeCoverDialog.show(supportFragmentManager, it.name, it.author)
+                supportFragmentManager.showDialog(
+                    ChangeCoverDialog(it.name, it.author)
+                )
             }
         }
         tvRead.setOnClickListener {
@@ -279,7 +283,7 @@ class BookInfoActivity :
         }
         tvChangeSource.setOnClickListener {
             viewModel.bookData.value?.let {
-                ChangeSourceDialog.show(supportFragmentManager, it.name, it.author)
+                supportFragmentManager.showDialog(ChangeSourceDialog(it.name, it.author))
             }
         }
         tvTocView.setOnClickListener {
@@ -295,7 +299,9 @@ class BookInfoActivity :
         }
         tvChangeGroup.setOnClickListener {
             viewModel.bookData.value?.let {
-                GroupSelectDialog.show(supportFragmentManager, it.group)
+                supportFragmentManager.showDialog(
+                    GroupSelectDialog(it.group)
+                )
             }
         }
         tvAuthor.setOnClickListener {
@@ -307,6 +313,52 @@ class BookInfoActivity :
             startActivity<SearchActivity> {
                 putExtra("key", viewModel.bookData.value?.name)
             }
+        }
+    }
+
+    private fun setSourceVariable() {
+        launch {
+            val variable = withContext(IO) { viewModel.bookSource?.getVariable() }
+            alert(R.string.set_source_variable) {
+                setMessage("源变量可在js中通过source.getVariable()获取")
+                val alertBinding = DialogEditTextBinding.inflate(layoutInflater).apply {
+                    editView.hint = "source variable"
+                    editView.setText(variable)
+                }
+                customView { alertBinding.root }
+                okButton {
+                    viewModel.bookSource?.setVariable(alertBinding.editView.text?.toString())
+                }
+                cancelButton()
+                neutralButton(R.string.delete) {
+                    viewModel.bookSource?.setVariable(null)
+                }
+            }.show()
+        }
+    }
+
+    private fun setBookVariable() {
+        launch {
+            val variable = withContext(IO) { viewModel.bookData.value?.getVariable("custom") }
+            alert(R.string.set_source_variable) {
+                setMessage("""书籍变量可在js中通过book.getVariable("custom")获取""")
+                val alertBinding = DialogEditTextBinding.inflate(layoutInflater).apply {
+                    editView.hint = "book variable"
+                    editView.setText(variable)
+                }
+                customView { alertBinding.root }
+                okButton {
+                    viewModel.bookData.value
+                        ?.putVariable("custom", alertBinding.editView.text?.toString())
+                    viewModel.saveBook()
+                }
+                cancelButton()
+                neutralButton(R.string.delete) {
+                    viewModel.bookData.value
+                        ?.putVariable("custom", null)
+                    viewModel.saveBook()
+                }
+            }.show()
         }
     }
 
@@ -383,9 +435,9 @@ class BookInfoActivity :
     override val oldBook: Book?
         get() = viewModel.bookData.value
 
-    override fun changeTo(book: Book) {
+    override fun changeTo(source: BookSource, book: Book) {
         upLoading(true)
-        viewModel.changeTo(book)
+        viewModel.changeTo(source, book)
     }
 
     override fun coverChangeTo(coverUrl: String) {

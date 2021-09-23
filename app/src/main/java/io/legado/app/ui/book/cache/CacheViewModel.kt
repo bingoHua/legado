@@ -56,7 +56,7 @@ class CacheViewModel(application: Application) : BaseViewModel(application) {
             }
         }.onError {
             finally(it.localizedMessage ?: "ERROR")
-            it.printStackTrace()
+            it.printOnDebug()
         }.onSuccess {
             finally(context.getString(R.string.success))
         }
@@ -139,18 +139,16 @@ class CacheViewModel(application: Application) : BaseViewModel(application) {
         )
         appDb.bookChapterDao.getChapterList(book.bookUrl).forEach { chapter ->
             BookHelp.getContent(book, chapter).let { content ->
-                var content1 = contentProcessor
+                val content1 = contentProcessor
                     .getContent(
                         book,
-                        chapter.title.replace("\\r?\\n".toRegex(), " "),
+                        chapter,
                         content ?: "null",
-                        false,
-                        useReplace
-                    )
-                    .joinToString("\n")
-                if(AppConfig.exportNoChapterName){
-                    content1 = content.toString()
-                }
+                        includeTitle = !AppConfig.exportNoChapterName,
+                        useReplace = useReplace,
+                        chineseConvert = false,
+                        reSegment = false
+                    ).joinToString("\n")
                 append.invoke("\n\n$content1")
             }
         }
@@ -189,7 +187,7 @@ class CacheViewModel(application: Application) : BaseViewModel(application) {
             }
         }.onError {
             finally(it.localizedMessage ?: "ERROR")
-            it.printStackTrace()
+            it.printOnDebug()
         }.onSuccess {
             finally(context.getString(R.string.success))
         }
@@ -396,7 +394,15 @@ class CacheViewModel(application: Application) : BaseViewModel(application) {
             BookHelp.getContent(book, chapter).let { content ->
                 var content1 = fixPic(epubBook, book, content ?: "null", chapter)
                 content1 = contentProcessor
-                    .getContent(book, "", content1, false, useReplace)
+                    .getContent(
+                        book,
+                        chapter,
+                        content1,
+                        includeTitle = false,
+                        useReplace = useReplace,
+                        chineseConvert = false,
+                        reSegment = false
+                    )
                     .joinToString("\n")
                 epubBook.addSection(
                     chapter.title,

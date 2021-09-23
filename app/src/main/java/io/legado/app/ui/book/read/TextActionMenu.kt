@@ -32,6 +32,7 @@ import java.util.*
 class TextActionMenu(private val context: Context, private val callBack: CallBack) :
     PopupWindow(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT),
     TextToSpeech.OnInitListener {
+
     private val binding = PopupActionMenuBinding.inflate(LayoutInflater.from(context))
     private val adapter = Adapter(context)
     private val menuItems: List<MenuItemImpl>
@@ -149,7 +150,7 @@ class TextActionMenu(private val context: Context, private val callBack: CallBac
                     }
                     context.startActivity(intent)
                 }.onFailure {
-                    it.printStackTrace()
+                    it.printOnDebug()
                     context.toastOnUi(it.localizedMessage ?: "ERROR")
                 }
             }

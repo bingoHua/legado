@@ -5,15 +5,17 @@ import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Ignore
 import androidx.room.Index
+import com.github.liuyueyi.quick.transfer.ChineseUtils
+import io.legado.app.R
+import io.legado.app.help.AppConfig
 import io.legado.app.model.analyzeRule.AnalyzeUrl
 import io.legado.app.model.analyzeRule.RuleDataInterface
-import io.legado.app.utils.GSON
-import io.legado.app.utils.MD5Utils
-import io.legado.app.utils.NetworkUtils
-import io.legado.app.utils.fromJsonObject
+import io.legado.app.utils.*
 import kotlinx.parcelize.IgnoredOnParcel
 import kotlinx.parcelize.Parcelize
+import splitties.init.appCtx
 
+@Suppress("unused")
 @Parcelize
 @Entity(
     tableName = "chapters",
@@ -30,9 +32,11 @@ import kotlinx.parcelize.Parcelize
 data class BookChapter(
     var url: String = "",               // 章节地址
     var title: String = "",             // 章节标题
-    var baseUrl: String = "",           //用来拼接相对url
+    var baseUrl: String = "",           // 用来拼接相对url
     var bookUrl: String = "",           // 书籍地址
     var index: Int = 0,                 // 章节序号
+    var isVip: Boolean = false,         // 是否VIP
+    var isPay: Boolean = false,         // 是否已购买
     var resourceUrl: String? = null,    // 音频真实URL
     var tag: String? = null,            //
     var start: Long? = null,            // 章节起始位置
@@ -49,8 +53,12 @@ data class BookChapter(
         GSON.fromJsonObject<HashMap<String, String>>(variable) ?: HashMap()
     }
 
-    override fun putVariable(key: String, value: String) {
-        variableMap[key] = value
+    override fun putVariable(key: String, value: String?) {
+        if (value != null) {
+            variableMap[key] = value
+        } else {
+            variableMap.remove(key)
+        }
         variable = GSON.toJson(variableMap)
     }
 
@@ -63,11 +71,50 @@ data class BookChapter(
         return false
     }
 
-    fun getAbsoluteURL():String{
+    @Suppress("unused")
+    fun getDisplayTitle(
+        replaceRules: Array<ReplaceRule>? = null,
+        useReplace: Boolean = true,
+        chineseConvert: Boolean = true,
+    ): String {
+        var displayTitle = title
+        if (useReplace && replaceRules != null) {
+            replaceRules.forEach { item ->
+                if (item.pattern.isNotEmpty()) {
+                    try {
+                        displayTitle = if (item.isRegex) {
+                            displayTitle.replace(item.pattern.toRegex(), item.replacement)
+                        } else {
+                            displayTitle.replace(item.pattern, item.replacement)
+                        }
+                    } catch (e: Exception) {
+                        appCtx.toastOnUi("${item.name}替换出错")
+                    }
+                }
+            }
+        }
+        if (chineseConvert) {
+            when (AppConfig.chineseConverterType) {
+                1 -> displayTitle = ChineseUtils.t2s(displayTitle)
+                2 -> displayTitle = ChineseUtils.s2t(displayTitle)
+            }
+        }
+        return when {
+            !isVip -> displayTitle
+            isPay -> appCtx.getString(R.string.payed_title, displayTitle)
+            else -> appCtx.getString(R.string.vip_title, displayTitle)
+        }
+    }
+
+    fun getAbsoluteURL(): String {
         val urlMatcher = AnalyzeUrl.paramPattern.matcher(url)
-        val urlBefore = if(urlMatcher.find())url.substring(0,urlMatcher.start()) else url
-        val urlAbsoluteBefore = NetworkUtils.getAbsoluteURL(baseUrl,urlBefore)
-        return if(urlBefore.length == url.length) urlAbsoluteBefore else urlAbsoluteBefore + ',' + url.substring(urlMatcher.end())
+        val urlBefore = if (urlMatcher.find()) url.substring(0, urlMatcher.start()) else url
+        val urlAbsoluteBefore = NetworkUtils.getAbsoluteURL(baseUrl, urlBefore)
+        return if (urlBefore.length == url.length) {
+            urlAbsoluteBefore
+        } else {
+            "$urlAbsoluteBefore," + url.substring(urlMatcher.end())
+        }
     }
 
     fun getFileName(): String = String.format("%05d-%s.nb", index, MD5Utils.md5Encode16(title))

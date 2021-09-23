@@ -8,7 +8,7 @@ import io.legado.app.data.entities.BookSource
 import io.legado.app.help.BookSourceAnalyzer
 import io.legado.app.help.http.newCallStrResponse
 import io.legado.app.help.http.okHttpClient
-import io.legado.app.help.storage.Restore
+import io.legado.app.model.NoStackTraceException
 import io.legado.app.utils.*
 import kotlinx.coroutines.Dispatchers
 
@@ -48,18 +48,21 @@ class BookSourceEditViewModel(application: Application) : BaseViewModel(applicat
             success?.invoke()
         }.onError {
             context.toastOnUi(it.localizedMessage)
-            it.printStackTrace()
+            it.printOnDebug()
         }
     }
 
     fun pasteSource(onSuccess: (source: BookSource) -> Unit) {
         execute(context = Dispatchers.Main) {
-            context.getClipText()?.let { text ->
+            val text = context.getClipText()
+            if (text.isNullOrBlank()) {
+                throw NoStackTraceException("剪贴板为空")
+            } else {
                 importSource(text, onSuccess)
             }
         }.onError {
             context.toastOnUi(it.localizedMessage ?: "Error")
-            it.printStackTrace()
+            it.printOnDebug()
         }
     }
 
@@ -80,8 +83,8 @@ class BookSourceEditViewModel(application: Application) : BaseViewModel(applicat
                 text1?.let { importSource(text1) }
             }
             text.isJsonArray() -> {
-                val items: List<Map<String, Any>> = Restore.jsonPath.parse(text).read("$")
-                val jsonItem = Restore.jsonPath.parse(items[0])
+                val items: List<Map<String, Any>> = jsonPath.parse(text).read("$")
+                val jsonItem = jsonPath.parse(items[0])
                 BookSourceAnalyzer.jsonToBookSource(jsonItem.jsonString())
             }
             text.isJsonObject() -> {

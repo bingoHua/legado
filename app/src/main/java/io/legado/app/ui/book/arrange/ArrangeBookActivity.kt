@@ -26,6 +26,7 @@ import io.legado.app.ui.widget.recycler.ItemTouchCallback
 import io.legado.app.ui.widget.recycler.VerticalDivider
 import io.legado.app.utils.cnCompare
 import io.legado.app.utils.getPrefInt
+import io.legado.app.utils.showDialog
 import io.legado.app.utils.viewbindingdelegate.viewBinding
 import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.Job
@@ -45,7 +46,7 @@ class ArrangeBookActivity : VMBaseActivity<ActivityArrangeBookBinding, ArrangeBo
     override val groupList: ArrayList<BookGroup> = arrayListOf()
     private val groupRequestCode = 22
     private val addToGroupRequestCode = 34
-    private lateinit var adapter: ArrangeBookAdapter
+    private val adapter by lazy { ArrangeBookAdapter(this, this) }
     private var booksFlowJob: Job? = null
     private var menu: Menu? = null
     private var groupId: Long = -1
@@ -90,7 +91,6 @@ class ArrangeBookActivity : VMBaseActivity<ActivityArrangeBookBinding, ArrangeBo
         ATH.applyEdgeEffectColor(binding.recyclerView)
         binding.recyclerView.layoutManager = LinearLayoutManager(this)
         binding.recyclerView.addItemDecoration(VerticalDivider(this))
-        adapter = ArrangeBookAdapter(this, this)
         binding.recyclerView.adapter = adapter
         val itemTouchCallback = ItemTouchCallback(adapter)
         itemTouchCallback.isCanDrag = getPrefInt(PreferKey.bookshelfSort) == 3
@@ -144,8 +144,7 @@ class ArrangeBookActivity : VMBaseActivity<ActivityArrangeBookBinding, ArrangeBo
 
     override fun onCompatOptionsItemSelected(item: MenuItem): Boolean {
         when (item.itemId) {
-            R.id.menu_group_manage -> GroupManageDialog()
-                .show(supportFragmentManager, "groupManage")
+            R.id.menu_group_manage -> supportFragmentManager.showDialog<GroupManageDialog>()
             else -> if (item.groupId == R.id.menu_group) {
                 binding.titleBar.subtitle = item.title
                 groupId = appDb.bookGroupDao.getByName(item.title.toString())?.groupId ?: 0
@@ -181,7 +180,9 @@ class ArrangeBookActivity : VMBaseActivity<ActivityArrangeBookBinding, ArrangeBo
     }
 
     override fun selectGroup(requestCode: Int, groupId: Long) {
-        GroupSelectDialog.show(supportFragmentManager, groupId, requestCode)
+        supportFragmentManager.showDialog(
+            GroupSelectDialog(groupId, requestCode)
+        )
     }
 
     override fun upGroup(requestCode: Int, groupId: Long) {

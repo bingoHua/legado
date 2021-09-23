@@ -9,7 +9,6 @@ import android.view.SubMenu
 import androidx.activity.viewModels
 import androidx.appcompat.widget.PopupMenu
 import androidx.appcompat.widget.SearchView
-import androidx.documentfile.provider.DocumentFile
 import androidx.recyclerview.widget.ItemTouchHelper
 import io.legado.app.R
 import io.legado.app.base.VMBaseActivity
@@ -18,6 +17,7 @@ import io.legado.app.data.appDb
 import io.legado.app.data.entities.RssSource
 import io.legado.app.databinding.ActivityRssSourceBinding
 import io.legado.app.databinding.DialogEditTextBinding
+import io.legado.app.help.DirectLinkUpload
 import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.theme.ATH
 import io.legado.app.lib.theme.primaryTextColor
@@ -35,7 +35,6 @@ import io.legado.app.utils.viewbindingdelegate.viewBinding
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
-import java.io.File
 
 /**
  * 订阅源管理
@@ -48,34 +47,44 @@ class RssSourceActivity : VMBaseActivity<ActivityRssSourceBinding, RssSourceView
     override val binding by viewBinding(ActivityRssSourceBinding::inflate)
     override val viewModel by viewModels<RssSourceViewModel>()
     private val importRecordKey = "rssSourceRecordKey"
-    private lateinit var adapter: RssSourceAdapter
+    private val adapter by lazy { RssSourceAdapter(this, this) }
     private var sourceFlowJob: Job? = null
     private var groups = hashSetOf<String>()
     private var groupMenu: SubMenu? = null
     private val qrCodeResult = registerForActivityResult(QrCodeResult()) {
         it ?: return@registerForActivityResult
-        ImportRssSourceDialog.start(supportFragmentManager, it)
+        supportFragmentManager.showDialog(
+            ImportRssSourceDialog(it)
+        )
     }
     private val importDoc = registerForActivityResult(HandleFileContract()) { uri ->
         kotlin.runCatching {
             uri?.readText(this)?.let {
-                ImportRssSourceDialog.start(supportFragmentManager, it)
+                supportFragmentManager.showDialog(
+                    ImportRssSourceDialog(it)
+                )
             }
         }.onFailure {
             toastOnUi("readTextError:${it.localizedMessage}")
         }
     }
-    private val exportDir = registerForActivityResult(HandleFileContract()) { uri ->
+    private val exportResult = registerForActivityResult(HandleFileContract()) { uri ->
         uri ?: return@registerForActivityResult
-        if (uri.isContentScheme()) {
-            DocumentFile.fromTreeUri(this, uri)?.let {
-                viewModel.exportSelection(adapter.selection, it)
+        alert(R.string.export_success) {
+            if (uri.toString().isAbsUrl()) {
+                DirectLinkUpload.getSummary()?.let { summary ->
+                    setMessage(summary)
+                }
             }
-        } else {
-            uri.path?.let {
-                viewModel.exportSelection(adapter.selection, File(it))
+            val alertBinding = DialogEditTextBinding.inflate(layoutInflater).apply {
+                editView.hint = getString(R.string.path)
+                editView.setText(uri.toString())
             }
-        }
+            customView { alertBinding.root }
+            okButton {
+                sendToClip(uri.toString())
+            }
+        }.show()
     }
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
@@ -126,7 +135,14 @@ class RssSourceActivity : VMBaseActivity<ActivityRssSourceBinding, RssSourceView
             R.id.menu_enable_selection -> viewModel.enableSelection(adapter.selection)
             R.id.menu_disable_selection -> viewModel.disableSelection(adapter.selection)
             R.id.menu_del_selection -> viewModel.delSelection(adapter.selection)
-            R.id.menu_export_selection -> exportDir.launch(null)
+            R.id.menu_export_selection -> exportResult.launch {
+                mode = HandleFileContract.EXPORT
+                fileData = Triple(
+                    "exportRssSource.json",
+                    GSON.toJson(adapter.selection).toByteArray(),
+                    "application/json"
+                )
+            }
             R.id.menu_top_sel -> viewModel.topSource(*adapter.selection.toTypedArray())
             R.id.menu_bottom_sel -> viewModel.bottomSource(*adapter.selection.toTypedArray())
         }
@@ -136,7 +152,6 @@ class RssSourceActivity : VMBaseActivity<ActivityRssSourceBinding, RssSourceView
     private fun initRecyclerView() {
         ATH.applyEdgeEffectColor(binding.recyclerView)
         binding.recyclerView.addItemDecoration(VerticalDivider(this))
-        adapter = RssSourceAdapter(this, this)
         binding.recyclerView.adapter = adapter
         // When this page is opened, it is in selection mode
         val dragSelectTouchHelper: DragSelectTouchHelper =
@@ -275,7 +290,9 @@ class RssSourceActivity : VMBaseActivity<ActivityRssSourceBinding, RssSourceView
                         cacheUrls.add(0, it)
                         aCache.put(importRecordKey, cacheUrls.joinToString(","))
                     }
-                    ImportRssSourceDialog.start(supportFragmentManager, it)
+                    supportFragmentManager.showDialog(
+                        ImportRssSourceDialog(it)
+                    )
                 }
             }
             cancelButton()

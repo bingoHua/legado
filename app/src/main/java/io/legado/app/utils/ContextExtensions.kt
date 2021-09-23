@@ -4,6 +4,8 @@ package io.legado.app.utils
 
 import android.annotation.SuppressLint
 import android.app.Activity
+import android.app.PendingIntent
+import android.app.PendingIntent.*
 import android.app.Service
 import android.content.*
 import android.content.pm.PackageManager
@@ -40,6 +42,39 @@ inline fun <reified T : Service> Context.startService(configIntent: Intent.() ->
 
 inline fun <reified T : Service> Context.stopService() {
     stopService(Intent(this, T::class.java))
+}
+
+@SuppressLint("UnspecifiedImmutableFlag")
+inline fun <reified T : Service> Context.servicePendingIntent(
+    action: String,
+    configIntent: Intent.() -> Unit = {}
+): PendingIntent? {
+    val intent = Intent(this, T::class.java)
+    intent.action = action
+    configIntent.invoke(intent)
+    return getService(this, 0, intent, FLAG_UPDATE_CURRENT)
+}
+
+@SuppressLint("UnspecifiedImmutableFlag")
+inline fun <reified T : Activity> Context.activityPendingIntent(
+    action: String,
+    configIntent: Intent.() -> Unit = {}
+): PendingIntent? {
+    val intent = Intent(this, T::class.java)
+    intent.action = action
+    configIntent.invoke(intent)
+    return getActivity(this, 0, intent, FLAG_UPDATE_CURRENT)
+}
+
+@SuppressLint("UnspecifiedImmutableFlag")
+inline fun <reified T : BroadcastReceiver> Context.broadcastPendingIntent(
+    action: String,
+    configIntent: Intent.() -> Unit = {}
+): PendingIntent? {
+    val intent = Intent(this, T::class.java)
+    intent.action = action
+    configIntent.invoke(intent)
+    return getBroadcast(this, 0, intent, FLAG_CANCEL_CURRENT)
 }
 
 fun Context.toastOnUi(message: Int) {
@@ -122,7 +157,7 @@ val Context.sysScreenOffTime: Int
             screenOffTime =
                 Settings.System.getInt(contentResolver, Settings.System.SCREEN_OFF_TIMEOUT)
         } catch (e: Exception) {
-            e.printStackTrace()
+            e.printOnDebug()
         }
         return screenOffTime
     }
@@ -264,7 +299,7 @@ val Context.channel: String
             val appInfo = pm.getApplicationInfo(packageName, PackageManager.GET_META_DATA)
             return appInfo.metaData.getString("channel") ?: ""
         } catch (e: Exception) {
-            e.printStackTrace()
+            e.printOnDebug()
         }
         return ""
     }

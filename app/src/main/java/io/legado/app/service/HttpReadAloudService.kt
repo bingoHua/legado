@@ -2,20 +2,17 @@ package io.legado.app.service
 
 import android.app.PendingIntent
 import android.media.MediaPlayer
+import io.legado.app.constant.AppLog
 import io.legado.app.constant.EventBus
 import io.legado.app.constant.PreferKey
 import io.legado.app.help.AppConfig
-import io.legado.app.help.IntentHelp
 import io.legado.app.help.coroutine.Coroutine
+import io.legado.app.model.ReadAloud
 import io.legado.app.model.ReadBook
 import io.legado.app.model.analyzeRule.AnalyzeUrl
-import io.legado.app.service.help.ReadAloud
 import io.legado.app.utils.*
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.ensureActive
-import kotlinx.coroutines.isActive
+import kotlinx.coroutines.*
 import splitties.init.appCtx
-import kotlinx.coroutines.launch
 import java.io.File
 import java.io.FileDescriptor
 import java.io.FileInputStream
@@ -29,32 +26,34 @@ class HttpReadAloudService : BaseReadAloudService(),
     MediaPlayer.OnErrorListener,
     MediaPlayer.OnCompletionListener {
 
-    private val player by lazy { MediaPlayer() }
-    private lateinit var ttsFolder: String
+    private val mediaPlayer = MediaPlayer()
+    private val ttsFolder: String by lazy {
+        externalCacheDir!!.absolutePath + File.separator + "httpTTS"
+    }
     private var task: Coroutine<*>? = null
     private var playingIndex = -1
     private val microAloudDownloader by lazy {
         MicroAloudDownloader(this/*, MicroAloudDownloader.MicroProxy("127.0.0.1", 1080, "", "")*/)
     }
+    private var playIndexJob: Job? = null
 
     override fun onCreate() {
         super.onCreate()
-        ttsFolder = externalCacheDir!!.absolutePath + File.separator + "httpTTS"
-        player.setOnErrorListener(this)
-        player.setOnPreparedListener(this)
-        player.setOnCompletionListener(this)
+        mediaPlayer.setOnErrorListener(this)
+        mediaPlayer.setOnPreparedListener(this)
+        mediaPlayer.setOnCompletionListener(this)
     }
 
     override fun onDestroy() {
         super.onDestroy()
         task?.cancel()
-        player.release()
+        mediaPlayer.release()
     }
 
-    override fun newReadAloud(dataKey: String?, play: Boolean) {
-        player.reset()
+    override fun newReadAloud(play: Boolean) {
+        mediaPlayer.reset()
         playingIndex = -1
-        super.newReadAloud(dataKey, play)
+        super.newReadAloud(play)
     }
 
     override fun play() {
@@ -76,24 +75,31 @@ class HttpReadAloudService : BaseReadAloudService(),
     }
 
     override fun playStop() {
-        player.stop()
+        mediaPlayer.stop()
+    }
+
+    private fun playNext() {
+        readAloudNumber += contentList[nowSpeak].length + 1
+        if (nowSpeak < contentList.lastIndex) {
+            nowSpeak++
+            play()
+        } else {
+            nextChapter()
+        }
     }
 
     private fun downloadAudio() {
         task?.cancel()
         task = execute {
             //removeCacheFile()
-            ReadAloud.httpTTS?.let {
+            ReadAloud.httpTTS?.let { httpTts ->
                 contentList.forEachIndexed { index, item ->
                     if (isActive) {
                         val fileName =
-                            md5SpeakFileName(it.url, AppConfig.ttsSpeechRate.toString(), item)
-
+                            md5SpeakFileName(httpTts.url, AppConfig.ttsSpeechRate.toString(), item)
                         if (hasSpeakFile(fileName)) { //已经下载好的语音缓存
                             if (index == nowSpeak) {
                                 val file = getSpeakFileAsMd5(fileName)
-
-                                @Suppress("BlockingMethodInNonBlockingContext")
                                 val fis = FileInputStream(file)
                                 playAudio(fis.fd)
                             }
@@ -101,29 +107,27 @@ class HttpReadAloudService : BaseReadAloudService(),
                             return@let
                         } else { //没有下载并且没有缓存文件
                             try {
-                                if (appCtx.getPrefLong(PreferKey.speakEngine) == -30L) {
+                                createSpeakCacheFile(fileName)
+                                if (appCtx.getPrefLong(PreferKey.ttsEngine) == -30L) {
                                     microAloudDownloader.download(
                                         item,
                                         AppConfig.ttsSpeechRate
                                     )
                                 } else {
                                     AnalyzeUrl(
-                                        it.url,
+                                        httpTts.url,
                                         speakText = item,
-                                        speakSpeed = AppConfig.ttsSpeechRate
+                                        speakSpeed = AppConfig.ttsSpeechRate,
+                                        source = httpTts,
+                                        headerMapF = httpTts.getHeaderMap(true)
                                     ).getByteArray()
                                 }?.let { bytes ->
                                     ensureActive()
-
                                     val file = getSpeakFileAsMd5IfNotExist(fileName)
-                                    //val file = getSpeakFile(index)
                                     file.writeBytes(bytes)
                                     removeSpeakCacheFile(fileName)
-
                                     val fis = FileInputStream(file)
-
                                     if (index == nowSpeak) {
-                                        @Suppress("BlockingMethodInNonBlockingContext")
                                         playAudio(fis.fd)
                                     }
                                 }
@@ -154,13 +158,13 @@ class HttpReadAloudService : BaseReadAloudService(),
     private fun playAudio(fd: FileDescriptor) {
         if (playingIndex != nowSpeak && requestFocus()) {
             try {
-                player.reset()
-                player.setDataSource(fd)
-                player.prepareAsync()
+                mediaPlayer.reset()
+                mediaPlayer.setDataSource(fd)
+                mediaPlayer.prepareAsync()
                 playingIndex = nowSpeak
                 postEvent(EventBus.TTS_PROGRESS, readAloudNumber + 1)
             } catch (e: Exception) {
-                e.printStackTrace()
+                e.printOnDebug()
             }
         }
     }
@@ -211,15 +215,43 @@ class HttpReadAloudService : BaseReadAloudService(),
 
     override fun pauseReadAloud(pause: Boolean) {
         super.pauseReadAloud(pause)
-        player.pause()
+        kotlin.runCatching {
+            playIndexJob?.cancel()
+            mediaPlayer.pause()
+        }
     }
 
     override fun resumeReadAloud() {
         super.resumeReadAloud()
-        if (playingIndex == -1) {
-            play()
-        } else {
-            player.start()
+        kotlin.runCatching {
+            if (playingIndex == -1) {
+                play()
+            } else {
+                mediaPlayer.start()
+                upPlayPos()
+            }
+        }
+    }
+
+    private fun upPlayPos() {
+        playIndexJob?.cancel()
+        val textChapter = textChapter ?: return
+        playIndexJob = launch {
+            postEvent(EventBus.TTS_PROGRESS, readAloudNumber + 1)
+            if (mediaPlayer.duration <= 0) {
+                return@launch
+            }
+            val speakTextLength = contentList[nowSpeak].length
+            val sleep = mediaPlayer.duration / speakTextLength
+            val start = speakTextLength * mediaPlayer.currentPosition / mediaPlayer.duration
+            for (i in start..contentList[nowSpeak].length) {
+                if (readAloudNumber + i > textChapter.getReadLength(pageIndex + 1)) {
+                    pageIndex++
+                    ReadBook.moveToNextPage()
+                    postEvent(EventBus.TTS_PROGRESS, readAloudNumber + i)
+                }
+                delay(sleep.toLong())
+            }
         }
     }
 
@@ -228,7 +260,7 @@ class HttpReadAloudService : BaseReadAloudService(),
      */
     override fun upSpeechRate(reset: Boolean) {
         task?.cancel()
-        player.stop()
+        mediaPlayer.stop()
         playingIndex = -1
         downloadAudio()
     }
@@ -236,45 +268,34 @@ class HttpReadAloudService : BaseReadAloudService(),
     override fun onPrepared(mp: MediaPlayer?) {
         super.play()
         if (pause) return
-        mp?.start()
-        textChapter?.let {
-            if (readAloudNumber + 1 > it.getReadLength(pageIndex + 1)) {
-                pageIndex++
-                ReadBook.moveToNextPage()
-            }
-        }
-        postEvent(EventBus.TTS_PROGRESS, readAloudNumber + 1)
+        mediaPlayer.start()
+        upPlayPos()
     }
 
+    private var errorNo = 0
+
     override fun onError(mp: MediaPlayer?, what: Int, extra: Int): Boolean {
-        LogUtils.d("mp", "what:$what extra:$extra")
         if (what == -38 && extra == 0) {
+            play()
             return true
         }
-        launch {
-            delay(100)
-            readAloudNumber += contentList[nowSpeak].length + 1
-            if (nowSpeak < contentList.lastIndex) {
-                nowSpeak++
-                play()
-            } else {
-                nextChapter()
-            }
+        AppLog.addLog("朗读错误,($what, $extra)")
+        errorNo++
+        if (errorNo >= 3) {
+            toastOnUi("朗读连续3次错误, 最后一次错误代码($what, $extra)")
+            ReadAloud.pause(this)
+        } else {
+            playNext()
         }
         return true
     }
 
     override fun onCompletion(mp: MediaPlayer?) {
-        readAloudNumber += contentList[nowSpeak].length + 1
-        if (nowSpeak < contentList.lastIndex) {
-            nowSpeak++
-            play()
-        } else {
-            nextChapter()
-        }
+        errorNo = 0
+        playNext()
     }
 
     override fun aloudServicePendingIntent(actionStr: String): PendingIntent? {
-        return IntentHelp.servicePendingIntent<HttpReadAloudService>(this, actionStr)
+        return servicePendingIntent<HttpReadAloudService>(actionStr)
     }
 }

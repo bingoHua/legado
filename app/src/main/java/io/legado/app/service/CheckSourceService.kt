@@ -10,13 +10,15 @@ import io.legado.app.constant.IntentAction
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.BookSource
 import io.legado.app.help.AppConfig
-import io.legado.app.help.IntentHelp
 import io.legado.app.help.coroutine.CompositeCoroutine
+import io.legado.app.model.CheckSource
 import io.legado.app.model.Debug
+import io.legado.app.model.NoStackTraceException
 import io.legado.app.model.webBook.WebBook
-import io.legado.app.service.help.CheckSource
 import io.legado.app.ui.book.source.manage.BookSourceActivity
+import io.legado.app.utils.activityPendingIntent
 import io.legado.app.utils.postEvent
+import io.legado.app.utils.servicePendingIntent
 import io.legado.app.utils.toastOnUi
 import kotlinx.coroutines.asCoroutineDispatcher
 import java.util.concurrent.Executors
@@ -25,7 +27,7 @@ import kotlin.math.min
 class CheckSourceService : BaseService() {
     private var threadCount = AppConfig.threadCount
     private var searchCoroutine =
-        Executors.newFixedThreadPool(min(threadCount, 8)).asCoroutineDispatcher()
+        Executors.newFixedThreadPool(min(threadCount, AppConst.MAX_THREAD)).asCoroutineDispatcher()
     private var tasks = CompositeCoroutine()
     private val allIds = ArrayList<String>()
     private val checkedIds = ArrayList<String>()
@@ -37,12 +39,12 @@ class CheckSourceService : BaseService() {
             .setOngoing(true)
             .setContentTitle(getString(R.string.check_book_source))
             .setContentIntent(
-                IntentHelp.activityPendingIntent<BookSourceActivity>(this, "activity")
+                activityPendingIntent<BookSourceActivity>("activity")
             )
             .addAction(
                 R.drawable.ic_stop_black_24dp,
                 getString(R.string.cancel),
-                IntentHelp.servicePendingIntent<CheckSourceService>(this, IntentAction.stop)
+                servicePendingIntent<CheckSourceService>(IntentAction.stop)
             )
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
     }
@@ -110,7 +112,13 @@ class CheckSourceService : BaseService() {
     fun check(source: BookSource) {
         execute(context = searchCoroutine) {
             Debug.startChecking(source)
-            var books = WebBook.searchBookAwait(this, source, CheckSource.keyword)
+            var searchWord = CheckSource.keyword
+            source.ruleSearch?.checkKeyWord?.let {
+                if (it.isNotBlank()) {
+                    searchWord = it
+                }
+            }
+            var books = WebBook.searchBookAwait(this, source, searchWord)
             if (books.isEmpty()) {
                 val exs = source.exploreKinds
                 var url: String? = null
@@ -121,7 +129,7 @@ class CheckSourceService : BaseService() {
                     }
                 }
                 if (url.isNullOrBlank()) {
-                    throw Exception("搜索内容为空并且没有发现")
+                    throw NoStackTraceException("搜索内容为空并且没有发现")
                 }
                 books = WebBook.exploreBookAwait(this, source, url)
             }
@@ -130,24 +138,23 @@ class CheckSourceService : BaseService() {
             val content =
                 WebBook.getContentAwait(this, source, book, toc.first(), toc.getOrNull(1)?.url)
             if (content.isBlank()) {
-                throw Exception("正文内容为空")
+                throw NoStackTraceException("正文内容为空")
             }
         }.timeout(180000L)
             .onError(searchCoroutine) {
                 source.addGroup("失效")
-                source.bookSourceComment = """
-                    "error:${it.localizedMessage}
-                    ${source.bookSourceComment}"
-                """.trimIndent()
+                if (source.bookSourceComment?.contains("Error: ") == false) {
+                    source.bookSourceComment = "Error: ${it.localizedMessage} \n\n" + "${source.bookSourceComment}"
+                }
                 Debug.updateFinalMessage(source.bookSourceUrl, "失败:${it.localizedMessage}")
                 source.respondTime = Debug.getRespondTime(source.bookSourceUrl)
                 appDb.bookSourceDao.update(source)
             }.onSuccess(searchCoroutine) {
                 source.removeGroup("失效")
                 source.bookSourceComment = source.bookSourceComment
-                    ?.split("\n")
+                    ?.split("\n\n")
                     ?.filterNot {
-                        it.startsWith("error:")
+                        it.startsWith("Error: ")
                     }?.joinToString("\n")
                 Debug.updateFinalMessage(source.bookSourceUrl, "成功")
                 source.respondTime = Debug.getRespondTime(source.bookSourceUrl)
@@ -177,7 +184,7 @@ class CheckSourceService : BaseService() {
         notificationBuilder.setContentText(notificationMsg)
         notificationBuilder.setProgress(allIds.size, checkedIds.size, false)
         postEvent(EventBus.CHECK_SOURCE, notificationMsg)
-        startForeground(112202, notificationBuilder.build())
+        startForeground(AppConst.notificationIdCheckSource, notificationBuilder.build())
     }
 
 }
