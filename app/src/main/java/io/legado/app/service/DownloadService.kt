@@ -7,6 +7,7 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.net.Uri
 import android.os.Build
+import android.os.Environment
 import androidx.core.app.NotificationCompat
 import androidx.core.content.FileProvider
 import io.legado.app.R
@@ -29,7 +30,8 @@ import java.io.File
 
 class DownloadService : BaseService() {
     private val groupKey = "${appCtx.packageName}.download"
-    private val downloads = hashMapOf<Long, String>()
+    private val downloadUrls = hashMapOf<Long, String>()
+    private val downloadNames = hashMapOf<Long, String>()
     private val completeDownloads = hashSetOf<Long>()
     private var upStateJob: Job? = null
     private val downloadReceiver = object : BroadcastReceiver() {
@@ -52,13 +54,13 @@ class DownloadService : BaseService() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             IntentAction.start -> startDownload(
-                intent.getLongExtra("downloadId", 0),
-                intent.getStringExtra("fileName") ?: "未知文件"
+                intent.getStringExtra("url"),
+                intent.getStringExtra("fileName")
             )
             IntentAction.play -> {
                 val id = intent.getLongExtra("downloadId", 0)
                 if (completeDownloads.contains(id)
-                    && downloads[id]?.endsWith(".apk") == true
+                    && downloadNames[id]?.endsWith(".apk") == true
                 ) {
                     installApk(id)
                 } else {
@@ -67,19 +69,58 @@ class DownloadService : BaseService() {
             }
             IntentAction.stop -> {
                 val downloadId = intent.getLongExtra("downloadId", 0)
-                downloads.remove(downloadId)
-                notificationManager.cancel(downloadId.toInt())
+                removeDownload(downloadId)
             }
         }
         return super.onStartCommand(intent, flags, startId)
     }
 
-    private fun startDownload(downloadId: Long, fileName: String) {
-        if (downloadId > 0) {
-            downloads[downloadId] = fileName
-            queryState()
-            if (upStateJob == null) {
-                checkDownloadState()
+    @Synchronized
+    private fun startDownload(url: String?, fileName: String?) {
+        if (url == null || fileName == null) {
+            if (downloadNames.isEmpty()) {
+                stopSelf()
+            }
+            return
+        }
+        if (downloadUrls.values.contains(url)) {
+            toastOnUi("已在下载列表")
+            return
+        }
+        // 指定下载地址
+        val request = DownloadManager.Request(Uri.parse(url))
+        // 设置通知
+        request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_HIDDEN)
+        // 设置下载文件保存的路径和文件名
+        request.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, fileName)
+        // 添加一个下载任务
+        val downloadId = downloadManager.enqueue(request)
+        downloadUrls[downloadId] = url
+        downloadNames[downloadId] = fileName
+        queryState()
+        if (upStateJob == null) {
+            checkDownloadState()
+        }
+    }
+
+    @Synchronized
+    private fun removeDownload(downloadId: Long) {
+        if (!completeDownloads.contains(downloadId)) {
+            downloadManager.remove(downloadId)
+        }
+        downloadUrls.remove(downloadId)
+        downloadNames.remove(downloadId)
+        notificationManager.cancel(downloadId.toInt())
+    }
+
+    @Synchronized
+    private fun successDownload(downloadId: Long) {
+        if (!completeDownloads.contains(downloadId)) {
+            completeDownloads.add(downloadId)
+            if (downloadNames[downloadId]?.endsWith(".apk") == true) {
+                installApk(downloadId)
+            } else {
+                toastOnUi("${downloadNames[downloadId]} ${getString(R.string.download_success)}")
             }
         }
     }
@@ -95,39 +136,38 @@ class DownloadService : BaseService() {
     }
 
     //查询下载进度
+    @Synchronized
     private fun queryState() {
-        if (downloads.isEmpty()) {
+        if (downloadNames.isEmpty()) {
             stopSelf()
             return
         }
-        val ids = downloads.keys
+        val ids = downloadNames.keys
         val query = DownloadManager.Query()
         query.setFilterById(*ids.toLongArray())
         downloadManager.query(query).use { cursor ->
-            if (!cursor.moveToFirst()) return
-            val id = cursor.getLong(cursor.getColumnIndex(DownloadManager.COLUMN_ID))
-            val progress: Int =
-                cursor.getInt(cursor.getColumnIndex(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR))
-            val max: Int =
-                cursor.getInt(cursor.getColumnIndex(DownloadManager.COLUMN_TOTAL_SIZE_BYTES))
-            val status =
-                when (cursor.getInt(cursor.getColumnIndex(DownloadManager.COLUMN_STATUS))) {
-                    DownloadManager.STATUS_PAUSED -> "暂停"
-                    DownloadManager.STATUS_PENDING -> "待下载"
-                    DownloadManager.STATUS_RUNNING -> "下载中"
-                    DownloadManager.STATUS_SUCCESSFUL -> {
-                        if (!completeDownloads.contains(id)) {
-                            completeDownloads.add(id)
-                            if (downloads[id]?.endsWith(".apk") == true) {
-                                installApk(id)
+            if (cursor.moveToFirst()) {
+                do {
+                    val id = cursor.getLong(cursor.getColumnIndex(DownloadManager.COLUMN_ID))
+                    val progress = cursor
+                        .getInt(cursor.getColumnIndex(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR))
+                    val max = cursor
+                        .getInt(cursor.getColumnIndex(DownloadManager.COLUMN_TOTAL_SIZE_BYTES))
+                    val status =
+                        when (cursor.getInt(cursor.getColumnIndex(DownloadManager.COLUMN_STATUS))) {
+                            DownloadManager.STATUS_PAUSED -> getString(R.string.pause)
+                            DownloadManager.STATUS_PENDING -> getString(R.string.wait_download)
+                            DownloadManager.STATUS_RUNNING -> getString(R.string.downloading)
+                            DownloadManager.STATUS_SUCCESSFUL -> {
+                                successDownload(id)
+                                getString(R.string.download_success)
                             }
+                            DownloadManager.STATUS_FAILED -> getString(R.string.download_error)
+                            else -> getString(R.string.unknown_state)
                         }
-                        "下载完成"
-                    }
-                    DownloadManager.STATUS_FAILED -> "下载失败"
-                    else -> "未知状态"
-                }
-            updateNotification(id, "${downloads[id]} $status", max, progress)
+                    upDownloadNotification(id, "${downloadNames[id]} $status", max, progress)
+                } while (cursor.moveToNext())
+            }
         }
     }
 
@@ -158,32 +198,25 @@ class DownloadService : BaseService() {
     }
 
     private fun upSummaryNotification() {
-        val notificationBuilder = NotificationCompat.Builder(this, AppConst.channelIdDownload)
+        val notification = NotificationCompat.Builder(this, AppConst.channelIdDownload)
             .setSmallIcon(R.drawable.ic_download)
-            .setOngoing(true)
             .setContentTitle(getString(R.string.action_download))
             .setGroup(groupKey)
             .setGroupSummary(true)
-        val notification = notificationBuilder.build()
+            .setOngoing(true)
+            .build()
         startForeground(AppConst.notificationIdDownload, notification)
     }
 
     /**
      * 更新通知
      */
-    private fun updateNotification(downloadId: Long, content: String, max: Int, progress: Int) {
-        val notificationBuilder = NotificationCompat.Builder(this, AppConst.channelIdDownload)
+    private fun upDownloadNotification(downloadId: Long, content: String, max: Int, progress: Int) {
+        val notification = NotificationCompat.Builder(this, AppConst.channelIdDownload)
             .setSmallIcon(R.drawable.ic_download)
             .setContentTitle(getString(R.string.action_download))
             .setContentIntent(
                 servicePendingIntent<DownloadService>(IntentAction.play) {
-                    putExtra("downloadId", downloadId)
-                }
-            )
-            .addAction(
-                R.drawable.ic_stop_black_24dp,
-                getString(R.string.cancel),
-                servicePendingIntent<DownloadService>(IntentAction.stop) {
                     putExtra("downloadId", downloadId)
                 }
             )
@@ -196,7 +229,7 @@ class DownloadService : BaseService() {
             .setContentText(content)
             .setProgress(max, progress, false)
             .setGroup(groupKey)
-        val notification = notificationBuilder.build()
+            .build()
         notificationManager.notify(downloadId.toInt(), notification)
     }
 
