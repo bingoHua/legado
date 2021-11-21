@@ -234,7 +234,7 @@ class CacheAudioService2 : BaseService() {
     private fun downloadTask(fileName: String, paragraph: String): Runnable {
         return Runnable {
             if (!hasSpeakFile(fileName)) { //已经下载好的语音缓存
-                if (appCtx.getPrefLong(PreferKey.ttsEngine) == -30L) {
+                if (appCtx.getPrefString(PreferKey.ttsEngine) == "-17") {
                     try {
                         microAloudDownloader.download(
                             paragraph,
