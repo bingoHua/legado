@@ -183,7 +183,7 @@ class CacheAudioService2 : BaseService() {
                             }
                         }
                     } else {
-                        AppLog.addLog("${getBook(bookUrl)?.name} is empty")
+                        AppLog.put("${getBook(bookUrl)?.name} is empty")
                     }
                 }
             }

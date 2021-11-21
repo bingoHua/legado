@@ -34,8 +34,8 @@ class HttpReadAloudService : BaseReadAloudService(),
     MediaPlayer.OnCompletionListener {
 
     private val mediaPlayer = MediaPlayer()
-    private val ttsFolder: String by lazy {
-        externalCacheDir!!.absolutePath + File.separator + "httpTTS"
+    private val ttsFolderPath: String by lazy {
+        externalCacheDir!!.absolutePath + File.separator + "httpTTS" + File.separator
     }
     private val cacheFiles = hashSetOf<String>()
     private var task: Coroutine<*>? = null
