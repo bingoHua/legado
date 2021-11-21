@@ -2,7 +2,10 @@ package io.legado.app.ui.book.read.config
 
 import android.content.DialogInterface
 import android.os.Bundle
-import android.view.*
+import android.view.Gravity
+import android.view.View
+import android.view.ViewGroup
+import android.view.WindowManager
 import android.widget.SeekBar
 import io.legado.app.R
 import io.legado.app.base.BaseDialogFragment
@@ -11,18 +14,19 @@ import io.legado.app.help.ReadBookConfig
 import io.legado.app.lib.theme.bottomBackground
 import io.legado.app.lib.theme.getPrimaryTextColor
 import io.legado.app.model.ReadAloud
+import io.legado.app.model.ReadBook
 import io.legado.app.service.BaseReadAloudService
+import io.legado.app.ui.book.read.BaseReadBookActivity
 import io.legado.app.ui.book.read.ReadBookActivity
-import io.legado.app.ui.book.read.ReadBookBaseActivity
 import io.legado.app.ui.widget.seekbar.SeekBarChangeListener
 import io.legado.app.utils.ColorUtils
 import io.legado.app.utils.viewbindingdelegate.viewBinding
 
 
-class AutoReadDialog : BaseDialogFragment() {
-    var callBack: CallBack? = null
+class AutoReadDialog : BaseDialogFragment(R.layout.dialog_auto_read) {
 
     private val binding by viewBinding(DialogAutoReadBinding::bind)
+    private val callBack: CallBack? get() = activity as? CallBack
 
     override fun onStart() {
         super.onStart()
@@ -43,17 +47,8 @@ class AutoReadDialog : BaseDialogFragment() {
         (activity as ReadBookActivity).bottomDialog--
     }
 
-    override fun onCreateView(
-        inflater: LayoutInflater,
-        container: ViewGroup?,
-        savedInstanceState: Bundle?
-    ): View? {
-        (activity as ReadBookActivity).bottomDialog++
-        callBack = activity as? CallBack
-        return inflater.inflate(R.layout.dialog_auto_read, container)
-    }
-
     override fun onFragmentCreated(view: View, savedInstanceState: Bundle?) = binding.run {
+        (activity as ReadBookActivity).bottomDialog++
         val bg = requireContext().bottomBackground
         val isLight = ColorUtils.isColorLight(bg)
         val textColor = requireContext().getPrimaryTextColor(isLight)
@@ -100,8 +95,9 @@ class AutoReadDialog : BaseDialogFragment() {
             dismissAllowingStateLoss()
         }
         binding.llSetting.setOnClickListener {
-            (activity as ReadBookBaseActivity).showPageAnimConfig {
+            (activity as BaseReadBookActivity).showPageAnimConfig {
                 (activity as ReadBookActivity).upPageAnim()
+                ReadBook.loadContent(false)
             }
         }
         binding.llCatalog.setOnClickListener { callBack?.openChapterList() }

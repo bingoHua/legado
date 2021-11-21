@@ -19,7 +19,7 @@ class BookInfoEditActivity :
     ChangeCoverDialog.CallBack {
 
     private val selectCover = registerForActivityResult(SelectImageContract()) {
-        it?.second?.let { uri ->
+        it.uri?.let { uri ->
             coverChangeTo(uri)
         }
     }
@@ -52,7 +52,7 @@ class BookInfoEditActivity :
     private fun initEvent() = binding.run {
         tvChangeCover.setOnClickListener {
             viewModel.bookData.value?.let {
-                supportFragmentManager.showDialog(
+                showDialogFragment(
                     ChangeCoverDialog(it.name, it.author)
                 )
             }

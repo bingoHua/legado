@@ -14,6 +14,7 @@ import io.legado.app.utils.*
 import kotlinx.coroutines.runBlocking
 import org.jsoup.nodes.Entities
 import org.mozilla.javascript.NativeObject
+import timber.log.Timber
 import java.net.URL
 import java.util.*
 import java.util.regex.Pattern
@@ -71,8 +72,10 @@ class AnalyzeRule(
     }
 
     fun setRedirectUrl(url: String): URL? {
-        kotlin.runCatching {
+        try {
             redirectUrl = URL(url)
+        } catch (e: Exception) {
+            log("URL($url) error\n${e.localizedMessage}")
         }
         return redirectUrl
     }
@@ -126,16 +129,20 @@ class AnalyzeRule(
      * 获取文本列表
      */
     @JvmOverloads
-    fun getStringList(rule: String?, isUrl: Boolean = false): List<String>? {
+    fun getStringList(rule: String?, mContent: Any? = null, isUrl: Boolean = false): List<String>? {
         if (rule.isNullOrEmpty()) return null
         val ruleList = splitSourceRule(rule, false)
-        return getStringList(ruleList, isUrl)
+        return getStringList(ruleList, mContent, isUrl)
     }
 
     @JvmOverloads
-    fun getStringList(ruleList: List<SourceRule>, isUrl: Boolean = false): List<String>? {
+    fun getStringList(
+        ruleList: List<SourceRule>,
+        mContent: Any? = null,
+        isUrl: Boolean = false
+    ): List<String>? {
         var result: Any? = null
-        val content = this.content
+        val content = mContent ?: this.content
         if (content != null && ruleList.isNotEmpty()) {
             result = content
             if (content is NativeObject) {
@@ -191,22 +198,22 @@ class AnalyzeRule(
      * 获取文本
      */
     @JvmOverloads
-    fun getString(ruleStr: String?, isUrl: Boolean = false, value: String? = null): String {
+    fun getString(ruleStr: String?, mContent: Any? = null, isUrl: Boolean = false): String {
         if (TextUtils.isEmpty(ruleStr)) return ""
         val ruleList = splitSourceRule(ruleStr)
-        return getString(ruleList, isUrl, value)
+        return getString(ruleList, mContent, isUrl)
     }
 
     @JvmOverloads
     fun getString(
         ruleList: List<SourceRule>,
-        isUrl: Boolean = false,
-        value: String? = null
+        mContent: Any? = null,
+        isUrl: Boolean = false
     ): String {
-        var result: Any? = value
-        val content = this.content
-        if ((content != null || result != null) && ruleList.isNotEmpty()) {
-            if (result == null) result = content
+        var result: Any? = null
+        val content = mContent ?: this.content
+        if (content != null && ruleList.isNotEmpty()) {
+            result = content
             if (result is NativeObject) {
                 result = result[ruleList[0].rule]?.toString()
             } else {
@@ -237,6 +244,8 @@ class AnalyzeRule(
         if (result == null) result = ""
         val str = kotlin.runCatching {
             Entities.unescape(result.toString())
+        }.onFailure {
+            log("Entities.unescape() error\n${it.localizedMessage}")
         }.getOrElse {
             result.toString()
         }
@@ -256,9 +265,10 @@ class AnalyzeRule(
     fun getElement(ruleStr: String): Any? {
         if (TextUtils.isEmpty(ruleStr)) return null
         var result: Any? = null
+        val content = this.content
         val ruleList = splitSourceRule(ruleStr, true)
-        content?.let { o ->
-            if (ruleList.isNotEmpty()) result = o
+        if (content != null && ruleList.isNotEmpty()) {
+            result = content
             for (sourceRule in ruleList) {
                 putRule(sourceRule.putMap)
                 sourceRule.makeUpRule(result)
@@ -288,9 +298,10 @@ class AnalyzeRule(
     @Suppress("UNCHECKED_CAST")
     fun getElements(ruleStr: String): List<Any> {
         var result: Any? = null
+        val content = this.content
         val ruleList = splitSourceRule(ruleStr, true)
-        content?.let { o ->
-            if (ruleList.isNotEmpty()) result = o
+        if (content != null && ruleList.isNotEmpty()) {
+            result = content
             for (sourceRule in ruleList) {
                 putRule(sourceRule.putMap)
                 result?.let {
@@ -650,10 +661,11 @@ class AnalyzeRule(
     override fun ajax(urlStr: String): String? {
         return runBlocking {
             kotlin.runCatching {
-                val analyzeUrl = AnalyzeUrl(urlStr, book = book, source = source)
-                analyzeUrl.getStrResponse().body
+                val analyzeUrl = AnalyzeUrl(urlStr, source = source, ruleData = book)
+                analyzeUrl.getStrResponseAwait().body
             }.onFailure {
-                it.printOnDebug()
+                log("ajax(${urlStr}) error\n${it.stackTraceToString()}")
+                Timber.e(it)
             }.getOrElse {
                 it.msg
             }

@@ -6,6 +6,7 @@ import io.legado.app.R
 import io.legado.app.base.VMBaseActivity
 import io.legado.app.data.entities.BaseSource
 import io.legado.app.databinding.ActivitySourceLoginBinding
+import io.legado.app.utils.showDialogFragment
 import io.legado.app.utils.viewbindingdelegate.viewBinding
 
 
@@ -15,10 +16,8 @@ class SourceLoginActivity : VMBaseActivity<ActivitySourceLoginBinding, SourceLog
     override val viewModel by viewModels<SourceLoginViewModel>()
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
-        intent.getStringExtra("sourceUrl")?.let {
-            viewModel.initData(it) { source ->
-                initView(source)
-            }
+        viewModel.initData(intent) { source ->
+            initView(source)
         }
     }
 
@@ -28,7 +27,7 @@ class SourceLoginActivity : VMBaseActivity<ActivitySourceLoginBinding, SourceLog
                 .replace(R.id.fl_fragment, WebViewLoginFragment())
                 .commit()
         } else {
-            RuleUiLoginDialog().show(supportFragmentManager, "ruleUiLogin")
+            showDialogFragment<SourceLoginDialog>()
         }
     }
 

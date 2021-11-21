@@ -15,6 +15,7 @@ import androidx.preference.ListPreference
 import androidx.preference.Preference
 import io.legado.app.R
 import io.legado.app.base.BasePreferenceFragment
+import io.legado.app.constant.AppLog
 import io.legado.app.constant.PreferKey
 import io.legado.app.help.AppConfig
 import io.legado.app.help.LocalConfig
@@ -26,8 +27,8 @@ import io.legado.app.help.storage.Restore
 import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.permission.Permissions
 import io.legado.app.lib.permission.PermissionsCompat
-import io.legado.app.lib.theme.ATH
 import io.legado.app.lib.theme.accentColor
+import io.legado.app.lib.theme.primaryColor
 import io.legado.app.ui.document.HandleFileContract
 import io.legado.app.ui.widget.dialog.TextDialog
 import io.legado.app.utils.*
@@ -38,56 +39,61 @@ import splitties.init.appCtx
 class BackupConfigFragment : BasePreferenceFragment(),
     SharedPreferences.OnSharedPreferenceChangeListener {
 
-    private val selectBackupPath = registerForActivityResult(HandleFileContract()) { uri ->
-        uri ?: return@registerForActivityResult
-        if (uri.isContentScheme()) {
-            AppConfig.backupPath = uri.toString()
-        } else {
-            AppConfig.backupPath = uri.path
+    private val selectBackupPath = registerForActivityResult(HandleFileContract()) {
+        it.uri?.let { uri ->
+            if (uri.isContentScheme()) {
+                AppConfig.backupPath = uri.toString()
+            } else {
+                AppConfig.backupPath = uri.path
+            }
         }
     }
-    private val backupDir = registerForActivityResult(HandleFileContract()) { uri ->
-        uri ?: return@registerForActivityResult
-        if (uri.isContentScheme()) {
-            AppConfig.backupPath = uri.toString()
-            Coroutine.async {
-                Backup.backup(appCtx, uri.toString())
-            }.onSuccess {
-                appCtx.toastOnUi(R.string.backup_success)
-            }.onError {
-                appCtx.toastOnUi(R.string.backup_fail)
-            }
-        } else {
-            uri.path?.let { path ->
-                AppConfig.backupPath = path
+    private val backupDir = registerForActivityResult(HandleFileContract()) { result ->
+        result.uri?.let { uri ->
+            if (uri.isContentScheme()) {
+                AppConfig.backupPath = uri.toString()
                 Coroutine.async {
-                    Backup.backup(appCtx, path)
+                    Backup.backup(appCtx, uri.toString())
                 }.onSuccess {
                     appCtx.toastOnUi(R.string.backup_success)
                 }.onError {
-                    appCtx.toastOnUi(R.string.backup_fail)
+                    AppLog.put("备份出错\n${it.localizedMessage}", it)
+                    appCtx.toastOnUi(getString(R.string.backup_fail, it.localizedMessage))
+                }
+            } else {
+                uri.path?.let { path ->
+                    AppConfig.backupPath = path
+                    Coroutine.async {
+                        Backup.backup(appCtx, path)
+                    }.onSuccess {
+                        appCtx.toastOnUi(R.string.backup_success)
+                    }.onError {
+                        AppLog.put("备份出错\n${it.localizedMessage}", it)
+                        appCtx.toastOnUi(getString(R.string.backup_fail, it.localizedMessage))
+                    }
                 }
             }
         }
     }
-    private val restoreDir = registerForActivityResult(HandleFileContract()) { uri ->
-        uri ?: return@registerForActivityResult
-        if (uri.isContentScheme()) {
-            AppConfig.backupPath = uri.toString()
-            Coroutine.async {
-                Restore.restore(appCtx, uri.toString())
-            }
-        } else {
-            uri.path?.let { path ->
-                AppConfig.backupPath = path
+    private val restoreDir = registerForActivityResult(HandleFileContract()) {
+        it.uri?.let { uri ->
+            if (uri.isContentScheme()) {
+                AppConfig.backupPath = uri.toString()
                 Coroutine.async {
-                    Restore.restore(appCtx, path)
+                    Restore.restore(appCtx, uri.toString())
+                }
+            } else {
+                uri.path?.let { path ->
+                    AppConfig.backupPath = path
+                    Coroutine.async {
+                        Restore.restore(appCtx, path)
+                    }
                 }
             }
         }
     }
-    private val restoreOld = registerForActivityResult(HandleFileContract()) { uri ->
-        uri?.let {
+    private val restoreOld = registerForActivityResult(HandleFileContract()) {
+        it.uri?.let { uri ->
             ImportOldData.importUri(appCtx, uri)
         }
     }
@@ -96,18 +102,18 @@ class BackupConfigFragment : BasePreferenceFragment(),
         addPreferencesFromResource(R.xml.pref_config_backup)
         findPreference<EditTextPreference>(PreferKey.webDavUrl)?.let {
             it.setOnBindEditTextListener { editText ->
-                ATH.setTint(editText, requireContext().accentColor)
+                editText.applyTint(requireContext().accentColor)
             }
 
         }
         findPreference<EditTextPreference>(PreferKey.webDavAccount)?.let {
             it.setOnBindEditTextListener { editText ->
-                ATH.setTint(editText, requireContext().accentColor)
+                editText.applyTint(requireContext().accentColor)
             }
         }
         findPreference<EditTextPreference>(PreferKey.webDavPassword)?.let {
             it.setOnBindEditTextListener { editText ->
-                ATH.setTint(editText, requireContext().accentColor)
+                editText.applyTint(requireContext().accentColor)
                 editText.inputType =
                     InputType.TYPE_TEXT_VARIATION_PASSWORD or InputType.TYPE_CLASS_TEXT
             }
@@ -124,7 +130,7 @@ class BackupConfigFragment : BasePreferenceFragment(),
         super.onViewCreated(view, savedInstanceState)
         activity?.setTitle(R.string.backup_restore)
         preferenceManager.sharedPreferences.registerOnSharedPreferenceChangeListener(this)
-        ATH.applyEdgeEffectColor(listView)
+        listView.setEdgeEffectColor(primaryColor)
         setHasOptionsMenu(true)
         if (!LocalConfig.backupHelpVersionIsLast) {
             showHelp()
@@ -146,7 +152,7 @@ class BackupConfigFragment : BasePreferenceFragment(),
 
     private fun showHelp() {
         val text = String(requireContext().assets.open("help/webDavHelp.md").readBytes())
-        TextDialog.show(childFragmentManager, text, TextDialog.MD)
+        showDialogFragment(TextDialog(text, TextDialog.Mode.MD))
     }
 
     override fun onDestroy() {
@@ -221,7 +227,7 @@ class BackupConfigFragment : BasePreferenceFragment(),
             onDismiss {
                 Restore.saveIgnoreConfig()
             }
-        }.show()
+        }
     }
 
 
@@ -239,7 +245,8 @@ class BackupConfigFragment : BasePreferenceFragment(),
                     }.onSuccess {
                         appCtx.toastOnUi(R.string.backup_success)
                     }.onError {
-                        appCtx.toastOnUi(R.string.backup_fail)
+                        AppLog.put("备份出错\n${it.localizedMessage}", it)
+                        appCtx.toastOnUi(getString(R.string.backup_fail, it.localizedMessage))
                     }
                 } else {
                     backupDir.launch(null)
@@ -261,7 +268,8 @@ class BackupConfigFragment : BasePreferenceFragment(),
                 }.onSuccess {
                     appCtx.toastOnUi(R.string.backup_success)
                 }.onError {
-                    appCtx.toastOnUi(R.string.backup_fail)
+                    AppLog.put("备份出错\n${it.localizedMessage}", it)
+                    appCtx.toastOnUi(getString(R.string.backup_fail, it.localizedMessage))
                 }
             }
             .request()
@@ -278,7 +286,7 @@ class BackupConfigFragment : BasePreferenceFragment(),
                     restoreFromLocal()
                 }
                 cancelButton()
-            }.show()
+            }
         }
     }
 

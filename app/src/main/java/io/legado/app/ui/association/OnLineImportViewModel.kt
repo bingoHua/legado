@@ -9,7 +9,7 @@ import io.legado.app.data.entities.HttpTTS
 import io.legado.app.data.entities.TxtTocRule
 import io.legado.app.help.ReadBookConfig
 import io.legado.app.help.ThemeConfig
-import io.legado.app.help.http.newCall
+import io.legado.app.help.http.newCallResponseBody
 import io.legado.app.help.http.okHttpClient
 import io.legado.app.help.http.text
 import io.legado.app.model.NoStackTraceException
@@ -25,7 +25,7 @@ class OnLineImportViewModel(app: Application) : BaseViewModel(app) {
 
     fun getText(url: String, success: (text: String) -> Unit) {
         execute {
-            okHttpClient.newCall {
+            okHttpClient.newCallResponseBody {
                 url(url)
             }.text("utf-8")
         }.onSuccess {
@@ -40,7 +40,7 @@ class OnLineImportViewModel(app: Application) : BaseViewModel(app) {
     fun getBytes(url: String, success: (bytes: ByteArray) -> Unit) {
         execute {
             @Suppress("BlockingMethodInNonBlockingContext")
-            okHttpClient.newCall {
+            okHttpClient.newCallResponseBody {
                 url(url)
             }.bytes()
         }.onSuccess {
@@ -76,12 +76,12 @@ class OnLineImportViewModel(app: Application) : BaseViewModel(app) {
     fun importHttpTTS(json: String, finally: (title: String, msg: String) -> Unit) {
         execute {
             if (json.isJsonArray()) {
-                GSON.fromJsonArray<HttpTTS>(json)?.let {
+                HttpTTS.fromJsonArray(json).let {
                     appDb.httpTTSDao.insert(*it.toTypedArray())
                     return@execute it.size
-                } ?: throw NoStackTraceException("格式不对")
+                }
             } else {
-                GSON.fromJsonObject<HttpTTS>(json)?.let {
+                HttpTTS.fromJson(json)?.let {
                     appDb.httpTTSDao.insert(it)
                     return@execute 1
                 } ?: throw NoStackTraceException("格式不对")
@@ -140,7 +140,7 @@ class OnLineImportViewModel(app: Application) : BaseViewModel(app) {
 
     fun determineType(url: String, finally: (title: String, msg: String) -> Unit) {
         execute {
-            val rs = okHttpClient.newCall {
+            val rs = okHttpClient.newCallResponseBody {
                 url(url)
             }
             when (rs.contentType()) {
@@ -164,6 +164,7 @@ class OnLineImportViewModel(app: Application) : BaseViewModel(app) {
                             importTextTocRule(json, finally)
                         json.contains("name") && json.contains("url") ->
                             importTextTocRule(json, finally)
+                        else -> errorLive.postValue("格式不对")
                     }
                 }
             }

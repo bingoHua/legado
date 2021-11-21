@@ -1,7 +1,6 @@
 package io.legado.app.ui.rss.source.manage
 
 import android.annotation.SuppressLint
-import android.content.Intent
 import android.os.Bundle
 import android.view.Menu
 import android.view.MenuItem
@@ -19,7 +18,7 @@ import io.legado.app.databinding.ActivityRssSourceBinding
 import io.legado.app.databinding.DialogEditTextBinding
 import io.legado.app.help.DirectLinkUpload
 import io.legado.app.lib.dialogs.alert
-import io.legado.app.lib.theme.ATH
+import io.legado.app.lib.theme.primaryColor
 import io.legado.app.lib.theme.primaryTextColor
 import io.legado.app.ui.association.ImportRssSourceDialog
 import io.legado.app.ui.document.HandleFileContract
@@ -53,14 +52,14 @@ class RssSourceActivity : VMBaseActivity<ActivityRssSourceBinding, RssSourceView
     private var groupMenu: SubMenu? = null
     private val qrCodeResult = registerForActivityResult(QrCodeResult()) {
         it ?: return@registerForActivityResult
-        supportFragmentManager.showDialog(
+        showDialogFragment(
             ImportRssSourceDialog(it)
         )
     }
-    private val importDoc = registerForActivityResult(HandleFileContract()) { uri ->
+    private val importDoc = registerForActivityResult(HandleFileContract()) {
         kotlin.runCatching {
-            uri?.readText(this)?.let {
-                supportFragmentManager.showDialog(
+            it.uri?.readText(this)?.let {
+                showDialogFragment(
                     ImportRssSourceDialog(it)
                 )
             }
@@ -68,23 +67,24 @@ class RssSourceActivity : VMBaseActivity<ActivityRssSourceBinding, RssSourceView
             toastOnUi("readTextError:${it.localizedMessage}")
         }
     }
-    private val exportResult = registerForActivityResult(HandleFileContract()) { uri ->
-        uri ?: return@registerForActivityResult
-        alert(R.string.export_success) {
-            if (uri.toString().isAbsUrl()) {
-                DirectLinkUpload.getSummary()?.let { summary ->
-                    setMessage(summary)
+    private val exportResult = registerForActivityResult(HandleFileContract()) {
+        it.uri?.let { uri ->
+            alert(R.string.export_success) {
+                if (uri.toString().isAbsUrl()) {
+                    DirectLinkUpload.getSummary()?.let { summary ->
+                        setMessage(summary)
+                    }
+                }
+                val alertBinding = DialogEditTextBinding.inflate(layoutInflater).apply {
+                    editView.hint = getString(R.string.path)
+                    editView.setText(uri.toString())
+                }
+                customView { alertBinding.root }
+                okButton {
+                    sendToClip(uri.toString())
                 }
             }
-            val alertBinding = DialogEditTextBinding.inflate(layoutInflater).apply {
-                editView.hint = getString(R.string.path)
-                editView.setText(uri.toString())
-            }
-            customView { alertBinding.root }
-            okButton {
-                sendToClip(uri.toString())
-            }
-        }.show()
+        }
     }
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
@@ -92,7 +92,7 @@ class RssSourceActivity : VMBaseActivity<ActivityRssSourceBinding, RssSourceView
         initSearchView()
         initGroupFlow()
         upSourceFlow()
-        initViewEvent()
+        initSelectActionBar()
     }
 
     override fun onCompatCreateOptionsMenu(menu: Menu): Boolean {
@@ -115,11 +115,7 @@ class RssSourceActivity : VMBaseActivity<ActivityRssSourceBinding, RssSourceView
             }
             R.id.menu_import_onLine -> showImportDialog()
             R.id.menu_import_qr -> qrCodeResult.launch(null)
-            R.id.menu_group_manage -> GroupManageDialog()
-                .show(supportFragmentManager, "rssGroupManage")
-            R.id.menu_share_source -> viewModel.shareSelection(adapter.selection) {
-                startActivity(Intent.createChooser(it, getString(R.string.share_selected_source)))
-            }
+            R.id.menu_group_manage -> showDialogFragment<GroupManageDialog>()
             R.id.menu_import_default -> viewModel.importDefault()
             R.id.menu_help -> showHelp()
             else -> if (item.groupId == R.id.source_group) {
@@ -134,23 +130,23 @@ class RssSourceActivity : VMBaseActivity<ActivityRssSourceBinding, RssSourceView
         when (item?.itemId) {
             R.id.menu_enable_selection -> viewModel.enableSelection(adapter.selection)
             R.id.menu_disable_selection -> viewModel.disableSelection(adapter.selection)
-            R.id.menu_del_selection -> viewModel.delSelection(adapter.selection)
-            R.id.menu_export_selection -> exportResult.launch {
-                mode = HandleFileContract.EXPORT
-                fileData = Triple(
-                    "exportRssSource.json",
-                    GSON.toJson(adapter.selection).toByteArray(),
-                    "application/json"
-                )
-            }
             R.id.menu_top_sel -> viewModel.topSource(*adapter.selection.toTypedArray())
             R.id.menu_bottom_sel -> viewModel.bottomSource(*adapter.selection.toTypedArray())
+            R.id.menu_export_selection -> viewModel.saveToFile(adapter.selection) { file ->
+                exportResult.launch {
+                    mode = HandleFileContract.EXPORT
+                    fileData = Triple("exportRssSource.json", file, "application/json")
+                }
+            }
+            R.id.menu_share_source -> viewModel.saveToFile(adapter.selection) {
+                share(it)
+            }
         }
         return true
     }
 
     private fun initRecyclerView() {
-        ATH.applyEdgeEffectColor(binding.recyclerView)
+        binding.recyclerView.setEdgeEffectColor(primaryColor)
         binding.recyclerView.addItemDecoration(VerticalDivider(this))
         binding.recyclerView.adapter = adapter
         // When this page is opened, it is in selection mode
@@ -166,7 +162,7 @@ class RssSourceActivity : VMBaseActivity<ActivityRssSourceBinding, RssSourceView
 
     private fun initSearchView() {
         binding.titleBar.findViewById<SearchView>(R.id.search_view).let {
-            ATH.setTint(it, primaryTextColor)
+            it.applyTint(primaryTextColor)
             it.onActionViewExpanded()
             it.queryHint = getString(R.string.search_rss_source)
             it.clearFocus()
@@ -181,6 +177,13 @@ class RssSourceActivity : VMBaseActivity<ActivityRssSourceBinding, RssSourceView
                 }
             })
         }
+    }
+
+    private fun initSelectActionBar() {
+        binding.selectActionBar.setMainActionText(R.string.delete)
+        binding.selectActionBar.inflateMenu(R.menu.rss_source_sel)
+        binding.selectActionBar.setOnMenuItemClickListener(this)
+        binding.selectActionBar.setCallBack(this)
     }
 
     private fun initGroupFlow() {
@@ -207,22 +210,15 @@ class RssSourceActivity : VMBaseActivity<ActivityRssSourceBinding, RssSourceView
         adapter.revertSelection()
     }
 
-    override fun onClickMainAction() {
+    override fun onClickSelectBarMainAction() {
         delSourceDialog()
-    }
-
-    private fun initViewEvent() {
-        binding.selectActionBar.setMainActionText(R.string.delete)
-        binding.selectActionBar.inflateMenu(R.menu.rss_source_sel)
-        binding.selectActionBar.setOnMenuItemClickListener(this)
-        binding.selectActionBar.setCallBack(this)
     }
 
     private fun delSourceDialog() {
         alert(titleResource = R.string.draw, messageResource = R.string.sure_del) {
-            okButton { viewModel.delSelection(adapter.selection) }
+            okButton { viewModel.del(*adapter.selection.toTypedArray()) }
             noButton()
-        }.show()
+        }
     }
 
     private fun upGroupMenu() = groupMenu?.let { menu ->
@@ -256,7 +252,7 @@ class RssSourceActivity : VMBaseActivity<ActivityRssSourceBinding, RssSourceView
 
     private fun showHelp() {
         val text = String(assets.open("help/SourceMRssHelp.md").readBytes())
-        TextDialog.show(supportFragmentManager, text, TextDialog.MD)
+        showDialogFragment(TextDialog(text, TextDialog.Mode.MD))
     }
 
     override fun upCountView() {
@@ -290,13 +286,13 @@ class RssSourceActivity : VMBaseActivity<ActivityRssSourceBinding, RssSourceView
                         cacheUrls.add(0, it)
                         aCache.put(importRecordKey, cacheUrls.joinToString(","))
                     }
-                    supportFragmentManager.showDialog(
+                    showDialogFragment(
                         ImportRssSourceDialog(it)
                     )
                 }
             }
             cancelButton()
-        }.show()
+        }
     }
 
     override fun del(source: RssSource) {
@@ -305,7 +301,7 @@ class RssSourceActivity : VMBaseActivity<ActivityRssSourceBinding, RssSourceView
 
     override fun edit(source: RssSource) {
         startActivity<RssSourceEditActivity> {
-            putExtra("data", source.sourceUrl)
+            putExtra("sourceUrl", source.sourceUrl)
         }
     }
 

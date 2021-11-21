@@ -1,13 +1,16 @@
 package io.legado.app.model.localBook
 
 import android.net.Uri
-import android.util.Log
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookChapter
-import io.legado.app.utils.*
+import io.legado.app.utils.FileUtils
+import io.legado.app.utils.MD5Utils
+import io.legado.app.utils.externalFiles
+import io.legado.app.utils.isContentScheme
 import me.ag2s.umdlib.domain.UmdBook
 import me.ag2s.umdlib.umd.UmdReader
 import splitties.init.appCtx
+import timber.log.Timber
 import java.io.File
 import java.io.InputStream
 import java.util.*
@@ -79,7 +82,7 @@ class UmdFile(var book: Book) {
                 }
             }
         } catch (e: Exception) {
-            e.printOnDebug()
+            Timber.e(e)
         }
     }
 
@@ -118,7 +121,7 @@ class UmdFile(var book: Book) {
             chapter.index = index
             chapter.bookUrl = book.bookUrl
             chapter.url = index.toString()
-            Log.d("UMD", chapter.url)
+            Timber.d(chapter.url)
             chapterList.add(chapter)
         }
         book.latestChapterTitle = chapterList.lastOrNull()?.title

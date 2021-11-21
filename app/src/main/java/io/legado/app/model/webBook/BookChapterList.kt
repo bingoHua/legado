@@ -63,11 +63,11 @@ object BookChapterList {
                 while (nextUrl.isNotEmpty() && !nextUrlList.contains(nextUrl)) {
                     nextUrlList.add(nextUrl)
                     AnalyzeUrl(
-                        ruleUrl = nextUrl,
-                        book = book,
+                        mUrl = nextUrl,
                         source = bookSource,
+                        ruleData = book,
                         headerMapF = bookSource.getHeaderMap()
-                    ).getStrResponse().body?.let { nextBody ->
+                    ).getStrResponseAwait().body?.let { nextBody ->
                         chapterData = analyzeChapterList(
                             scope, book, nextUrl, nextUrl,
                             nextBody, tocRule, listRule, bookSource
@@ -85,12 +85,12 @@ object BookChapterList {
                         async(IO) {
                             val urlStr = chapterData.second[it]
                             val analyzeUrl = AnalyzeUrl(
-                                ruleUrl = urlStr,
-                                book = book,
+                                mUrl = urlStr,
                                 source = bookSource,
+                                ruleData = book,
                                 headerMapF = bookSource.getHeaderMap()
                             )
-                            val res = analyzeUrl.getStrResponse()
+                            val res = analyzeUrl.getStrResponseAwait()
                             analyzeChapterList(
                                 this, book, urlStr, res.url,
                                 res.body!!, tocRule, listRule, bookSource, false
@@ -156,7 +156,7 @@ object BookChapterList {
         val nextTocRule = tocRule.nextTocUrl
         if (getNextUrl && !nextTocRule.isNullOrEmpty()) {
             Debug.log(bookSource.bookSourceUrl, "┌获取目录下一页列表", log)
-            analyzeRule.getStringList(nextTocRule, true)?.let {
+            analyzeRule.getStringList(nextTocRule, isUrl = true)?.let {
                 for (item in it) {
                     if (item != baseUrl) {
                         nextUrlList.add(item)
@@ -177,9 +177,7 @@ object BookChapterList {
             val vipRule = analyzeRule.splitSourceRule(tocRule.isVip)
             val payRule = analyzeRule.splitSourceRule(tocRule.isPay)
             val upTimeRule = analyzeRule.splitSourceRule(tocRule.updateTime)
-            var isVip: String?
-            var isPay: String?
-            for (item in elements) {
+            elements.forEachIndexed { index, item ->
                 scope.ensureActive()
                 analyzeRule.setContent(item)
                 val bookChapter = BookChapter(bookUrl = book.bookUrl, baseUrl = baseUrl)
@@ -187,12 +185,13 @@ object BookChapterList {
                 bookChapter.title = analyzeRule.getString(nameRule)
                 bookChapter.url = analyzeRule.getString(urlRule)
                 bookChapter.tag = analyzeRule.getString(upTimeRule)
-                isVip = analyzeRule.getString(vipRule)
-                isPay = analyzeRule.getString(payRule)
                 if (bookChapter.url.isEmpty()) {
                     bookChapter.url = baseUrl
+                    Debug.log(bookSource.bookSourceUrl, "目录${index}未获取到url,使用baseUrl替代")
                 }
                 if (bookChapter.title.isNotEmpty()) {
+                    val isVip = analyzeRule.getString(vipRule)
+                    val isPay = analyzeRule.getString(payRule)
                     if (isVip.isNotEmpty() && !isVip.matches(falseRegex)) {
                         bookChapter.isVip = true
                     }

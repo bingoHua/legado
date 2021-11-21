@@ -6,7 +6,8 @@ import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
 import androidx.annotation.RequiresApi
 import io.legado.app.constant.IntentAction
-import io.legado.app.utils.printOnDebug
+import timber.log.Timber
+
 
 /**
  * web服务快捷开关
@@ -17,17 +18,17 @@ class WebTileService : TileService() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         try {
             when (intent?.action) {
-                IntentAction.start -> {
-                    qsTile.state = Tile.STATE_ACTIVE
-                    qsTile.updateTile()
+                IntentAction.start -> qsTile?.run {
+                    state = Tile.STATE_ACTIVE
+                    updateTile()
                 }
-                IntentAction.stop -> {
-                    qsTile.state = Tile.STATE_INACTIVE
-                    qsTile.updateTile()
+                IntentAction.stop -> qsTile?.run {
+                    state = Tile.STATE_INACTIVE
+                    updateTile()
                 }
             }
         } catch (e: Exception) {
-            e.printOnDebug()
+            Timber.e(e)
         }
         return super.onStartCommand(intent, flags, startId)
     }

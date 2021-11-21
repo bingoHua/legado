@@ -1,6 +1,5 @@
 package io.legado.app.model
 
-import androidx.lifecycle.MutableLiveData
 import io.legado.app.constant.AppLog
 import io.legado.app.constant.BookType
 import io.legado.app.data.appDb
@@ -17,25 +16,25 @@ import io.legado.app.ui.book.read.page.entities.TextChapter
 import io.legado.app.ui.book.read.page.provider.ChapterProvider
 import io.legado.app.ui.book.read.page.provider.ImageProvider
 import io.legado.app.utils.msg
-import io.legado.app.utils.printOnDebug
+
 import io.legado.app.utils.toastOnUi
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.delay
 import splitties.init.appCtx
+import timber.log.Timber
 
 
 @Suppress("MemberVisibilityCanBePrivate")
 object ReadBook : CoroutineScope by MainScope() {
-    var titleDate = MutableLiveData<String>()
     var book: Book? = null
+    var callBack: CallBack? = null
     var inBookshelf = false
     var chapterSize = 0
     var durChapterIndex = 0
     var durChapterPos = 0
     var isLocalBook = true
-    var callBack: CallBack? = null
     var prevTextChapter: TextChapter? = null
     var curTextChapter: TextChapter? = null
     var nextTextChapter: TextChapter? = null
@@ -53,15 +52,26 @@ object ReadBook : CoroutineScope by MainScope() {
         durChapterIndex = book.durChapterIndex
         durChapterPos = book.durChapterPos
         isLocalBook = book.origin == BookType.local
-        chapterSize = book.totalChapterNum
         clearTextChapter()
-        titleDate.postValue(book.name)
+        callBack?.upMenuView()
         callBack?.upPageAnim()
         upWebBook(book)
         ImageProvider.clearAllCache()
         synchronized(this) {
             loadingChapters.clear()
         }
+    }
+
+    fun upData(book: Book) {
+        ReadBook.book = book
+        chapterSize = appDb.bookChapterDao.getChapterCount(book.bookUrl)
+        if (durChapterIndex != book.durChapterIndex) {
+            durChapterIndex = book.durChapterIndex
+            durChapterPos = book.durChapterPos
+            clearTextChapter()
+        }
+        callBack?.upMenuView()
+        upWebBook(book)
     }
 
     fun upWebBook(book: Book) {
@@ -96,11 +106,9 @@ object ReadBook : CoroutineScope by MainScope() {
         nextTextChapter = null
     }
 
-    fun uploadProgress(syncBookProgress: Boolean = AppConfig.syncBookProgress) {
-        if (syncBookProgress) {
-            book?.let {
-                AppWebDav.uploadBookProgress(it)
-            }
+    fun uploadProgress() {
+        book?.let {
+            AppWebDav.uploadBookProgress(it)
         }
     }
 
@@ -139,7 +147,7 @@ object ReadBook : CoroutineScope by MainScope() {
             }
             loadContent(durChapterIndex.plus(1), upContent, false)
             saveRead()
-            callBack?.upView()
+            callBack?.upMenuView()
             curPageChanged()
             return true
         } else {
@@ -164,7 +172,7 @@ object ReadBook : CoroutineScope by MainScope() {
             }
             loadContent(durChapterIndex.minus(1), upContent, false)
             saveRead()
-            callBack?.upView()
+            callBack?.upMenuView()
             curPageChanged()
             return true
         } else {
@@ -261,7 +269,7 @@ object ReadBook : CoroutineScope by MainScope() {
                 } ?: removeLoading(index)
             }.onError {
                 removeLoading(index)
-                AppLog.addLog("加载正文出错\n${it.localizedMessage}")
+                AppLog.put("加载正文出错\n${it.localizedMessage}")
             }
         }
     }
@@ -352,7 +360,7 @@ object ReadBook : CoroutineScope by MainScope() {
                     0 -> {
                         curTextChapter = textChapter
                         if (upContent) callBack?.upContent(offset, resetPageOffset)
-                        callBack?.upView()
+                        callBack?.upMenuView()
                         curPageChanged()
                         callBack?.contentLoadFinish()
                     }
@@ -367,7 +375,7 @@ object ReadBook : CoroutineScope by MainScope() {
                 }
             }
         }.onError {
-            it.printOnDebug()
+            Timber.e(it)
             appCtx.toastOnUi("ChapterProvider ERROR:\n${it.msg}")
         }.onSuccess {
             success?.invoke()
@@ -444,6 +452,8 @@ object ReadBook : CoroutineScope by MainScope() {
     }
 
     interface CallBack {
+        fun upMenuView()
+
         fun loadChapterList(book: Book)
 
         fun upContent(
@@ -451,8 +461,6 @@ object ReadBook : CoroutineScope by MainScope() {
             resetPageOffset: Boolean = true,
             success: (() -> Unit)? = null
         )
-
-        fun upView()
 
         fun pageChanged()
 

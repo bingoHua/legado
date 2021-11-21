@@ -2,7 +2,6 @@ package io.legado.app.ui.book.group
 
 import android.content.Context
 import android.os.Bundle
-import android.view.LayoutInflater
 import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
@@ -25,14 +24,15 @@ import io.legado.app.lib.theme.primaryColor
 import io.legado.app.ui.widget.recycler.ItemTouchCallback
 import io.legado.app.ui.widget.recycler.VerticalDivider
 import io.legado.app.utils.applyTint
-import io.legado.app.utils.showDialog
+import io.legado.app.utils.setLayout
+import io.legado.app.utils.showDialogFragment
 import io.legado.app.utils.viewbindingdelegate.viewBinding
-import io.legado.app.utils.windowSize
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 
 
-class GroupSelectDialog() : BaseDialogFragment(), Toolbar.OnMenuItemClickListener {
+class GroupSelectDialog() : BaseDialogFragment(R.layout.dialog_book_group_picker),
+    Toolbar.OnMenuItemClickListener {
 
     constructor(groupId: Long, requestCode: Int = -1) : this() {
         arguments = Bundle().apply {
@@ -50,16 +50,7 @@ class GroupSelectDialog() : BaseDialogFragment(), Toolbar.OnMenuItemClickListene
 
     override fun onStart() {
         super.onStart()
-        val dm = requireActivity().windowSize
-        dialog?.window?.setLayout((dm.widthPixels * 0.9).toInt(), (dm.heightPixels * 0.9).toInt())
-    }
-
-    override fun onCreateView(
-        inflater: LayoutInflater,
-        container: ViewGroup?,
-        savedInstanceState: Bundle?
-    ): View? {
-        return inflater.inflate(R.layout.dialog_book_group_picker, container)
+        setLayout(0.9f, 0.9f)
     }
 
     override fun onFragmentCreated(view: View, savedInstanceState: Bundle?) {
@@ -104,7 +95,7 @@ class GroupSelectDialog() : BaseDialogFragment(), Toolbar.OnMenuItemClickListene
 
     override fun onMenuItemClick(item: MenuItem?): Boolean {
         when (item?.itemId) {
-            R.id.menu_add -> childFragmentManager.showDialog(
+            R.id.menu_add -> showDialogFragment(
                 GroupEditDialog()
             )
         }
@@ -148,7 +139,7 @@ class GroupSelectDialog() : BaseDialogFragment(), Toolbar.OnMenuItemClickListene
                     }
                 }
                 tvEdit.setOnClickListener {
-                    childFragmentManager.showDialog(
+                    showDialogFragment(
                         GroupEditDialog(getItem(holder.layoutPosition))
                     )
                 }

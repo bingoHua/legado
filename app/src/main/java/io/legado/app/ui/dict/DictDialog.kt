@@ -1,10 +1,7 @@
 package io.legado.app.ui.dict
 
-import android.os.Build
 import android.os.Bundle
-import android.text.Html
 import android.text.method.LinkMovementMethod
-import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import androidx.fragment.app.viewModels
@@ -12,13 +9,15 @@ import io.legado.app.R
 import io.legado.app.base.BaseDialogFragment
 import io.legado.app.databinding.DialogDictBinding
 import io.legado.app.utils.invisible
+import io.legado.app.utils.setHtml
+import io.legado.app.utils.setLayout
 import io.legado.app.utils.toastOnUi
 import io.legado.app.utils.viewbindingdelegate.viewBinding
 
 /**
  * 词典
  */
-class DictDialog() : BaseDialogFragment() {
+class DictDialog() : BaseDialogFragment(R.layout.dialog_dict) {
 
     constructor(word: String) : this() {
         arguments = Bundle().apply {
@@ -31,16 +30,7 @@ class DictDialog() : BaseDialogFragment() {
 
     override fun onStart() {
         super.onStart()
-        dialog?.window
-            ?.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
-    }
-
-    override fun onCreateView(
-        inflater: LayoutInflater,
-        container: ViewGroup?,
-        savedInstanceState: Bundle?,
-    ): View? {
-        return inflater.inflate(R.layout.dialog_dict, container)
+        setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
     }
 
     override fun onFragmentCreated(view: View, savedInstanceState: Bundle?) {
@@ -53,12 +43,7 @@ class DictDialog() : BaseDialogFragment() {
         }
         viewModel.dictHtmlData.observe(viewLifecycleOwner) {
             binding.rotateLoading.invisible()
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                binding.tvDict.text = Html.fromHtml(it, Html.FROM_HTML_MODE_LEGACY)
-            } else {
-                @Suppress("DEPRECATION")
-                binding.tvDict.text = Html.fromHtml(it)
-            }
+            binding.tvDict.setHtml(it)
         }
         viewModel.dict(word)
 

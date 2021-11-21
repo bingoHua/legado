@@ -3,7 +3,6 @@ package io.legado.app.ui.rss.source.manage
 import android.annotation.SuppressLint
 import android.content.Context
 import android.os.Bundle
-import android.view.LayoutInflater
 import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
@@ -30,23 +29,16 @@ import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 
 
-class GroupManageDialog : BaseDialogFragment(), Toolbar.OnMenuItemClickListener {
+class GroupManageDialog : BaseDialogFragment(R.layout.dialog_recycler_view),
+    Toolbar.OnMenuItemClickListener {
+
     private val viewModel: RssSourceViewModel by activityViewModels()
     private val binding by viewBinding(DialogRecyclerViewBinding::bind)
     private val adapter by lazy { GroupAdapter(requireContext()) }
 
     override fun onStart() {
         super.onStart()
-        val dm = requireActivity().windowSize
-        dialog?.window?.setLayout((dm.widthPixels * 0.9).toInt(), (dm.heightPixels * 0.9).toInt())
-    }
-
-    override fun onCreateView(
-        inflater: LayoutInflater,
-        container: ViewGroup?,
-        savedInstanceState: Bundle?
-    ): View? {
-        return inflater.inflate(R.layout.dialog_recycler_view, container)
+        setLayout(0.9f, 0.9f)
     }
 
     override fun onFragmentCreated(view: View, savedInstanceState: Bundle?) = binding.run {
@@ -100,7 +92,7 @@ class GroupManageDialog : BaseDialogFragment(), Toolbar.OnMenuItemClickListener 
                 }
             }
             noButton()
-        }.show().requestInputMethod()
+        }.requestInputMethod()
     }
 
     @SuppressLint("InflateParams")
@@ -115,7 +107,7 @@ class GroupManageDialog : BaseDialogFragment(), Toolbar.OnMenuItemClickListener 
                 viewModel.upGroup(group, alertBinding.editView.text?.toString())
             }
             noButton()
-        }.show().requestInputMethod()
+        }.requestInputMethod()
     }
 
     private inner class GroupAdapter(context: Context) :

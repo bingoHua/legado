@@ -18,6 +18,7 @@ import io.legado.app.databinding.ItemFindBookBinding
 import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.lib.theme.accentColor
 import io.legado.app.ui.login.SourceLoginActivity
+import io.legado.app.ui.widget.dialog.TextDialog
 import io.legado.app.utils.*
 import kotlinx.coroutines.CoroutineScope
 import splitties.views.onLongClick
@@ -95,7 +96,11 @@ class ExploreAdapter(context: Context, private val scope: CoroutineScope, val ca
                     tv.setOnClickListener(null)
                 } else {
                     tv.setOnClickListener {
-                        callBack.openExplore(sourceUrl, kind.title, kind.url)
+                        if (kind.title.startsWith("ERROR:")) {
+                            it.activity?.showDialogFragment(TextDialog(kind.url))
+                        } else {
+                            callBack.openExplore(sourceUrl, kind.title, kind.url)
+                        }
                     }
                 }
             }
@@ -159,7 +164,8 @@ class ExploreAdapter(context: Context, private val scope: CoroutineScope, val ca
                 R.id.menu_edit -> callBack.editSource(source.bookSourceUrl)
                 R.id.menu_top -> callBack.toTop(source)
                 R.id.menu_login -> context.startActivity<SourceLoginActivity> {
-                    putExtra("sourceUrl", source.bookSourceUrl)
+                    putExtra("type", "bookSource")
+                    putExtra("key", source.bookSourceUrl)
                 }
                 R.id.menu_refresh -> Coroutine.async(scope) {
                     ACache.get(context, "explore").remove(source.bookSourceUrl)

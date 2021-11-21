@@ -12,13 +12,12 @@ import android.view.View
 import android.widget.FrameLayout
 import androidx.appcompat.app.AppCompatActivity
 import androidx.viewbinding.ViewBinding
-import io.legado.app.App
 import io.legado.app.R
 import io.legado.app.constant.AppConst
+import io.legado.app.constant.AppLog
 import io.legado.app.constant.Theme
 import io.legado.app.help.AppConfig
 import io.legado.app.help.ThemeConfig
-import io.legado.app.lib.theme.ATH
 import io.legado.app.lib.theme.ThemeStore
 import io.legado.app.lib.theme.backgroundColor
 import io.legado.app.lib.theme.primaryColor
@@ -49,7 +48,7 @@ abstract class BaseActivity<VB : ViewBinding>(
         }
 
     override fun attachBaseContext(newBase: Context) {
-        super.attachBaseContext(LanguageUtils.setConfiguration(newBase))
+        super.attachBaseContext(AppContextWrapper.wrap(newBase))
     }
 
     override fun onCreateView(
@@ -78,13 +77,6 @@ abstract class BaseActivity<VB : ViewBinding>(
         observeLiveBus()
     }
 
-    override fun onWindowFocusChanged(hasFocus: Boolean) {
-        super.onWindowFocusChanged(hasFocus)
-        if (hasFocus) {
-            App.navigationBarHeight = navigationBarHeight
-        }
-    }
-
     override fun onMultiWindowModeChanged(isInMultiWindowMode: Boolean, newConfig: Configuration?) {
         super.onMultiWindowModeChanged(isInMultiWindowMode, newConfig)
         findViewById<TitleBar>(R.id.title_bar)
@@ -106,12 +98,12 @@ abstract class BaseActivity<VB : ViewBinding>(
 
     abstract fun onActivityCreated(savedInstanceState: Bundle?)
 
-    final override fun onCreateOptionsMenu(menu: Menu?): Boolean {
-        return menu?.let {
+    final override fun onCreateOptionsMenu(menu: Menu): Boolean {
+        return menu.let {
             val bool = onCompatCreateOptionsMenu(it)
             it.applyTint(this, toolBarTheme)
             bool
-        } ?: super.onCreateOptionsMenu(menu)
+        }
     }
 
     override fun onMenuOpened(featureId: Int, menu: Menu): Boolean {
@@ -136,11 +128,11 @@ abstract class BaseActivity<VB : ViewBinding>(
             Theme.Transparent -> setTheme(R.style.AppTheme_Transparent)
             Theme.Dark -> {
                 setTheme(R.style.AppTheme_Dark)
-                ATH.applyBackgroundTint(window.decorView)
+                window.decorView.applyBackgroundTint(backgroundColor)
             }
             Theme.Light -> {
                 setTheme(R.style.AppTheme_Light)
-                ATH.applyBackgroundTint(window.decorView)
+                window.decorView.applyBackgroundTint(backgroundColor)
             }
             else -> {
                 if (ColorUtils.isColorLight(primaryColor)) {
@@ -148,7 +140,7 @@ abstract class BaseActivity<VB : ViewBinding>(
                 } else {
                     setTheme(R.style.AppTheme_Dark)
                 }
-                ATH.applyBackgroundTint(window.decorView)
+                window.decorView.applyBackgroundTint(backgroundColor)
             }
         }
         if (imageBg) {
@@ -157,32 +149,34 @@ abstract class BaseActivity<VB : ViewBinding>(
                     window.decorView.background = BitmapDrawable(resources, it)
                 }
             } catch (e: OutOfMemoryError) {
-                toastOnUi(e.localizedMessage)
+                toastOnUi("背景图片太大,内存溢出")
             } catch (e: Exception) {
-                toastOnUi(e.localizedMessage)
+                AppLog.put("加载背景出错\n${e.localizedMessage}", e)
             }
         }
     }
 
     private fun setupSystemBar() {
         if (fullScreen && !isInMultiWindow) {
-            ATH.fullScreen(this)
+            fullScreen()
         }
-        ATH.setStatusBarColorAuto(this, fullScreen)
+        val isTransparentStatusBar = AppConfig.isTransparentStatusBar
+        val statusBarColor = ThemeStore.statusBarColor(this, isTransparentStatusBar)
+        setStatusBarColorAuto(statusBarColor, isTransparentStatusBar, fullScreen)
         if (toolBarTheme == Theme.Dark) {
-            ATH.setLightStatusBar(this, false)
+            setLightStatusBar(false)
         } else if (toolBarTheme == Theme.Light) {
-            ATH.setLightStatusBar(this, true)
+            setLightStatusBar(true)
         }
         upNavigationBarColor()
     }
 
     open fun upNavigationBarColor() {
         if (AppConfig.immNavigationBar) {
-            ATH.setNavigationBarColorAuto(this, ThemeStore.navigationBarColor(this))
+            setNavigationBarColorAuto(ThemeStore.navigationBarColor(this))
         } else {
             val nbColor = ColorUtils.darkenColor(ThemeStore.navigationBarColor(this))
-            ATH.setNavigationBarColorAuto(this, nbColor)
+            setNavigationBarColorAuto(nbColor)
         }
     }
 

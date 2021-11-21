@@ -1,7 +1,6 @@
 package io.legado.app.ui.book.group
 
 import android.os.Bundle
-import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import androidx.fragment.app.viewModels
@@ -15,7 +14,7 @@ import io.legado.app.utils.*
 import io.legado.app.utils.viewbindingdelegate.viewBinding
 import splitties.views.onClick
 
-class GroupEditDialog() : BaseDialogFragment() {
+class GroupEditDialog() : BaseDialogFragment(R.layout.dialog_book_group_edit) {
 
     constructor(bookGroup: BookGroup? = null) : this() {
         arguments = Bundle().apply {
@@ -27,7 +26,7 @@ class GroupEditDialog() : BaseDialogFragment() {
     private val viewModel by viewModels<GroupViewModel>()
     private var bookGroup: BookGroup? = null
     val selectImage = registerForActivityResult(SelectImageContract()) {
-        readUri(it?.second) { name, bytes ->
+        readUri(it?.uri) { name, bytes ->
             var file = requireContext().externalFiles
             file = FileUtils.createFileIfNotExist(file, "covers", name)
             file.writeBytes(bytes)
@@ -37,19 +36,10 @@ class GroupEditDialog() : BaseDialogFragment() {
 
     override fun onStart() {
         super.onStart()
-        val dm = requireActivity().windowSize
-        dialog?.window?.setLayout(
-            (dm.widthPixels * 0.9).toInt(),
+        setLayout(
+            0.9f,
             ViewGroup.LayoutParams.WRAP_CONTENT
         )
-    }
-
-    override fun onCreateView(
-        inflater: LayoutInflater,
-        container: ViewGroup?,
-        savedInstanceState: Bundle?
-    ): View? {
-        return inflater.inflate(R.layout.dialog_book_group_edit, container)
     }
 
     override fun onFragmentCreated(view: View, savedInstanceState: Bundle?) {
@@ -107,7 +97,7 @@ class GroupEditDialog() : BaseDialogFragment() {
                 ok.invoke()
             }
             noButton()
-        }.show()
+        }
     }
 
 }

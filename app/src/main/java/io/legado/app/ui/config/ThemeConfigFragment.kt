@@ -12,6 +12,7 @@ import android.view.View
 import android.widget.SeekBar
 import androidx.preference.Preference
 import io.legado.app.R
+import io.legado.app.base.AppContextWrapper
 import io.legado.app.base.BasePreferenceFragment
 import io.legado.app.constant.AppConst
 import io.legado.app.constant.EventBus
@@ -23,7 +24,7 @@ import io.legado.app.help.LauncherIconHelp
 import io.legado.app.help.ThemeConfig
 import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.dialogs.selector
-import io.legado.app.lib.theme.ATH
+import io.legado.app.lib.theme.primaryColor
 import io.legado.app.ui.widget.number.NumberPickerDialog
 import io.legado.app.ui.widget.prefs.ColorPreference
 import io.legado.app.ui.widget.seekbar.SeekBarChangeListener
@@ -37,13 +38,14 @@ class ThemeConfigFragment : BasePreferenceFragment(),
     private val requestCodeBgLight = 121
     private val requestCodeBgDark = 122
     private val selectImage = registerForActivityResult(SelectImageContract()) {
-        val uri = it?.second ?: return@registerForActivityResult
-        when (it.first) {
-            requestCodeBgLight -> setBgFromUri(uri, PreferKey.bgImage) {
-                upTheme(false)
-            }
-            requestCodeBgDark -> setBgFromUri(uri, PreferKey.bgImageN) {
-                upTheme(true)
+        it.uri?.let { uri ->
+            when (it.requestCode) {
+                requestCodeBgLight -> setBgFromUri(uri, PreferKey.bgImage) {
+                    upTheme(false)
+                }
+                requestCodeBgDark -> setBgFromUri(uri, PreferKey.bgImageN) {
+                    upTheme(true)
+                }
             }
         }
     }
@@ -56,6 +58,7 @@ class ThemeConfigFragment : BasePreferenceFragment(),
         upPreferenceSummary(PreferKey.bgImage, getPrefString(PreferKey.bgImage))
         upPreferenceSummary(PreferKey.bgImageN, getPrefString(PreferKey.bgImageN))
         upPreferenceSummary(PreferKey.barElevation, AppConfig.elevation.toString())
+        upPreferenceSummary(PreferKey.fontScale)
         findPreference<ColorPreference>(PreferKey.cBackground)?.let {
             it.onSaveColor = { color ->
                 if (!ColorUtils.isColorLight(color)) {
@@ -81,7 +84,7 @@ class ThemeConfigFragment : BasePreferenceFragment(),
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         activity?.setTitle(R.string.theme_setting)
-        ATH.applyEdgeEffectColor(listView)
+        listView.setEdgeEffectColor(primaryColor)
         setHasOptionsMenu(true)
     }
 
@@ -152,6 +155,19 @@ class ThemeConfigFragment : BasePreferenceFragment(),
                     AppConfig.elevation = it
                     recreateActivities()
                 }
+            PreferKey.fontScale -> NumberPickerDialog(requireContext())
+                .setTitle(getString(R.string.font_scale))
+                .setMaxValue(16)
+                .setMinValue(8)
+                .setValue(10)
+                .setCustomButton((R.string.btn_default_s)) {
+                    putPrefInt(PreferKey.fontScale, 0)
+                    recreateActivities()
+                }
+                .show {
+                    putPrefInt(PreferKey.fontScale, it)
+                    recreateActivities()
+                }
             PreferKey.bgImage -> selectBgAction(false)
             PreferKey.bgImageN -> selectBgAction(true)
             "themeList" -> ThemeListDialog().show(childFragmentManager, "themeList")
@@ -183,7 +199,7 @@ class ThemeConfigFragment : BasePreferenceFragment(),
                 }
             }
             noButton()
-        }.show()
+        }
     }
 
     private fun selectBgAction(isNight: Boolean) {
@@ -241,7 +257,7 @@ class ThemeConfigFragment : BasePreferenceFragment(),
                 }
             }
             noButton()
-        }.show()
+        }
     }
 
     private fun upTheme(isNightTheme: Boolean) {
@@ -257,11 +273,15 @@ class ThemeConfigFragment : BasePreferenceFragment(),
         postEvent(EventBus.RECREATE, "")
     }
 
-    private fun upPreferenceSummary(preferenceKey: String, value: String?) {
+    private fun upPreferenceSummary(preferenceKey: String, value: String? = null) {
         val preference = findPreference<Preference>(preferenceKey) ?: return
         when (preferenceKey) {
             PreferKey.barElevation -> preference.summary =
                 getString(R.string.bar_elevation_s, value)
+            PreferKey.fontScale -> {
+                val fontScale = AppContextWrapper.getFontScale(requireContext())
+                preference.summary = getString(R.string.font_scale_summary, fontScale)
+            }
             PreferKey.bgImage,
             PreferKey.bgImageN -> preference.summary = if (value.isNullOrBlank()) {
                 getString(R.string.select_image)

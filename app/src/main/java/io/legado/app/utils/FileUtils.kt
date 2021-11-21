@@ -3,8 +3,8 @@ package io.legado.app.utils
 import android.os.Environment
 import android.webkit.MimeTypeMap
 import androidx.annotation.IntDef
-import io.legado.app.ui.document.utils.ConvertUtils
 import splitties.init.appCtx
+import timber.log.Timber
 import java.io.*
 import java.nio.charset.Charset
 import java.text.SimpleDateFormat
@@ -13,10 +13,6 @@ import java.util.regex.Pattern
 
 @Suppress("unused", "MemberVisibilityCanBePrivate")
 object FileUtils {
-
-    fun exists(root: File, vararg subDirFiles: String): Boolean {
-        return getFile(root, *subDirFiles).exists()
-    }
 
     fun createFileIfNotExist(root: File, vararg subDirFiles: String): File {
         val filePath = getPath(root, *subDirFiles)
@@ -50,7 +46,7 @@ object FileUtils {
                 file.createNewFile()
             }
         } catch (e: IOException) {
-            e.printOnDebug()
+            Timber.e(e)
         }
         return file
     }
@@ -71,9 +67,17 @@ object FileUtils {
         return file
     }
 
-    fun getFile(root: File, vararg subDirFiles: String): File {
-        val filePath = getPath(root, *subDirFiles)
-        return File(filePath)
+    fun getPath(rootPath: String, vararg subDirFiles: String): String {
+        val path = StringBuilder(rootPath)
+        subDirFiles.forEach {
+            if (it.isNotEmpty()) {
+                if (!path.endsWith(File.separator)) {
+                    path.append(File.separator)
+                }
+                path.append(it)
+            }
+        }
+        return path.toString()
     }
 
     fun getPath(root: File, vararg subDirFiles: String): String {
@@ -112,8 +116,8 @@ object FileUtils {
         var sdCardDirectory = Environment.getExternalStorageDirectory().absolutePath
         try {
             sdCardDirectory = File(sdCardDirectory).canonicalPath
-        } catch (ioe: IOException) {
-            ioe.printOnDebug()
+        } catch (e: IOException) {
+            Timber.e(e)
         }
         return sdCardDirectory
     }
@@ -162,20 +166,19 @@ object FileUtils {
     fun listDirs(
         startDirPath: String,
         excludeDirs: Array<String>? = null, @SortType sortType: Int = BY_NAME_ASC
-    ): Array<File?> {
+    ): Array<File> {
         var excludeDirs1 = excludeDirs
         val dirList = ArrayList<File>()
         val startDir = File(startDirPath)
         if (!startDir.isDirectory) {
-            return arrayOfNulls(0)
+            return arrayOf()
         }
         val dirs = startDir.listFiles(FileFilter { f ->
             if (f == null) {
                 return@FileFilter false
             }
             f.isDirectory
-        })
-            ?: return arrayOfNulls(0)
+        }) ?: return arrayOf()
         if (excludeDirs1 == null) {
             excludeDirs1 = arrayOf()
         }
@@ -217,22 +220,18 @@ object FileUtils {
     fun listDirsAndFiles(
         startDirPath: String,
         allowExtensions: Array<String>? = null
-    ): Array<File?>? {
-        val dirs: Array<File?>?
-        val files: Array<File?>? = if (allowExtensions == null) {
+    ): Array<File>? {
+        val dirs: Array<File>?
+        val files: Array<File>? = if (allowExtensions == null) {
             listFiles(startDirPath)
         } else {
             listFiles(startDirPath, allowExtensions)
         }
-        val dirsAndFiles: Array<File?>
         dirs = listDirs(startDirPath)
         if (files == null) {
             return null
         }
-        dirsAndFiles = arrayOfNulls(dirs.size + files.size)
-        System.arraycopy(dirs, 0, dirsAndFiles, 0, dirs.size)
-        System.arraycopy(files, 0, dirsAndFiles, dirs.size, files.size)
-        return dirsAndFiles
+        return dirs + files
     }
 
     /**
@@ -242,11 +241,11 @@ object FileUtils {
     fun listFiles(
         startDirPath: String,
         filterPattern: Pattern? = null, @SortType sortType: Int = BY_NAME_ASC
-    ): Array<File?> {
+    ): Array<File> {
         val fileList = ArrayList<File>()
         val f = File(startDirPath)
         if (!f.isDirectory) {
-            return arrayOfNulls(0)
+            return arrayOf()
         }
         val files = f.listFiles(FileFilter { file ->
             if (file == null) {
@@ -258,7 +257,7 @@ object FileUtils {
 
             filterPattern?.matcher(file.name)?.find() ?: true
         })
-            ?: return arrayOfNulls(0)
+            ?: return arrayOf()
         for (file in files) {
             fileList.add(file.absoluteFile)
         }
@@ -290,7 +289,7 @@ object FileUtils {
     /**
      * 列出指定目录下的所有文件
      */
-    fun listFiles(startDirPath: String, allowExtensions: Array<String>?): Array<File?>? {
+    fun listFiles(startDirPath: String, allowExtensions: Array<String>?): Array<File>? {
         val file = File(startDirPath)
         return file.listFiles { _, name ->
             //返回当前目录所有以某些扩展名结尾的文件
@@ -303,7 +302,7 @@ object FileUtils {
     /**
      * 列出指定目录下的所有文件
      */
-    fun listFiles(startDirPath: String, allowExtension: String?): Array<File?>? {
+    fun listFiles(startDirPath: String, allowExtension: String?): Array<File>? {
         return if (allowExtension == null)
             listFiles(startDirPath, allowExtension = null)
         else
@@ -623,7 +622,7 @@ object FileUtils {
      */
     fun getSize(path: String): String {
         val fileSize = getLength(path)
-        return ConvertUtils.toFileSizeString(fileSize)
+        return ConvertUtils.formatFileSize(fileSize)
     }
 
     /**

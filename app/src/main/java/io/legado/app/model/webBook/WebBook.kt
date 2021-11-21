@@ -7,6 +7,7 @@ import io.legado.app.data.entities.SearchBook
 import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.help.http.StrResponse
 import io.legado.app.model.Debug
+import io.legado.app.model.NoStackTraceException
 import io.legado.app.model.analyzeRule.AnalyzeUrl
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -15,32 +16,6 @@ import kotlin.coroutines.CoroutineContext
 
 @Suppress("MemberVisibilityCanBePrivate")
 object WebBook {
-    /**
-     * 精准搜索
-     */
-    suspend fun preciseSearch(
-        scope: CoroutineScope,
-        bookSources: List<BookSource>,
-        name: String,
-        author: String
-    ): Pair<BookSource, Book>? {
-        bookSources.forEach { source ->
-            kotlin.runCatching {
-                if (!scope.isActive) return null
-                searchBookAwait(scope, source, name).firstOrNull {
-                    it.name == name && it.author == author
-                }?.let { searchBook ->
-                    if (!scope.isActive) return null
-                    var book = searchBook.toBook()
-                    if (book.tocUrl.isBlank()) {
-                        book = getBookInfoAwait(scope, source, book)
-                    }
-                    return Pair(source, book)
-                }
-            }
-        }
-        return null
-    }
 
     /**
      * 搜索
@@ -66,19 +41,19 @@ object WebBook {
         val variableBook = SearchBook()
         bookSource.searchUrl?.let { searchUrl ->
             val analyzeUrl = AnalyzeUrl(
-                ruleUrl = searchUrl,
+                mUrl = searchUrl,
                 key = key,
                 page = page,
                 baseUrl = bookSource.bookSourceUrl,
                 headerMapF = bookSource.getHeaderMap(true),
-                book = variableBook,
-                source = bookSource
+                source = bookSource,
+                ruleData = variableBook,
             )
-            var res = analyzeUrl.getStrResponse()
+            var res = analyzeUrl.getStrResponseAwait()
             //检测书源是否已登录
             bookSource.loginCheckJs?.let { checkJs ->
                 if (checkJs.isNotBlank()) {
-                    res = analyzeUrl.evalJS(checkJs) as StrResponse
+                    res = analyzeUrl.evalJS(checkJs, res) as StrResponse
                 }
             }
             return BookList.analyzeBookList(
@@ -117,14 +92,14 @@ object WebBook {
     ): ArrayList<SearchBook> {
         val variableBook = SearchBook()
         val analyzeUrl = AnalyzeUrl(
-            ruleUrl = url,
+            mUrl = url,
             page = page,
             baseUrl = bookSource.bookSourceUrl,
-            book = variableBook,
             source = bookSource,
+            ruleData = variableBook,
             headerMapF = bookSource.getHeaderMap(true)
         )
-        var res = analyzeUrl.getStrResponse()
+        var res = analyzeUrl.getStrResponseAwait()
         //检测书源是否已登录
         bookSource.loginCheckJs?.let { checkJs ->
             if (checkJs.isNotBlank()) {
@@ -176,13 +151,13 @@ object WebBook {
             )
         } else {
             val analyzeUrl = AnalyzeUrl(
-                ruleUrl = book.bookUrl,
+                mUrl = book.bookUrl,
                 baseUrl = bookSource.bookSourceUrl,
-                book = book,
                 source = bookSource,
+                ruleData = book,
                 headerMapF = bookSource.getHeaderMap(true)
             )
-            var res = analyzeUrl.getStrResponse()
+            var res = analyzeUrl.getStrResponseAwait()
             //检测书源是否已登录
             bookSource.loginCheckJs?.let { checkJs ->
                 if (checkJs.isNotBlank()) {
@@ -233,13 +208,13 @@ object WebBook {
             )
         } else {
             val analyzeUrl = AnalyzeUrl(
-                ruleUrl = book.tocUrl,
+                mUrl = book.tocUrl,
                 baseUrl = book.bookUrl,
-                book = book,
                 source = bookSource,
+                ruleData = book,
                 headerMapF = bookSource.getHeaderMap(true)
             )
-            var res = analyzeUrl.getStrResponse()
+            var res = analyzeUrl.getStrResponseAwait()
             //检测书源是否已登录
             bookSource.loginCheckJs?.let { checkJs ->
                 if (checkJs.isNotBlank()) {
@@ -297,14 +272,14 @@ object WebBook {
             )
         } else {
             val analyzeUrl = AnalyzeUrl(
-                ruleUrl = bookChapter.getAbsoluteURL(),
+                mUrl = bookChapter.getAbsoluteURL(),
                 baseUrl = book.tocUrl,
-                book = book,
                 source = bookSource,
+                ruleData = book,
                 chapter = bookChapter,
                 headerMapF = bookSource.getHeaderMap(true)
             )
-            var res = analyzeUrl.getStrResponse(
+            var res = analyzeUrl.getStrResponseAwait(
                 jsStr = bookSource.getContentRule().webJs,
                 sourceRegex = bookSource.getContentRule().sourceRegex
             )
@@ -326,4 +301,45 @@ object WebBook {
             )
         }
     }
+
+    /**
+     * 精准搜索
+     */
+    fun preciseSearch(
+        scope: CoroutineScope,
+        bookSources: List<BookSource>,
+        name: String,
+        author: String,
+        context: CoroutineContext = Dispatchers.IO,
+    ): Coroutine<Pair<BookSource, Book>> {
+        return Coroutine.async(scope, context) {
+            preciseSearchAwait(scope, bookSources, name, author)
+                ?: throw NoStackTraceException("没有搜索到<$name>$author")
+        }
+    }
+
+    suspend fun preciseSearchAwait(
+        scope: CoroutineScope,
+        bookSources: List<BookSource>,
+        name: String,
+        author: String
+    ): Pair<BookSource, Book>? {
+        bookSources.forEach { source ->
+            kotlin.runCatching {
+                if (!scope.isActive) return null
+                searchBookAwait(scope, source, name).firstOrNull {
+                    it.name == name && it.author == author
+                }?.let { searchBook ->
+                    if (!scope.isActive) return null
+                    var book = searchBook.toBook()
+                    if (book.tocUrl.isBlank()) {
+                        book = getBookInfoAwait(scope, source, book)
+                    }
+                    return Pair(source, book)
+                }
+            }
+        }
+        return null
+    }
+
 }

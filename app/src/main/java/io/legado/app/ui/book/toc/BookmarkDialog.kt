@@ -1,7 +1,6 @@
 package io.legado.app.ui.book.toc
 
 import android.os.Bundle
-import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import io.legado.app.R
@@ -10,12 +9,13 @@ import io.legado.app.data.appDb
 import io.legado.app.data.entities.Bookmark
 import io.legado.app.databinding.DialogBookmarkBinding
 import io.legado.app.lib.theme.primaryColor
+import io.legado.app.utils.setLayout
 import io.legado.app.utils.viewbindingdelegate.viewBinding
 import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-class BookmarkDialog() : BaseDialogFragment() {
+class BookmarkDialog() : BaseDialogFragment(R.layout.dialog_bookmark) {
 
     constructor(bookmark: Bookmark) : this() {
         arguments = Bundle().apply {
@@ -27,18 +27,10 @@ class BookmarkDialog() : BaseDialogFragment() {
 
     override fun onStart() {
         super.onStart()
-        dialog?.window?.setLayout(
+        setLayout(
             ViewGroup.LayoutParams.MATCH_PARENT,
             ViewGroup.LayoutParams.WRAP_CONTENT
         )
-    }
-
-    override fun onCreateView(
-        inflater: LayoutInflater,
-        container: ViewGroup?,
-        savedInstanceState: Bundle?
-    ): View? {
-        return inflater.inflate(R.layout.dialog_bookmark, container)
     }
 
     override fun onFragmentCreated(view: View, savedInstanceState: Bundle?) {

@@ -1,6 +1,7 @@
 package io.legado.app.constant
 
 import android.annotation.SuppressLint
+import android.content.pm.PackageManager
 import android.provider.Settings
 import io.legado.app.BuildConfig
 import io.legado.app.R
@@ -20,7 +21,7 @@ object AppConst {
 
     const val UA_NAME = "User-Agent"
 
-    const val MAX_THREAD = 6
+    const val MAX_THREAD = 9
 
     val SCRIPT_ENGINE: ScriptEngine by lazy {
         ScriptEngineManager().getEngineByName("rhino")
@@ -78,28 +79,22 @@ object AppConst {
 
     val sysElevation = appCtx.resources.getDimension(R.dimen.design_appbar_elevation).toInt()
 
-    val darkWebViewJs by lazy {
-        """
-            document.body.style.backgroundColor = "#222222";
-            document.getElementsByTagName('body')[0].style.webkitTextFillColor = '#8a8a8a';
-        """.trimIndent()
-    }
-
     val androidId: String by lazy {
         Settings.System.getString(appCtx.contentResolver, Settings.Secure.ANDROID_ID)
     }
 
     val appInfo: AppInfo by lazy {
         val appInfo = AppInfo()
-        appCtx.packageManager.getPackageInfo(appCtx.packageName, 0)?.let {
-            appInfo.versionName = it.versionName
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
-                appInfo.versionCode = it.longVersionCode
-            } else {
-                @Suppress("DEPRECATION")
-                appInfo.versionCode = it.versionCode.toLong()
+        appCtx.packageManager.getPackageInfo(appCtx.packageName, PackageManager.GET_ACTIVITIES)
+            ?.let {
+                appInfo.versionName = it.versionName
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+                    appInfo.versionCode = it.longVersionCode
+                } else {
+                    @Suppress("DEPRECATION")
+                    appInfo.versionCode = it.versionCode.toLong()
+                }
             }
-        }
         appInfo
     }
 
@@ -111,6 +106,9 @@ object AppConst {
         var versionName: String = ""
     )
 
+    /**
+     * The authority of a FileProvider defined in a <provider> element in your app's manifest.
+     */
     const val authority = BuildConfig.APPLICATION_ID + ".fileProvider"
 
 }

@@ -11,7 +11,7 @@ import io.legado.app.R
 import io.legado.app.base.VMBaseActivity
 import io.legado.app.constant.Theme
 import io.legado.app.databinding.ActivityTranslucenceBinding
-import io.legado.app.help.IntentDataHelp
+import io.legado.app.help.IntentData
 import io.legado.app.lib.dialogs.SelectItem
 import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.permission.Permissions
@@ -33,21 +33,20 @@ class HandleFileActivity :
 
     private val selectDocTree =
         registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
-            uri ?: let {
-                finish()
-                return@registerForActivityResult
-            }
-            if (uri.isContentScheme()) {
-                val modeFlags =
-                    Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
-                contentResolver.takePersistableUriPermission(uri, modeFlags)
-            }
-            onResult(Intent().setData(uri))
+            uri?.let {
+                if (uri.isContentScheme()) {
+                    val modeFlags =
+                        Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                    contentResolver.takePersistableUriPermission(uri, modeFlags)
+                }
+                onResult(Intent().setData(uri))
+            } ?: finish()
         }
 
     private val selectDoc = registerForActivityResult(ActivityResultContracts.OpenDocument()) {
-        it ?: return@registerForActivityResult
-        onResult(Intent().setData(it))
+        it?.let {
+            onResult(Intent().setData(it))
+        } ?: finish()
     }
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
@@ -80,7 +79,17 @@ class HandleFileActivity :
         alert(title) {
             items(selectList) { _, item, _ ->
                 when (item.value) {
-                    HandleFileContract.DIR -> selectDocTree.launch(null)
+                    HandleFileContract.DIR -> kotlin.runCatching {
+                        selectDocTree.launch(null)
+                    }.onFailure {
+                        toastOnUi(R.string.open_sys_dir_picker_error)
+                        checkPermissions {
+                            FilePickerDialog.show(
+                                supportFragmentManager,
+                                mode = HandleFileContract.DIR
+                            )
+                        }
+                    }
                     HandleFileContract.FILE -> selectDoc.launch(typesOfExtensions(allowExtensions))
                     10 -> checkPermissions {
                         FilePickerDialog.show(
@@ -116,13 +125,13 @@ class HandleFileActivity :
             onCancelled {
                 finish()
             }
-        }.show()
+        }
     }
 
-    private fun getFileData(): Triple<String, ByteArray, String>? {
+    private fun getFileData(): Triple<String, Any, String>? {
         val fileName = intent.getStringExtra("fileName")
         val file = intent.getStringExtra("fileKey")?.let {
-            IntentDataHelp.getData<ByteArray>(it)
+            IntentData.get<Any>(it)
         }
         val contentType = intent.getStringExtra("contentType")
         if (fileName != null && file != null && contentType != null) {

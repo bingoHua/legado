@@ -8,6 +8,7 @@ import android.content.res.Configuration
 import android.os.Build
 import androidx.multidex.MultiDexApplication
 import com.jeremyliao.liveeventbus.LiveEventBus
+import io.legado.app.base.AppContextWrapper
 import io.legado.app.constant.AppConst.channelIdDownload
 import io.legado.app.constant.AppConst.channelIdReadAloud
 import io.legado.app.constant.AppConst.channelIdWeb
@@ -16,8 +17,8 @@ import io.legado.app.help.CrashHandler
 import io.legado.app.help.LifecycleHelp
 import io.legado.app.help.ThemeConfig.applyDayNight
 import io.legado.app.help.http.cronet.CronetLoader
-import io.legado.app.utils.LanguageUtils
 import io.legado.app.utils.defaultSharedPreferences
+import timber.log.Timber
 import java.io.FileOutputStream
 import java.io.IOException
 import java.io.InputStream
@@ -27,9 +28,11 @@ class App : MultiDexApplication() {
     override fun onCreate() {
         super.onCreate()
         CrashHandler(this)
+        if (BuildConfig.DEBUG) {
+            Timber.plant(Timber.DebugTree())
+        }
         //预下载Cronet so
         CronetLoader.preDownload()
-        LanguageUtils.setConfiguration(this)
         createNotificationChannels()
         applyDayNight(this)
         LiveEventBus.config()
@@ -38,6 +41,10 @@ class App : MultiDexApplication() {
         registerActivityLifecycleCallbacks(LifecycleHelp)
         copyAssetsFile("ssml.xml")
         defaultSharedPreferences.registerOnSharedPreferenceChangeListener(AppConfig)
+    }
+
+    override fun attachBaseContext(base: Context) {
+        super.attachBaseContext(AppContextWrapper.wrap(base))
     }
 
     private fun copyAssetsFile(sourceFilename: String) {
@@ -119,10 +126,6 @@ class App : MultiDexApplication() {
             //向notification manager 提交channel
             it.createNotificationChannels(listOf(downloadChannel, readAloudChannel, webChannel))
         }
-    }
-
-    companion object {
-        var navigationBarHeight = 0
     }
 
 }

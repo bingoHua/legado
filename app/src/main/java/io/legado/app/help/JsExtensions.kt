@@ -3,6 +3,8 @@ package io.legado.app.help
 import android.net.Uri
 import android.util.Base64
 import androidx.annotation.Keep
+import io.legado.app.BuildConfig
+import io.legado.app.constant.AppConst
 import io.legado.app.constant.AppConst.dateFormat
 import io.legado.app.data.entities.BaseSource
 import io.legado.app.help.http.*
@@ -13,9 +15,11 @@ import io.legado.app.utils.*
 import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
+import org.apache.commons.lang3.time.DateFormatUtils
 import org.jsoup.Connection
 import org.jsoup.Jsoup
 import splitties.init.appCtx
+import timber.log.Timber
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -43,9 +47,10 @@ interface JsExtensions {
         return runBlocking {
             kotlin.runCatching {
                 val analyzeUrl = AnalyzeUrl(urlStr, source = getSource())
-                analyzeUrl.getStrResponse().body
+                analyzeUrl.getStrResponseAwait().body
             }.onFailure {
-                it.printOnDebug()
+                log("ajax(${urlStr}) error\n${it.stackTraceToString()}")
+                Timber.e(it)
             }.getOrElse {
                 it.msg
             }
@@ -61,7 +66,7 @@ interface JsExtensions {
                 async(IO) {
                     val url = urlList[it]
                     val analyzeUrl = AnalyzeUrl(url, source = getSource())
-                    analyzeUrl.getStrResponse()
+                    analyzeUrl.getStrResponseAwait()
                 }
             }
             val resArray = Array<StrResponse?>(urlList.size) {
@@ -78,9 +83,10 @@ interface JsExtensions {
         return runBlocking {
             val analyzeUrl = AnalyzeUrl(urlStr, source = getSource())
             kotlin.runCatching {
-                analyzeUrl.getStrResponse()
+                analyzeUrl.getStrResponseAwait()
             }.onFailure {
-                it.printOnDebug()
+                log("connect(${urlStr}) error\n${it.stackTraceToString()}")
+                Timber.e(it)
             }.getOrElse {
                 StrResponse(analyzeUrl.url, it.localizedMessage)
             }
@@ -92,9 +98,10 @@ interface JsExtensions {
             val headerMap = GSON.fromJsonObject<Map<String, String>>(header)
             val analyzeUrl = AnalyzeUrl(urlStr, headerMapF = headerMap, source = getSource())
             kotlin.runCatching {
-                analyzeUrl.getStrResponse()
+                analyzeUrl.getStrResponseAwait()
             }.onFailure {
-                it.printOnDebug()
+                log("ajax($urlStr,$header) error\n${it.stackTraceToString()}")
+                Timber.e(it)
             }.getOrElse {
                 StrResponse(analyzeUrl.url, it.localizedMessage)
             }
@@ -108,9 +115,14 @@ interface JsExtensions {
      * @param js 用来取返回值的js语句, 没有就返回整个源代码
      * @return 返回js获取的内容
      */
-    fun webView(html: String?, url: String?, js: String?): String {
-        //TODO
-        return ""
+    fun webView(html: String?, url: String?, js: String?): String? {
+        return runBlocking {
+            BackstageWebView(
+                url = url,
+                html = html,
+                javaScript = js
+            ).getStrResponse().body
+        }
     }
 
     /**
@@ -214,6 +226,14 @@ interface JsExtensions {
 
     fun md5Encode16(str: String): String {
         return MD5Utils.md5Encode16(str)
+    }
+
+    /**
+     * 格式化时间
+     */
+    fun timeFormatUTC(time: Long, format: String, sh: Int): String? {
+        val utc = SimpleTimeZone(sh, "UTC")
+        return DateFormatUtils.format(Date(time), format, utc, null)
     }
 
     /**
@@ -368,7 +388,7 @@ interface JsExtensions {
     fun getZipByteArrayContent(url: String, path: String): ByteArray? {
         val bytes = if (url.startsWith("http://") || url.startsWith("https://")) {
             runBlocking {
-                return@runBlocking okHttpClient.newCall { url(url) }.bytes()
+                return@runBlocking okHttpClient.newCallResponseBody { url(url) }.bytes()
             }
         } else {
             StringUtils.hexStringToByte(url)
@@ -383,8 +403,7 @@ interface JsExtensions {
             }
             entry = zis.nextEntry
         }
-        Debug.log("getZipContent 未发现内容")
-
+        log("getZipContent 未发现内容")
         return null
     }
 
@@ -413,7 +432,7 @@ interface JsExtensions {
             str.isAbsUrl() -> runBlocking {
                 var x = CacheManager.getByteArray(key)
                 if (x == null) {
-                    x = okHttpClient.newCall { url(str) }.bytes()
+                    x = okHttpClient.newCallResponseBody { url(str) }.bytes()
                     x.let {
                         CacheManager.put(key, it)
                     }
@@ -445,8 +464,11 @@ interface JsExtensions {
         contentArray.forEachIndexed { index, s ->
             val oldCode = s.code
             if (font1.inLimit(s)) {
-                val code = font2.getCodeByGlyf(font1.getGlyfByCode(oldCode))
-                if (code != 0) contentArray[index] = code.toChar()
+                val glyf = font1.getGlyfByCode(oldCode)
+                val code = font2.getCodeByGlyf(glyf)
+                if (code != 0) {
+                    contentArray[index] = code.toChar()
+                }
             }
         }
         return contentArray.joinToString("")
@@ -459,7 +481,17 @@ interface JsExtensions {
         getSource()?.let {
             Debug.log(it.getKey(), msg)
         } ?: Debug.log(msg)
+        if (BuildConfig.DEBUG) {
+            Timber.d(msg)
+        }
         return msg
+    }
+
+    /**
+     * 生成UUID
+     */
+    fun randomUUID(): String {
+        return UUID.randomUUID().toString()
     }
 
     /**
@@ -479,8 +511,8 @@ interface JsExtensions {
                 transformation,
                 iv.encodeToByteArray()
             )
-        } catch (e: java.lang.Exception) {
-            e.printOnDebug()
+        } catch (e: Exception) {
+            Timber.e(e)
             log(e.localizedMessage ?: "aesDecodeToByteArrayERROR")
             null
         }
@@ -519,7 +551,7 @@ interface JsExtensions {
                 iv.encodeToByteArray()
             )
         } catch (e: Exception) {
-            e.printOnDebug()
+            Timber.e(e)
             log(e.localizedMessage ?: "aesDecodeToByteArrayERROR")
             null
         }
@@ -557,7 +589,7 @@ interface JsExtensions {
                 iv.encodeToByteArray()
             )
         } catch (e: Exception) {
-            e.printOnDebug()
+            Timber.e(e)
             log(e.localizedMessage ?: "aesEncodeToByteArrayERROR")
             null
         }
@@ -594,7 +626,7 @@ interface JsExtensions {
                 iv.encodeToByteArray()
             )
         } catch (e: Exception) {
-            e.printOnDebug()
+            Timber.e(e)
             log(e.localizedMessage ?: "aesEncodeToBase64ByteArrayERROR")
             null
         }
@@ -611,6 +643,10 @@ interface JsExtensions {
         data: String, key: String, transformation: String, iv: String
     ): String? {
         return aesEncodeToBase64ByteArray(data, key, transformation, iv)?.let { String(it) }
+    }
+
+    fun android(): String {
+        return AppConst.androidId
     }
 
 }

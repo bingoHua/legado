@@ -18,16 +18,13 @@ import io.legado.app.data.appDb
 import io.legado.app.data.entities.Book
 import io.legado.app.databinding.FragmentBooksBinding
 import io.legado.app.help.AppConfig
-import io.legado.app.lib.theme.ATH
 import io.legado.app.lib.theme.accentColor
+import io.legado.app.lib.theme.primaryColor
 import io.legado.app.ui.book.audio.AudioPlayActivity
 import io.legado.app.ui.book.info.BookInfoActivity
 import io.legado.app.ui.book.read.ReadBookActivity
 import io.legado.app.ui.main.MainViewModel
-import io.legado.app.utils.cnCompare
-import io.legado.app.utils.getPrefInt
-import io.legado.app.utils.observeEvent
-import io.legado.app.utils.startActivity
+import io.legado.app.utils.*
 import io.legado.app.utils.viewbindingdelegate.viewBinding
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.collect
@@ -48,9 +45,17 @@ class BooksFragment() : BaseFragment(R.layout.fragment_books),
     }
 
     private val binding by viewBinding(FragmentBooksBinding::bind)
-    private val activityViewModel: MainViewModel
-            by activityViewModels()
-    private lateinit var booksAdapter: BaseBooksAdapter<*>
+    private val activityViewModel by activityViewModels<MainViewModel>()
+    private val bookshelfLayout by lazy {
+        getPrefInt(PreferKey.bookshelfLayout)
+    }
+    private val booksAdapter: BaseBooksAdapter<*> by lazy {
+        if (bookshelfLayout == 0) {
+            BooksAdapterList(requireContext(), this)
+        } else {
+            BooksAdapterGrid(requireContext(), this)
+        }
+    }
     private var booksFlowJob: Job? = null
     private var position = 0
     private var groupId = -1L
@@ -65,19 +70,16 @@ class BooksFragment() : BaseFragment(R.layout.fragment_books),
     }
 
     private fun initRecyclerView() {
-        ATH.applyEdgeEffectColor(binding.rvBookshelf)
+        binding.rvBookshelf.setEdgeEffectColor(primaryColor)
         binding.refreshLayout.setColorSchemeColors(accentColor)
         binding.refreshLayout.setOnRefreshListener {
             binding.refreshLayout.isRefreshing = false
             activityViewModel.upToc(booksAdapter.getItems())
         }
-        val bookshelfLayout = getPrefInt(PreferKey.bookshelfLayout)
         if (bookshelfLayout == 0) {
             binding.rvBookshelf.layoutManager = LinearLayoutManager(context)
-            booksAdapter = BooksAdapterList(requireContext(), this)
         } else {
             binding.rvBookshelf.layoutManager = GridLayoutManager(context, bookshelfLayout + 2)
-            booksAdapter = BooksAdapterGrid(requireContext(), this)
         }
         binding.rvBookshelf.adapter = booksAdapter
         booksAdapter.registerAdapterDataObserver(object : RecyclerView.AdapterDataObserver() {

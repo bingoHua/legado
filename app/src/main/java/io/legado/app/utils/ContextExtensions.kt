@@ -15,8 +15,9 @@ import android.graphics.Bitmap
 import android.graphics.drawable.Drawable
 import android.net.Uri
 import android.os.BatteryManager
+import android.os.Build
+import android.os.Process
 import android.provider.Settings
-import android.widget.Toast
 import androidx.annotation.ColorRes
 import androidx.annotation.DrawableRes
 import androidx.core.content.ContextCompat
@@ -26,6 +27,7 @@ import androidx.preference.PreferenceManager
 import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel
 import io.legado.app.R
 import io.legado.app.constant.AppConst
+import timber.log.Timber
 import java.io.File
 import java.io.FileOutputStream
 
@@ -77,30 +79,6 @@ inline fun <reified T : BroadcastReceiver> Context.broadcastPendingIntent(
     return getBroadcast(this, 0, intent, FLAG_CANCEL_CURRENT)
 }
 
-fun Context.toastOnUi(message: Int) {
-    runOnUI {
-        Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
-    }
-}
-
-fun Context.toastOnUi(message: CharSequence?) {
-    runOnUI {
-        Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
-    }
-}
-
-fun Context.longToastOnUi(message: Int) {
-    runOnUI {
-        Toast.makeText(this, message, Toast.LENGTH_LONG).show()
-    }
-}
-
-fun Context.longToastOnUi(message: CharSequence?) {
-    runOnUI {
-        Toast.makeText(this, message, Toast.LENGTH_LONG).show()
-    }
-}
-
 val Context.defaultSharedPreferences: SharedPreferences
     get() = PreferenceManager.getDefaultSharedPreferences(this)
 
@@ -147,23 +125,37 @@ fun Context.getCompatDrawable(@DrawableRes id: Int): Drawable? = ContextCompat.g
 fun Context.getCompatColorStateList(@ColorRes id: Int): ColorStateList? =
     ContextCompat.getColorStateList(this, id)
 
+fun Context.restart() {
+    val intent: Intent? = packageManager.getLaunchIntentForPackage(packageName)
+    intent?.let {
+        intent.addFlags(
+            Intent.FLAG_ACTIVITY_NEW_TASK
+                    or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                    or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        )
+        startActivity(intent)
+        //杀掉以前进程
+        Process.killProcess(Process.myPid())
+    }
+}
+
 /**
  * 系统息屏时间
  */
 val Context.sysScreenOffTime: Int
     get() {
-        var screenOffTime = 0
-        try {
-            screenOffTime =
-                Settings.System.getInt(contentResolver, Settings.System.SCREEN_OFF_TIMEOUT)
-        } catch (e: Exception) {
-            e.printOnDebug()
-        }
-        return screenOffTime
+        return kotlin.runCatching {
+            Settings.System.getInt(contentResolver, Settings.System.SCREEN_OFF_TIMEOUT)
+        }.onFailure {
+            Timber.e(it)
+        }.getOrDefault(0)
     }
 
 val Context.statusBarHeight: Int
     get() {
+        if (Build.BOARD == "windows") {
+            return 0
+        }
         val resourceId = resources.getIdentifier("status_bar_height", "dimen", "android")
         return resources.getDimensionPixelSize(resourceId)
     }
@@ -183,6 +175,21 @@ fun Context.share(text: String, title: String = getString(R.string.share)) {
         intent.type = "text/plain"
         startActivity(Intent.createChooser(intent, title))
     }
+}
+
+fun Context.share(file: File, type: String = "text/*") {
+    val fileUri = FileProvider.getUriForFile(this, AppConst.authority, file)
+    val intent = Intent(Intent.ACTION_SEND)
+    intent.type = type
+    intent.putExtra(Intent.EXTRA_STREAM, fileUri)
+    intent.flags = Intent.FLAG_GRANT_READ_URI_PERMISSION
+    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    startActivity(
+        Intent.createChooser(
+            intent,
+            getString(R.string.share_selected_source)
+        )
+    )
 }
 
 @SuppressLint("SetWorldReadable")
@@ -246,14 +253,6 @@ fun Context.sendMail(mail: String) {
 }
 
 /**
- * 系统是否暗色主题
- */
-fun Context.sysIsDarkMode(): Boolean {
-    val mode = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
-    return mode == Configuration.UI_MODE_NIGHT_YES
-}
-
-/**
  * 获取电量
  */
 val Context.sysBattery: Int
@@ -292,6 +291,27 @@ fun Context.openUrl(uri: Uri) {
     }
 }
 
+fun Context.openFileUri(uri: Uri, type: String? = null) {
+    val intent = Intent()
+    intent.action = Intent.ACTION_VIEW
+    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+        //7.0版本以上
+        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    }
+    intent.setDataAndType(uri, type ?: IntentType.from(uri))
+    try {
+        startActivity(intent)
+    } catch (e: Exception) {
+        toastOnUi(e.msg)
+    }
+}
+
+val Context.isPad: Boolean
+    get() {
+        return resources.configuration.screenLayout and Configuration.SCREENLAYOUT_SIZE_MASK >= Configuration.SCREENLAYOUT_SIZE_LARGE
+    }
+
 val Context.channel: String
     get() {
         try {
@@ -299,7 +319,7 @@ val Context.channel: String
             val appInfo = pm.getApplicationInfo(packageName, PackageManager.GET_META_DATA)
             return appInfo.metaData.getString("channel") ?: ""
         } catch (e: Exception) {
-            e.printOnDebug()
+            Timber.e(e)
         }
         return ""
     }

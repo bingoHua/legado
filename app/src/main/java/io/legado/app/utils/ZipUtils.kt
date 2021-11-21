@@ -1,15 +1,15 @@
 package io.legado.app.utils
 
-import android.util.Log
 import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.withContext
+import timber.log.Timber
 import java.io.*
 import java.util.*
 import java.util.zip.ZipEntry
 import java.util.zip.ZipFile
 import java.util.zip.ZipOutputStream
 
-@Suppress("unused", "BlockingMethodInNonBlockingContext")
+@Suppress("unused", "BlockingMethodInNonBlockingContext", "MemberVisibilityCanBePrivate")
 object ZipUtils {
 
     /**
@@ -242,7 +242,7 @@ object ZipUtils {
                     val entry = entries.nextElement() as ZipEntry
                     val entryName = entry.name
                     if (entryName.contains("../")) {
-                        Log.e("ZipUtils", "entryName: $entryName is dangerous!")
+                        Timber.e("entryName: $entryName is dangerous!")
                         continue
                     }
                     if (!unzipChildFile(destDir, files, zip, entry, entryName)) return files
@@ -252,7 +252,7 @@ object ZipUtils {
                     val entry = entries.nextElement() as ZipEntry
                     val entryName = entry.name
                     if (entryName.contains("../")) {
-                        Log.e("ZipUtils", "entryName: $entryName is dangerous!")
+                        Timber.e("entryName: $entryName is dangerous!")
                         continue
                     }
                     if (entryName.contains(keyword!!)) {
@@ -315,7 +315,7 @@ object ZipUtils {
         while (entries.hasMoreElements()) {
             val entryName = (entries.nextElement() as ZipEntry).name
             if (entryName.contains("../")) {
-                Log.e("ZipUtils", "entryName: $entryName is dangerous!")
+                Timber.e("entryName: $entryName is dangerous!")
                 paths.add(entryName)
             } else {
                 paths.add(entryName)
@@ -369,7 +369,7 @@ object ZipUtils {
         return try {
             file.createNewFile()
         } catch (e: IOException) {
-            e.printOnDebug()
+            Timber.e(e)
             false
         }
     }

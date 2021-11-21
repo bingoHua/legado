@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import androidx.documentfile.provider.DocumentFile
 import io.legado.app.R
+import io.legado.app.constant.AppLog
 import io.legado.app.constant.PreferKey
 import io.legado.app.data.appDb
 import io.legado.app.help.DefaultData
@@ -15,13 +16,14 @@ import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.withContext
 import splitties.init.appCtx
 import java.io.File
+import java.io.FileOutputStream
 import java.util.concurrent.TimeUnit
 
 
 object Backup {
 
     val backupPath: String by lazy {
-        FileUtils.getFile(appCtx.filesDir, "backup").absolutePath
+        appCtx.filesDir.getFile("backup").absolutePath
     }
 
     val backupFileNames by lazy {
@@ -51,7 +53,8 @@ object Backup {
             Coroutine.async {
                 backup(context, context.getPrefString(PreferKey.backupPath) ?: "", true)
             }.onError {
-                appCtx.toastOnUi(R.string.autobackup_fail)
+                AppLog.put("备份出错\n${it.localizedMessage}", it)
+                appCtx.toastOnUi(appCtx.getString(R.string.autobackup_fail, it.localizedMessage))
             }
         }
     }
@@ -86,14 +89,13 @@ object Backup {
             }
             Preferences.getSharedPreferences(appCtx, backupPath, "config")?.let { sp ->
                 val edit = sp.edit()
-                appCtx.defaultSharedPreferences.all.map {
-                    when (val value = it.value) {
-                        is Int -> edit.putInt(it.key, value)
-                        is Boolean -> edit.putBoolean(it.key, value)
-                        is Long -> edit.putLong(it.key, value)
-                        is Float -> edit.putFloat(it.key, value)
-                        is String -> edit.putString(it.key, value)
-                        else -> Unit
+                appCtx.defaultSharedPreferences.all.forEach { (key, value) ->
+                    when (value) {
+                        is Int -> edit.putInt(key, value)
+                        is Boolean -> edit.putBoolean(key, value)
+                        is Long -> edit.putLong(key, value)
+                        is Float -> edit.putFloat(key, value)
+                        is String -> edit.putString(key, value)
                     }
                 }
                 edit.commit()
@@ -113,8 +115,10 @@ object Backup {
 
     private fun writeListToJson(list: List<Any>, fileName: String, path: String) {
         if (list.isNotEmpty()) {
-            val json = GSON.toJson(list)
-            FileUtils.createFileIfNotExist(path + File.separator + fileName).writeText(json)
+            val file = FileUtils.createFileIfNotExist(path + File.separator + fileName)
+            FileOutputStream(file).use {
+                GSON.writeToOutputStream(it, list)
+            }
         }
     }
 

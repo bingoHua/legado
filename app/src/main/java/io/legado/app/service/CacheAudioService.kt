@@ -120,7 +120,7 @@ class CacheAudioService : BaseService() {
                     chapters.addAll(it)
                     downloadMap[bookUrl] = chapters
                 } else {
-                    AppLog.addLog("${getBook(bookUrl)?.name} is empty")
+                    AppLog.put("${getBook(bookUrl)?.name} is empty")
                 }
             }
             for (i in 0 until threadCount) {

@@ -13,13 +13,16 @@ import io.legado.app.base.BasePreferenceFragment
 import io.legado.app.constant.EventBus
 import io.legado.app.constant.PreferKey
 import io.legado.app.help.ReadBookConfig
-import io.legado.app.lib.theme.ATH
 import io.legado.app.lib.theme.bottomBackground
+import io.legado.app.lib.theme.primaryColor
+import io.legado.app.model.ReadBook
 import io.legado.app.ui.book.read.ReadBookActivity
 import io.legado.app.ui.book.read.page.ReadView
+import io.legado.app.ui.book.read.page.provider.ChapterProvider
 import io.legado.app.utils.dp
 import io.legado.app.utils.getPrefBoolean
 import io.legado.app.utils.postEvent
+import io.legado.app.utils.setEdgeEffectColor
 
 class MoreConfigDialog : DialogFragment() {
     private val readPreferTag = "readPreferenceFragment"
@@ -75,7 +78,7 @@ class MoreConfigDialog : DialogFragment() {
 
         override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
             super.onViewCreated(view, savedInstanceState)
-            ATH.applyEdgeEffectColor(listView)
+            listView.setEdgeEffectColor(primaryColor)
         }
 
         override fun onResume() {
@@ -121,6 +124,10 @@ class MoreConfigDialog : DialogFragment() {
                 }
                 PreferKey.expandTextMenu -> {
                     (activity as? ReadBookActivity)?.textActionMenu?.upMenu()
+                }
+                PreferKey.doublePageHorizontal -> {
+                    ChapterProvider.upLayout()
+                    ReadBook.loadContent(false)
                 }
             }
         }

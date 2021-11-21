@@ -8,9 +8,11 @@ import io.legado.app.base.BaseViewModel
 import io.legado.app.constant.AppLog
 import io.legado.app.help.DirectLinkUpload
 import io.legado.app.utils.FileUtils
+import io.legado.app.utils.GSON
 import io.legado.app.utils.isContentScheme
-import io.legado.app.utils.printOnDebug
+
 import io.legado.app.utils.writeBytes
+import timber.log.Timber
 import java.io.File
 
 class HandleFileViewModel(application: Application) : BaseViewModel(application) {
@@ -19,7 +21,7 @@ class HandleFileViewModel(application: Application) : BaseViewModel(application)
 
     fun upload(
         fileName: String,
-        file: ByteArray,
+        file: Any,
         contentType: String,
         success: (url: String) -> Unit
     ) {
@@ -28,28 +30,34 @@ class HandleFileViewModel(application: Application) : BaseViewModel(application)
         }.onSuccess {
             success.invoke(it)
         }.onError {
-            AppLog.addLog("上传文件失败\n${it.localizedMessage}", it)
-            it.printOnDebug()
+            AppLog.put("上传文件失败\n${it.localizedMessage}", it)
+            Timber.e(it)
             errorLiveData.postValue(it.localizedMessage)
         }
     }
 
-    fun saveToLocal(uri: Uri, fileName: String, data: ByteArray, success: (uri: Uri) -> Unit) {
+    fun saveToLocal(uri: Uri, fileName: String, data: Any, success: (uri: Uri) -> Unit) {
         execute {
+            val bytes = when (data) {
+                is File -> data.readBytes()
+                is ByteArray -> data
+                is String -> data.toByteArray()
+                else -> GSON.toJson(data).toByteArray()
+            }
             return@execute if (uri.isContentScheme()) {
                 val doc = DocumentFile.fromTreeUri(context, uri)!!
                 doc.findFile(fileName)?.delete()
                 val newDoc = doc.createFile("", fileName)
-                newDoc!!.writeBytes(context, data)
+                newDoc!!.writeBytes(context, bytes)
                 newDoc.uri
             } else {
                 val file = File(uri.path!!)
                 val newFile = FileUtils.createFileIfNotExist(file, fileName)
-                newFile.writeBytes(data)
+                newFile.writeBytes(bytes)
                 Uri.fromFile(newFile)
             }
         }.onError {
-            it.printOnDebug()
+            Timber.e(it)
             errorLiveData.postValue(it.localizedMessage)
         }.onSuccess {
             success.invoke(it)

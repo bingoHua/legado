@@ -3,7 +3,6 @@ package io.legado.app.ui.book.read.config
 import android.annotation.SuppressLint
 import android.content.Context
 import android.os.Bundle
-import android.view.LayoutInflater
 import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
@@ -34,7 +33,8 @@ import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import java.util.*
 
-class TocRegexDialog() : BaseDialogFragment(), Toolbar.OnMenuItemClickListener {
+class TocRegexDialog() : BaseDialogFragment(R.layout.dialog_toc_regex),
+    Toolbar.OnMenuItemClickListener {
 
     constructor(tocRegex: String?) : this() {
         arguments = Bundle().apply {
@@ -51,16 +51,7 @@ class TocRegexDialog() : BaseDialogFragment(), Toolbar.OnMenuItemClickListener {
 
     override fun onStart() {
         super.onStart()
-        val dm = requireActivity().windowSize
-        dialog?.window?.setLayout((dm.widthPixels * 0.9).toInt(), (dm.heightPixels * 0.8).toInt())
-    }
-
-    override fun onCreateView(
-        inflater: LayoutInflater,
-        container: ViewGroup?,
-        savedInstanceState: Bundle?
-    ): View? {
-        return inflater.inflate(R.layout.dialog_toc_regex, container)
+        setLayout(0.9f, 0.8f)
     }
 
     override fun onFragmentCreated(view: View, savedInstanceState: Bundle?) {
@@ -164,7 +155,7 @@ class TocRegexDialog() : BaseDialogFragment(), Toolbar.OnMenuItemClickListener {
                 }
             }
             cancelButton()
-        }.show()
+        }
     }
 
     @SuppressLint("InflateParams")
@@ -185,7 +176,7 @@ class TocRegexDialog() : BaseDialogFragment(), Toolbar.OnMenuItemClickListener {
                 }
             }
             cancelButton()
-        }.show()
+        }
     }
 
     inner class TocRegexAdapter(context: Context) :

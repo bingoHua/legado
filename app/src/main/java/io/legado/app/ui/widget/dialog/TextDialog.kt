@@ -1,15 +1,14 @@
 package io.legado.app.ui.widget.dialog
 
 import android.os.Bundle
-import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import androidx.fragment.app.FragmentManager
 import io.legado.app.R
 import io.legado.app.base.BaseDialogFragment
 import io.legado.app.databinding.DialogTextViewBinding
+import io.legado.app.utils.setHtml
+import io.legado.app.utils.setLayout
 import io.legado.app.utils.viewbindingdelegate.viewBinding
-import io.legado.app.utils.windowSize
 import io.noties.markwon.Markwon
 import io.noties.markwon.ext.tables.TablePlugin
 import io.noties.markwon.html.HtmlPlugin
@@ -18,29 +17,25 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 
-class TextDialog : BaseDialogFragment() {
+class TextDialog() : BaseDialogFragment(R.layout.dialog_text_view) {
 
-    companion object {
-        const val MD = 1
+    enum class Mode {
+        MD, HTML, TEXT
+    }
 
-        fun show(
-            fragmentManager: FragmentManager,
-            content: String?,
-            mode: Int = 0,
-            time: Long = 0,
-            autoClose: Boolean = false
-        ) {
-            TextDialog().apply {
-                val bundle = Bundle()
-                bundle.putString("content", content)
-                bundle.putInt("mode", mode)
-                bundle.putLong("time", time)
-                arguments = bundle
-                isCancelable = false
-                this.autoClose = autoClose
-            }.show(fragmentManager, "textDialog")
+    constructor(
+        content: String?,
+        mode: Mode = Mode.TEXT,
+        time: Long = 0,
+        autoClose: Boolean = false
+    ) : this() {
+        arguments = Bundle().apply {
+            putString("content", content)
+            putString("mode", mode.name)
+            putLong("time", time)
         }
-
+        isCancelable = false
+        this.autoClose = autoClose
     }
 
     private val binding by viewBinding(DialogTextViewBinding::bind)
@@ -49,23 +44,14 @@ class TextDialog : BaseDialogFragment() {
 
     override fun onStart() {
         super.onStart()
-        val dm = requireActivity().windowSize
-        dialog?.window?.setLayout((dm.widthPixels * 0.9).toInt(), (dm.heightPixels * 0.9).toInt())
-    }
-
-    override fun onCreateView(
-        inflater: LayoutInflater,
-        container: ViewGroup?,
-        savedInstanceState: Bundle?
-    ): View? {
-        return inflater.inflate(R.layout.dialog_text_view, container)
+        setLayout(ViewGroup.LayoutParams.MATCH_PARENT, 0.9f)
     }
 
     override fun onFragmentCreated(view: View, savedInstanceState: Bundle?) {
         arguments?.let {
             val content = it.getString("content") ?: ""
-            when (it.getInt("mode")) {
-                MD -> binding.textView.post {
+            when (it.getString("mode")) {
+                Mode.MD.name -> binding.textView.post {
                     Markwon.builder(requireContext())
                         .usePlugin(GlideImagesPlugin.create(requireContext()))
                         .usePlugin(HtmlPlugin.create())
@@ -73,6 +59,7 @@ class TextDialog : BaseDialogFragment() {
                         .build()
                         .setMarkdown(binding.textView, content)
                 }
+                Mode.HTML.name -> binding.textView.setHtml(content)
                 else -> binding.textView.text = content
             }
             time = it.getLong("time", 0L)

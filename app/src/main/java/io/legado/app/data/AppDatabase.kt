@@ -16,7 +16,7 @@ val appDb by lazy {
 }
 
 @Database(
-    version = 41,
+    version = 42,
     exportSchema = true,
     entities = [Book::class, BookGroup::class, BookSource::class, BookChapter::class,
         ReplaceRule::class, SearchBook::class, SearchKeyword::class, Cookie::class,
@@ -83,6 +83,10 @@ abstract class AppDatabase : RoomDatabase() {
                     select ${AppConst.bookGroupNoneId}, '未分组', -7, 1
                     where not exists (select * from book_groups where groupId = ${AppConst.bookGroupNoneId})"""
                 )
+                db.execSQL("update book_sources set loginUi = null where loginUi = 'null'")
+                db.execSQL("update rssSources set loginUi = null where loginUi = 'null'")
+                db.execSQL("update httpTTS set loginUi = null where loginUi = 'null'")
+                db.execSQL("update httpTTS set concurrentRate = '0' where loginUi is null")
             }
         }
 

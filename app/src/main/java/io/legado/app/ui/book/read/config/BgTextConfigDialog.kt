@@ -5,7 +5,10 @@ import android.content.DialogInterface
 import android.graphics.Color
 import android.net.Uri
 import android.os.Bundle
-import android.view.*
+import android.view.Gravity
+import android.view.View
+import android.view.ViewGroup
+import android.view.WindowManager
 import androidx.documentfile.provider.DocumentFile
 import com.jaredrummler.android.colorpicker.ColorPickerDialog
 import io.legado.app.R
@@ -16,7 +19,7 @@ import io.legado.app.databinding.DialogReadBgTextBinding
 import io.legado.app.databinding.ItemBgImageBinding
 import io.legado.app.help.DefaultData
 import io.legado.app.help.ReadBookConfig
-import io.legado.app.help.http.newCall
+import io.legado.app.help.http.newCallResponseBody
 import io.legado.app.help.http.okHttpClient
 import io.legado.app.lib.dialogs.SelectItem
 import io.legado.app.lib.dialogs.alert
@@ -28,9 +31,10 @@ import io.legado.app.ui.book.read.ReadBookActivity
 import io.legado.app.ui.document.HandleFileContract
 import io.legado.app.utils.*
 import io.legado.app.utils.viewbindingdelegate.viewBinding
+import timber.log.Timber
 import java.io.File
 
-class BgTextConfigDialog : BaseDialogFragment() {
+class BgTextConfigDialog : BaseDialogFragment(R.layout.dialog_read_bg_text) {
 
     companion object {
         const val TEXT_COLOR = 121
@@ -44,20 +48,22 @@ class BgTextConfigDialog : BaseDialogFragment() {
     private var secondaryTextColor = 0
     private val importFormNet = "网络导入"
     private val selectBgImage = registerForActivityResult(SelectImageContract()) {
-        it?.second?.let { uri ->
+        it.uri?.let { uri ->
             setBgFromUri(uri)
         }
     }
     private val selectExportDir = registerForActivityResult(HandleFileContract()) {
-        it ?: return@registerForActivityResult
-        exportConfig(it)
+        it.uri?.let { uri ->
+            exportConfig(uri)
+        }
     }
     private val selectImportDoc = registerForActivityResult(HandleFileContract()) {
-        it ?: return@registerForActivityResult
-        if (it.toString() == importFormNet) {
-            importNetConfigAlert()
-        } else {
-            importConfig(it)
+        it.uri?.let { uri ->
+            if (uri.toString() == importFormNet) {
+                importNetConfigAlert()
+            } else {
+                importConfig(uri)
+            }
         }
     }
 
@@ -75,16 +81,8 @@ class BgTextConfigDialog : BaseDialogFragment() {
         }
     }
 
-    override fun onCreateView(
-        inflater: LayoutInflater,
-        container: ViewGroup?,
-        savedInstanceState: Bundle?
-    ): View? {
-        (activity as ReadBookActivity).bottomDialog++
-        return inflater.inflate(R.layout.dialog_read_bg_text, container)
-    }
-
     override fun onFragmentCreated(view: View, savedInstanceState: Bundle?) {
+        (activity as ReadBookActivity).bottomDialog++
         initView()
         initData()
         initEvent()
@@ -150,7 +148,7 @@ class BgTextConfigDialog : BaseDialogFragment() {
                     }
                 }
                 cancelButton()
-            }.show()
+            }
         }
         binding.tvRestore.setOnClickListener {
             val defaultConfigs = DefaultData.readConfigs
@@ -230,7 +228,7 @@ class BgTextConfigDialog : BaseDialogFragment() {
             if (fontPath.isNotEmpty()) {
                 val fontName = FileUtils.getName(fontPath)
                 val fontBytes = fontPath.parseToUri().readBytes(requireContext())
-                fontBytes?.let {
+                fontBytes.let {
                     val fontExportFile = FileUtils.createFileIfNotExist(configDir, fontName)
                     fontExportFile.writeBytes(it)
                     exportFiles.add(fontExportFile)
@@ -281,7 +279,7 @@ class BgTextConfigDialog : BaseDialogFragment() {
         }.onSuccess {
             toastOnUi("导出成功, 文件名为 $exportFileName")
         }.onError {
-            it.printOnDebug()
+            Timber.e(it)
             longToast("导出失败:${it.localizedMessage}")
         }
     }
@@ -297,13 +295,13 @@ class BgTextConfigDialog : BaseDialogFragment() {
                 }
             }
             noButton()
-        }.show()
+        }
     }
 
     private fun importNetConfig(url: String) {
         execute {
             @Suppress("BlockingMethodInNonBlockingContext")
-            okHttpClient.newCall {
+            okHttpClient.newCallResponseBody {
                 url(url)
             }.bytes().let {
                 importConfig(it)
@@ -316,9 +314,9 @@ class BgTextConfigDialog : BaseDialogFragment() {
     private fun importConfig(uri: Uri) {
         execute {
             @Suppress("BlockingMethodInNonBlockingContext")
-            importConfig(uri.readBytes(requireContext())!!)
+            importConfig(uri.readBytes(requireContext()))
         }.onError {
-            it.printOnDebug()
+            Timber.e(it)
             longToast("导入失败:${it.localizedMessage}")
         }
     }
@@ -332,7 +330,7 @@ class BgTextConfigDialog : BaseDialogFragment() {
             postEvent(EventBus.UP_CONFIG, true)
             toastOnUi("导入成功")
         }.onError {
-            it.printOnDebug()
+            Timber.e(it)
             longToast("导入失败:${it.localizedMessage}")
         }
     }

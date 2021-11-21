@@ -22,8 +22,8 @@ import io.legado.app.databinding.ActivityBookSourceEditBinding
 import io.legado.app.help.LocalConfig
 import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.dialogs.selector
-import io.legado.app.lib.theme.ATH
 import io.legado.app.lib.theme.backgroundColor
+import io.legado.app.lib.theme.primaryColor
 import io.legado.app.ui.book.source.debug.BookSourceDebugActivity
 import io.legado.app.ui.document.HandleFileContract
 import io.legado.app.ui.login.SourceLoginActivity
@@ -41,7 +41,7 @@ class BookSourceEditActivity :
     override val binding by viewBinding(ActivityBookSourceEditBinding::inflate)
     override val viewModel by viewModels<BookSourceEditViewModel>()
 
-    private val adapter = BookSourceEditAdapter()
+    private val adapter by lazy { BookSourceEditAdapter() }
     private val sourceEntities: ArrayList<EditEntity> = ArrayList()
     private val searchEntities: ArrayList<EditEntity> = ArrayList()
     private val findEntities: ArrayList<EditEntity> = ArrayList()
@@ -54,12 +54,13 @@ class BookSourceEditActivity :
             upRecyclerView(source)
         }
     }
-    private val selectDoc = registerForActivityResult(HandleFileContract()) { uri ->
-        uri ?: return@registerForActivityResult
-        if (uri.isContentScheme()) {
-            sendText(uri.toString())
-        } else {
-            sendText(uri.path.toString())
+    private val selectDoc = registerForActivityResult(HandleFileContract()) {
+        it.uri?.let { uri ->
+            if (uri.isContentScheme()) {
+                sendText(uri.toString())
+            } else {
+                sendText(uri.path.toString())
+            }
         }
     }
 
@@ -83,6 +84,11 @@ class BookSourceEditActivity :
     override fun onCompatCreateOptionsMenu(menu: Menu): Boolean {
         menuInflater.inflate(R.menu.source_edit, menu)
         return super.onCompatCreateOptionsMenu(menu)
+    }
+
+    override fun onMenuOpened(featureId: Int, menu: Menu): Boolean {
+        menu.findItem(R.id.menu_login)?.isVisible = !viewModel.bookSource?.loginUrl.isNullOrBlank()
+        return super.onMenuOpened(featureId, menu)
     }
 
     override fun onCompatOptionsItemSelected(item: MenuItem): Boolean {
@@ -114,13 +120,12 @@ class BookSourceEditActivity :
                 ErrorCorrectionLevel.L
             )
             R.id.menu_help -> showRuleHelp()
-            R.id.menu_login -> getSource().let {
-                if (checkSource(it)) {
-                    if (it.loginUrl.isNullOrEmpty()) {
-                        toastOnUi(R.string.source_no_login)
-                    } else {
+            R.id.menu_login -> getSource().let { source ->
+                if (checkSource(source)) {
+                    viewModel.save(source) {
                         startActivity<SourceLoginActivity> {
-                            putExtra("sourceUrl", it.bookSourceUrl)
+                            putExtra("type", "bookSource")
+                            putExtra("key", source.bookSourceUrl)
                         }
                     }
                 }
@@ -130,7 +135,7 @@ class BookSourceEditActivity :
     }
 
     private fun initView() {
-        ATH.applyEdgeEffectColor(binding.recyclerView)
+        binding.recyclerView.setEdgeEffectColor(primaryColor)
         mSoftKeyboardTool = KeyboardToolPop(this, AppConst.keyboardToolChars, this)
         window.decorView.viewTreeObserver.addOnGlobalLayoutListener(KeyboardOnGlobalChangeListener())
         binding.recyclerView.layoutManager = LinearLayoutManager(this)
@@ -160,7 +165,7 @@ class BookSourceEditActivity :
                 negativeButton(R.string.no) {
                     super.finish()
                 }
-            }.show()
+            }
         } else {
             super.finish()
         }
@@ -197,7 +202,7 @@ class BookSourceEditActivity :
             add(EditEntity("bookSourceGroup", source?.bookSourceGroup, R.string.source_group))
             add(EditEntity("bookSourceComment", source?.bookSourceComment, R.string.comment))
             add(EditEntity("loginUrl", source?.loginUrl, R.string.login_url))
-            add(EditEntity("loginUi", source?.getLoginUiStr(), R.string.login_ui))
+            add(EditEntity("loginUi", source?.loginUi, R.string.login_ui))
             add(EditEntity("loginCheckJs", source?.loginCheckJs, R.string.login_check_js))
             add(EditEntity("bookUrlPattern", source?.bookUrlPattern, R.string.book_url_pattern))
             add(EditEntity("header", source?.header, R.string.source_http_header))
@@ -296,7 +301,7 @@ class BookSourceEditActivity :
                 "bookSourceName" -> source.bookSourceName = it.value ?: ""
                 "bookSourceGroup" -> source.bookSourceGroup = it.value
                 "loginUrl" -> source.loginUrl = it.value
-                "loginUi" -> source.loginUi = GSON.fromJsonArray(it.value)
+                "loginUi" -> source.loginUi = it.value
                 "loginCheckJs" -> source.loginCheckJs = it.value
                 "bookUrlPattern" -> source.bookUrlPattern = it.value
                 "header" -> source.header = it.value
@@ -426,12 +431,12 @@ class BookSourceEditActivity :
 
     private fun showRuleHelp() {
         val mdText = String(assets.open("help/ruleHelp.md").readBytes())
-        TextDialog.show(supportFragmentManager, mdText, TextDialog.MD)
+        showDialogFragment(TextDialog(mdText, TextDialog.Mode.MD))
     }
 
     private fun showRegexHelp() {
         val mdText = String(assets.open("help/regexHelp.md").readBytes())
-        TextDialog.show(supportFragmentManager, mdText, TextDialog.MD)
+        showDialogFragment(TextDialog(mdText, TextDialog.Mode.MD))
     }
 
     private fun showKeyboardTopPopupWindow() {

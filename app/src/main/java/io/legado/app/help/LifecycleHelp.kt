@@ -4,7 +4,6 @@ import android.app.Activity
 import android.app.Application
 import android.os.Bundle
 import io.legado.app.base.BaseService
-import io.legado.app.utils.LanguageUtils
 import java.lang.ref.WeakReference
 import java.util.*
 
@@ -86,9 +85,6 @@ object LifecycleHelp : Application.ActivityLifecycleCallbacks {
 
     override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {
         activities.add(WeakReference(activity))
-        if (!LanguageUtils.isSameWithSetting(activity)) {
-            LanguageUtils.setConfiguration(activity)
-        }
     }
 
     @Synchronized

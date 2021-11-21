@@ -3,6 +3,7 @@ package io.legado.app.help.http
 import io.legado.app.constant.AppConst
 import io.legado.app.help.AppConfig
 import io.legado.app.utils.EncodingDetect
+import io.legado.app.utils.GSON
 import io.legado.app.utils.UTF8BOMFighter
 import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -10,13 +11,34 @@ import kotlinx.coroutines.withContext
 import okhttp3.*
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.asRequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
+import java.io.File
 import java.io.IOException
 import java.nio.charset.Charset
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
-suspend fun OkHttpClient.newCall(
+suspend fun OkHttpClient.newCallResponse(
+    retry: Int = 0,
+    builder: Request.Builder.() -> Unit
+): Response {
+    return withContext(IO) {
+        val requestBuilder = Request.Builder()
+        requestBuilder.header(AppConst.UA_NAME, AppConfig.userAgent)
+        requestBuilder.apply(builder)
+        var response: Response? = null
+        for (i in 0..retry) {
+            response = this@newCallResponse.newCall(requestBuilder.build()).await()
+            if (response.isSuccessful) {
+                return@withContext response
+            }
+        }
+        return@withContext response!!
+    }
+}
+
+suspend fun OkHttpClient.newCallResponseBody(
     retry: Int = 0,
     builder: Request.Builder.() -> Unit
 ): ResponseBody {
@@ -26,7 +48,7 @@ suspend fun OkHttpClient.newCall(
         requestBuilder.apply(builder)
         var response: Response? = null
         for (i in 0..retry) {
-            response = this@newCall.newCall(requestBuilder.build()).await()
+            response = this@newCallResponseBody.newCall(requestBuilder.build()).await()
             if (response.isSuccessful) {
                 return@withContext response.body!!
             }
@@ -133,9 +155,22 @@ fun Request.Builder.postMultipart(type: String?, form: Map<String, Any>) {
         when (val value = it.value) {
             is Map<*, *> -> {
                 val fileName = value["fileName"] as String
-                val file = value["file"] as ByteArray
+                val file = value["file"]
                 val mediaType = (value["contentType"] as? String)?.toMediaType()
-                val requestBody = file.toRequestBody(mediaType)
+                val requestBody = when (file) {
+                    is File -> {
+                        file.asRequestBody(mediaType)
+                    }
+                    is ByteArray -> {
+                        file.toRequestBody(mediaType)
+                    }
+                    is String -> {
+                        file.toRequestBody(mediaType)
+                    }
+                    else -> {
+                        GSON.toJson(file).toRequestBody(mediaType)
+                    }
+                }
                 multipartBody.addFormDataPart(it.key, fileName, requestBody)
             }
             else -> multipartBody.addFormDataPart(it.key, it.value.toString())

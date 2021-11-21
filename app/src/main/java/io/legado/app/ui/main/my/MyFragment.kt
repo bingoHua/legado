@@ -14,7 +14,7 @@ import io.legado.app.constant.PreferKey
 import io.legado.app.databinding.FragmentMyConfigBinding
 import io.legado.app.help.AppConfig
 import io.legado.app.help.ThemeConfig
-import io.legado.app.lib.theme.ATH
+import io.legado.app.lib.theme.primaryColor
 import io.legado.app.service.WebService
 import io.legado.app.ui.about.AboutActivity
 import io.legado.app.ui.about.DonateActivity
@@ -51,7 +51,7 @@ class MyFragment : BaseFragment(R.layout.fragment_my_config) {
         when (item.itemId) {
             R.id.menu_help -> {
                 val text = String(requireContext().assets.open("help/appHelp.md").readBytes())
-                TextDialog.show(childFragmentManager, text, TextDialog.MD)
+                showDialogFragment(TextDialog(text, TextDialog.Mode.MD))
             }
         }
     }
@@ -89,7 +89,7 @@ class MyFragment : BaseFragment(R.layout.fragment_my_config) {
 
         override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
             super.onViewCreated(view, savedInstanceState)
-            ATH.applyEdgeEffectColor(listView)
+            listView.setEdgeEffectColor(primaryColor)
         }
 
         override fun onResume() {

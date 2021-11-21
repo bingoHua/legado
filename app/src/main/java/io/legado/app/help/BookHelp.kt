@@ -14,6 +14,7 @@ import io.legado.app.utils.*
 import kotlinx.coroutines.delay
 import org.apache.commons.text.similarity.JaccardSimilarity
 import splitties.init.appCtx
+import timber.log.Timber
 import java.io.File
 import java.util.concurrent.CopyOnWriteArraySet
 import java.util.regex.Pattern
@@ -48,7 +49,7 @@ object BookHelp {
             appDb.bookDao.all.forEach {
                 bookFolderNames.add(it.getFolderName())
             }
-            val file = FileUtils.getFile(downloadDir, cacheFolderName)
+            val file = downloadDir.getFile(cacheFolderName)
             file.listFiles()?.forEach { bookFile ->
                 if (!bookFolderNames.contains(bookFile.name)) {
                     FileUtils.deleteFile(bookFile.absolutePath)
@@ -58,12 +59,7 @@ object BookHelp {
     }
 
     fun getEpubFile(book: Book): File {
-        val file = FileUtils.getFile(
-            downloadDir,
-            cacheFolderName,
-            book.getFolderName(),
-            "index.epubx"
-        )
+        val file = downloadDir.getFile(cacheFolderName, book.getFolderName(), "index.epubx")
         if (!file.exists()) {
             val input = if (book.bookUrl.isContentScheme()) {
                 val uri = Uri.parse(book.bookUrl)
@@ -116,7 +112,7 @@ object BookHelp {
         downloadImages.add(src)
         val analyzeUrl = AnalyzeUrl(src, source = bookSource)
         try {
-            analyzeUrl.getByteArray().let {
+            analyzeUrl.getByteArrayAwait().let {
                 FileUtils.createFileIfNotExist(
                     downloadDir,
                     cacheFolderName,
@@ -126,15 +122,14 @@ object BookHelp {
                 ).writeBytes(it)
             }
         } catch (e: Exception) {
-            e.printOnDebug()
+            Timber.e(e)
         } finally {
             downloadImages.remove(src)
         }
     }
 
     fun getImage(book: Book, src: String): File {
-        return FileUtils.getFile(
-            downloadDir,
+        return downloadDir.getFile(
             cacheFolderName,
             book.getFolderName(),
             cacheImageFolderName,
@@ -171,8 +166,7 @@ object BookHelp {
         return if (book.isLocalTxt()) {
             true
         } else {
-            FileUtils.exists(
-                downloadDir,
+            downloadDir.exists(
                 cacheFolderName,
                 book.getFolderName(),
                 bookChapter.getFileName()
@@ -219,8 +213,7 @@ object BookHelp {
             }
             return string
         } else {
-            val file = FileUtils.getFile(
-                downloadDir,
+            val file = downloadDir.getFile(
                 cacheFolderName,
                 book.getFolderName(),
                 bookChapter.getFileName()
@@ -237,8 +230,7 @@ object BookHelp {
      */
     fun reverseContent(book: Book, bookChapter: BookChapter) {
         if (!book.isLocalBook()) {
-            val file = FileUtils.getFile(
-                downloadDir,
+            val file = downloadDir.getFile(
                 cacheFolderName,
                 book.getFolderName(),
                 bookChapter.getFileName()

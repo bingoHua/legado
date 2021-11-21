@@ -2,11 +2,9 @@ package io.legado.app.ui.config
 
 import android.annotation.SuppressLint
 import android.content.ComponentName
-import android.content.Intent
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.os.Bundle
-import android.os.Process
 import android.view.View
 import androidx.preference.ListPreference
 import androidx.preference.Preference
@@ -18,10 +16,9 @@ import io.legado.app.databinding.DialogEditTextBinding
 import io.legado.app.help.AppConfig
 import io.legado.app.help.BookHelp
 import io.legado.app.lib.dialogs.alert
-import io.legado.app.lib.theme.ATH
+import io.legado.app.lib.theme.primaryColor
 import io.legado.app.receiver.SharedReceiverActivity
 import io.legado.app.service.WebService
-import io.legado.app.ui.main.MainActivity
 import io.legado.app.ui.widget.number.NumberPickerDialog
 import io.legado.app.utils.*
 import splitties.init.appCtx
@@ -50,7 +47,7 @@ class OtherConfigFragment : BasePreferenceFragment(),
         super.onViewCreated(view, savedInstanceState)
         activity?.setTitle(R.string.other_setting)
         preferenceManager.sharedPreferences.registerOnSharedPreferenceChangeListener(this)
-        ATH.applyEdgeEffectColor(listView)
+        listView.setEdgeEffectColor(primaryColor)
     }
 
     override fun onDestroy() {
@@ -113,11 +110,7 @@ class OtherConfigFragment : BasePreferenceFragment(),
             }
             PreferKey.showDiscovery, PreferKey.showRss -> postEvent(EventBus.NOTIFY_MAIN, true)
             PreferKey.language -> listView.postDelayed({
-                LanguageUtils.setConfiguration(appCtx)
-                val intent = Intent(appCtx, MainActivity::class.java)
-                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
-                appCtx.startActivity(intent)
-                Process.killProcess(Process.myPid())
+                appCtx.restart()
             }, 1000)
             PreferKey.userAgent -> listView.post {
                 upPreferenceSummary(PreferKey.userAgent, AppConfig.userAgent)
@@ -159,7 +152,7 @@ class OtherConfigFragment : BasePreferenceFragment(),
                 }
             }
             noButton()
-        }.show()
+        }
     }
 
     private fun clearCache() {
@@ -173,7 +166,7 @@ class OtherConfigFragment : BasePreferenceFragment(),
                 toastOnUi(R.string.clear_cache_success)
             }
             noButton()
-        }.show()
+        }
     }
 
     private fun isProcessTextEnabled(): Boolean {

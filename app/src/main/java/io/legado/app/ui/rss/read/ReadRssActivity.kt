@@ -13,11 +13,9 @@ import androidx.webkit.WebSettingsCompat
 import androidx.webkit.WebViewFeature
 import io.legado.app.R
 import io.legado.app.base.VMBaseActivity
-import io.legado.app.constant.AppConst
 import io.legado.app.databinding.ActivityRssReadBinding
 import io.legado.app.help.AppConfig
 import io.legado.app.lib.dialogs.SelectItem
-import io.legado.app.lib.theme.DrawableUtils
 import io.legado.app.lib.theme.primaryTextColor
 import io.legado.app.model.Download
 import io.legado.app.ui.association.OnLineImportActivity
@@ -28,8 +26,11 @@ import io.legado.app.utils.viewbindingdelegate.viewBinding
 import kotlinx.coroutines.launch
 import org.apache.commons.text.StringEscapeUtils
 import org.jsoup.Jsoup
+import java.net.URLDecoder
 
-
+/**
+ * rss阅读界面
+ */
 class ReadRssActivity : VMBaseActivity<ActivityRssReadBinding, ReadRssViewModel>(false),
     ReadRssViewModel.CallBack {
 
@@ -41,9 +42,10 @@ class ReadRssActivity : VMBaseActivity<ActivityRssReadBinding, ReadRssViewModel>
     private var customWebViewCallback: WebChromeClient.CustomViewCallback? = null
     private var webPic: String? = null
     private val saveImage = registerForActivityResult(HandleFileContract()) {
-        it ?: return@registerForActivityResult
-        ACache.get(this).put(imagePathKey, it.toString())
-        viewModel.saveImage(webPic, it.toString())
+        it.uri?.let { uri ->
+            ACache.get(this).put(imagePathKey, uri.toString())
+            viewModel.saveImage(webPic, uri.toString())
+        }
     }
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
@@ -96,7 +98,8 @@ class ReadRssActivity : VMBaseActivity<ActivityRssReadBinding, ReadRssViewModel>
             } ?: toastOnUi(R.string.null_url)
             R.id.menu_aloud -> readAloud()
             R.id.menu_login -> startActivity<SourceLoginActivity> {
-                putExtra("sourceUrl", viewModel.rssSource?.loginUrl)
+                putExtra("type", "rssSource")
+                putExtra("key", viewModel.rssSource?.loginUrl)
             }
         }
         return super.onCompatOptionsItemSelected(item)
@@ -109,8 +112,8 @@ class ReadRssActivity : VMBaseActivity<ActivityRssReadBinding, ReadRssViewModel>
 
     @SuppressLint("SetJavaScriptEnabled")
     private fun initWebView() {
-        binding.webView.webChromeClient = RssWebChromeClient()
-        binding.webView.webViewClient = RssWebViewClient()
+        binding.webView.webChromeClient = CustomWebChromeClient()
+        binding.webView.webViewClient = CustomWebViewClient()
         binding.webView.settings.apply {
             mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
             domStorageEnabled = true
@@ -124,15 +127,15 @@ class ReadRssActivity : VMBaseActivity<ActivityRssReadBinding, ReadRssViewModel>
                 hitTestResult.type == WebView.HitTestResult.SRC_IMAGE_ANCHOR_TYPE
             ) {
                 hitTestResult.extra?.let {
-                    webPic = it
-                    saveImage()
+                    saveImage(it)
                     return@setOnLongClickListener true
                 }
             }
             return@setOnLongClickListener false
         }
         binding.webView.setDownloadListener { url, _, contentDisposition, _, _ ->
-            val fileName = URLUtil.guessFileName(url, contentDisposition, null)
+            var fileName = URLUtil.guessFileName(url, contentDisposition, null)
+            fileName = URLDecoder.decode(fileName, "UTF-8")
             binding.llView.longSnackbar(fileName, getString(R.string.action_download)) {
                 Download.start(this, url, fileName)
             }
@@ -140,7 +143,8 @@ class ReadRssActivity : VMBaseActivity<ActivityRssReadBinding, ReadRssViewModel>
 
     }
 
-    private fun saveImage() {
+    private fun saveImage(webPic: String) {
+        this.webPic = webPic
         val path = ACache.get(this@ReadRssActivity).getAsString(imagePathKey)
         if (path.isNullOrEmpty()) {
             selectSaveFolder()
@@ -202,9 +206,6 @@ class ReadRssActivity : VMBaseActivity<ActivityRssReadBinding, ReadRssViewModel>
                     binding.webView.settings,
                     WebSettingsCompat.FORCE_DARK_ON
                 )
-            } else {
-                binding.webView
-                    .evaluateJavascript(AppConst.darkWebViewJs, null)
             }
         }
     }
@@ -217,7 +218,7 @@ class ReadRssActivity : VMBaseActivity<ActivityRssReadBinding, ReadRssViewModel>
             starMenuItem?.setIcon(R.drawable.ic_star_border)
             starMenuItem?.setTitle(R.string.out_favorites)
         }
-        DrawableUtils.setTint(starMenuItem?.icon, primaryTextColor)
+        starMenuItem?.icon?.setTintMutate(primaryTextColor)
     }
 
     override fun upTtsMenu(isPlaying: Boolean) {
@@ -229,7 +230,7 @@ class ReadRssActivity : VMBaseActivity<ActivityRssReadBinding, ReadRssViewModel>
                 ttsMenuItem?.setIcon(R.drawable.ic_volume_up)
                 ttsMenuItem?.setTitle(R.string.read_aloud)
             }
-            DrawableUtils.setTint(ttsMenuItem?.icon, primaryTextColor)
+            ttsMenuItem?.icon?.setTintMutate(primaryTextColor)
         }
     }
 
@@ -281,7 +282,8 @@ class ReadRssActivity : VMBaseActivity<ActivityRssReadBinding, ReadRssViewModel>
         binding.webView.destroy()
     }
 
-    inner class RssWebChromeClient : WebChromeClient() {
+    inner class CustomWebChromeClient : WebChromeClient() {
+
         override fun onShowCustomView(view: View?, callback: CustomViewCallback?) {
             requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR
             binding.llView.invisible()
@@ -296,7 +298,7 @@ class ReadRssActivity : VMBaseActivity<ActivityRssReadBinding, ReadRssViewModel>
         }
     }
 
-    inner class RssWebViewClient : WebViewClient() {
+    inner class CustomWebViewClient : WebViewClient() {
         override fun shouldOverrideUrlLoading(
             view: WebView?,
             request: WebResourceRequest?
@@ -317,7 +319,13 @@ class ReadRssActivity : VMBaseActivity<ActivityRssReadBinding, ReadRssViewModel>
 
         override fun onPageFinished(view: WebView?, url: String?) {
             super.onPageFinished(view, url)
-            upWebViewTheme()
+            view?.title?.let { title ->
+                if (title != url && title != view.url && title.isNotBlank() && url != "about:blank") {
+                    binding.titleBar.title = title
+                } else {
+                    binding.titleBar.title = intent.getStringExtra("title")
+                }
+            }
         }
 
         private fun shouldOverrideUrlLoading(url: Uri): Boolean {

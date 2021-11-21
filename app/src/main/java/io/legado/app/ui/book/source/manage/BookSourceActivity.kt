@@ -1,7 +1,6 @@
 package io.legado.app.ui.book.source.manage
 
 import android.annotation.SuppressLint
-import android.content.Intent
 import android.os.Bundle
 import android.view.Menu
 import android.view.MenuItem
@@ -23,11 +22,12 @@ import io.legado.app.databinding.DialogEditTextBinding
 import io.legado.app.help.DirectLinkUpload
 import io.legado.app.help.LocalConfig
 import io.legado.app.lib.dialogs.alert
-import io.legado.app.lib.theme.ATH
+import io.legado.app.lib.theme.primaryColor
 import io.legado.app.lib.theme.primaryTextColor
 import io.legado.app.model.CheckSource
 import io.legado.app.model.Debug
 import io.legado.app.ui.association.ImportBookSourceDialog
+import io.legado.app.ui.book.local.rule.TxtTocRuleActivity
 import io.legado.app.ui.book.source.debug.BookSourceDebugActivity
 import io.legado.app.ui.book.source.edit.BookSourceEditActivity
 import io.legado.app.ui.document.HandleFileContract
@@ -62,35 +62,35 @@ class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceV
     private var snackBar: Snackbar? = null
     private val qrResult = registerForActivityResult(QrCodeResult()) {
         it ?: return@registerForActivityResult
-        supportFragmentManager.showDialog(ImportBookSourceDialog(it))
+        showDialogFragment(ImportBookSourceDialog(it))
     }
-    private val importDoc = registerForActivityResult(HandleFileContract()) { uri ->
-        uri ?: return@registerForActivityResult
-        try {
-            uri.readText(this)?.let {
-                supportFragmentManager.showDialog(ImportBookSourceDialog(it))
+    private val importDoc = registerForActivityResult(HandleFileContract()) {
+        it.uri?.let { uri ->
+            try {
+                showDialogFragment(ImportBookSourceDialog(uri.readText(this)))
+            } catch (e: Exception) {
+                toastOnUi("readTextError:${e.localizedMessage}")
             }
-        } catch (e: Exception) {
-            toastOnUi("readTextError:${e.localizedMessage}")
         }
     }
-    private val exportDir = registerForActivityResult(HandleFileContract()) { uri ->
-        uri ?: return@registerForActivityResult
-        alert(R.string.export_success) {
-            if (uri.toString().isAbsUrl()) {
-                DirectLinkUpload.getSummary()?.let { summary ->
-                    setMessage(summary)
+    private val exportDir = registerForActivityResult(HandleFileContract()) {
+        it.uri?.let { uri ->
+            alert(R.string.export_success) {
+                if (uri.toString().isAbsUrl()) {
+                    DirectLinkUpload.getSummary()?.let { summary ->
+                        setMessage(summary)
+                    }
+                }
+                val alertBinding = DialogEditTextBinding.inflate(layoutInflater).apply {
+                    editView.hint = getString(R.string.path)
+                    editView.setText(uri.toString())
+                }
+                customView { alertBinding.root }
+                okButton {
+                    sendToClip(uri.toString())
                 }
             }
-            val alertBinding = DialogEditTextBinding.inflate(layoutInflater).apply {
-                editView.hint = getString(R.string.path)
-                editView.setText(uri.toString())
-            }
-            customView { alertBinding.root }
-            okButton {
-                sendToClip(uri.toString())
-            }
-        }.show()
+        }
     }
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
@@ -121,16 +121,13 @@ class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceV
         when (item.itemId) {
             R.id.menu_add_book_source -> startActivity<BookSourceEditActivity>()
             R.id.menu_import_qr -> qrResult.launch(null)
-            R.id.menu_share_source -> viewModel.shareSelection(adapter.selection) {
-                startActivity(Intent.createChooser(it, getString(R.string.share_selected_source)))
-            }
-            R.id.menu_group_manage ->
-                GroupManageDialog().show(supportFragmentManager, "groupManage")
+            R.id.menu_group_manage -> showDialogFragment<GroupManageDialog>()
             R.id.menu_import_local -> importDoc.launch {
                 mode = HandleFileContract.FILE
                 allowExtensions = arrayOf("txt", "json")
             }
             R.id.menu_import_onLine -> showImportDialog()
+            R.id.menu_text_toc_rule -> startActivity<TxtTocRuleActivity>()
             R.id.menu_sort_manual -> {
                 item.isChecked = true
                 sortCheck(Sort.Default)
@@ -184,7 +181,7 @@ class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceV
     }
 
     private fun initRecyclerView() {
-        ATH.applyEdgeEffectColor(binding.recyclerView)
+        binding.recyclerView.setEdgeEffectColor(primaryColor)
         binding.recyclerView.addItemDecoration(VerticalDivider(this))
         binding.recyclerView.adapter = adapter
         // When this page is opened, it is in selection mode
@@ -199,7 +196,7 @@ class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceV
     }
 
     private fun initSearchView() {
-        ATH.setTint(searchView, primaryTextColor)
+        searchView.applyTint(primaryTextColor)
         searchView.onActionViewExpanded()
         searchView.queryHint = getString(R.string.search_book_source)
         searchView.clearFocus()
@@ -272,7 +269,7 @@ class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceV
 
     private fun showHelp() {
         val text = String(assets.open("help/SourceMBookHelp.md").readBytes())
-        TextDialog.show(supportFragmentManager, text, TextDialog.MD)
+        showDialogFragment(TextDialog(text, TextDialog.Mode.MD))
     }
 
     private fun sortCheck(sort: Sort) {
@@ -309,11 +306,11 @@ class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceV
         adapter.revertSelection()
     }
 
-    override fun onClickMainAction() {
+    override fun onClickSelectBarMainAction() {
         alert(titleResource = R.string.draw, messageResource = R.string.sure_del) {
-            okButton { viewModel.delSelection(adapter.selection) }
+            okButton { viewModel.del(*adapter.selection.toTypedArray()) }
             noButton()
-        }.show()
+        }
     }
 
     private fun initSelectActionBar() {
@@ -334,13 +331,14 @@ class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceV
             R.id.menu_bottom_sel -> viewModel.bottomSource(*adapter.selection.toTypedArray())
             R.id.menu_add_group -> selectionAddToGroups()
             R.id.menu_remove_group -> selectionRemoveFromGroups()
-            R.id.menu_export_selection -> exportDir.launch {
-                mode = HandleFileContract.EXPORT
-                fileData = Triple(
-                    "bookSource.json",
-                    GSON.toJson(adapter.selection).toByteArray(),
-                    "application/json"
-                )
+            R.id.menu_export_selection -> viewModel.saveToFile(adapter.selection) { file ->
+                exportDir.launch {
+                    mode = HandleFileContract.EXPORT
+                    fileData = Triple("bookSource.json", file, "application/json")
+                }
+            }
+            R.id.menu_share_source -> viewModel.saveToFile(adapter.selection) {
+                share(it)
             }
         }
         return true
@@ -364,7 +362,7 @@ class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceV
                 checkMessageRefreshJob().start()
             }
             noButton()
-        }.show()
+        }
     }
 
     @SuppressLint("InflateParams")
@@ -384,7 +382,7 @@ class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceV
                 }
             }
             cancelButton()
-        }.show()
+        }
     }
 
     @SuppressLint("InflateParams")
@@ -404,7 +402,7 @@ class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceV
                 }
             }
             cancelButton()
-        }.show()
+        }
     }
 
     private fun upGroupMenu() = groupMenu?.let { menu ->
@@ -440,11 +438,11 @@ class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceV
                         cacheUrls.add(0, it)
                         aCache.put(importRecordKey, cacheUrls.joinToString(","))
                     }
-                    supportFragmentManager.showDialog(ImportBookSourceDialog(it))
+                    showDialogFragment(ImportBookSourceDialog(it))
                 }
             }
             cancelButton()
-        }.show()
+        }
     }
 
     override fun observeLiveBus() {

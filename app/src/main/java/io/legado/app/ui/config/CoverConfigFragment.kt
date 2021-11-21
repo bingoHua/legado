@@ -10,7 +10,7 @@ import io.legado.app.R
 import io.legado.app.base.BasePreferenceFragment
 import io.legado.app.constant.PreferKey
 import io.legado.app.lib.dialogs.selector
-import io.legado.app.lib.theme.ATH
+import io.legado.app.lib.theme.primaryColor
 import io.legado.app.model.BookCover
 import io.legado.app.ui.widget.prefs.SwitchPreference
 import io.legado.app.utils.*
@@ -21,10 +21,11 @@ class CoverConfigFragment : BasePreferenceFragment(),
     private val requestCodeCover = 111
     private val requestCodeCoverDark = 112
     private val selectImage = registerForActivityResult(SelectImageContract()) {
-        val uri = it?.second ?: return@registerForActivityResult
-        when (it.first) {
-            requestCodeCover -> setCoverFromUri(PreferKey.defaultCover, uri)
-            requestCodeCoverDark -> setCoverFromUri(PreferKey.defaultCoverDark, uri)
+        it.uri?.let { uri ->
+            when (it.requestCode) {
+                requestCodeCover -> setCoverFromUri(PreferKey.defaultCover, uri)
+                requestCodeCoverDark -> setCoverFromUri(PreferKey.defaultCoverDark, uri)
+            }
         }
     }
 
@@ -41,7 +42,7 @@ class CoverConfigFragment : BasePreferenceFragment(),
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         activity?.setTitle(R.string.cover_config)
-        ATH.applyEdgeEffectColor(listView)
+        listView.setEdgeEffectColor(primaryColor)
         setHasOptionsMenu(true)
     }
 
@@ -81,7 +82,7 @@ class CoverConfigFragment : BasePreferenceFragment(),
 
     @SuppressLint("PrivateResource")
     override fun onPreferenceTreeClick(preference: Preference?): Boolean {
-        when (val key = preference?.key) {
+        when (preference?.key) {
             PreferKey.defaultCover ->
                 if (getPrefString(PreferKey.defaultCover).isNullOrEmpty()) {
                     selectImage.launch(requestCodeCover)

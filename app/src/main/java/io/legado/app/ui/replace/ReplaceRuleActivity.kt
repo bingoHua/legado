@@ -23,7 +23,7 @@ import io.legado.app.help.ContentProcessor
 import io.legado.app.help.DirectLinkUpload
 import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.lib.dialogs.alert
-import io.legado.app.lib.theme.ATH
+import io.legado.app.lib.theme.primaryColor
 import io.legado.app.lib.theme.primaryTextColor
 import io.legado.app.ui.association.ImportReplaceRuleDialog
 import io.legado.app.ui.document.HandleFileContract
@@ -61,7 +61,7 @@ class ReplaceRuleActivity : VMBaseActivity<ActivityReplaceRuleBinding, ReplaceRu
     private var dataInit = false
     private val qrCodeResult = registerForActivityResult(QrCodeResult()) {
         it ?: return@registerForActivityResult
-        supportFragmentManager.showDialog(
+        showDialogFragment(
             ImportReplaceRuleDialog(it)
         )
     }
@@ -71,10 +71,10 @@ class ReplaceRuleActivity : VMBaseActivity<ActivityReplaceRuleBinding, ReplaceRu
                 setResult(RESULT_OK)
             }
         }
-    private val importDoc = registerForActivityResult(HandleFileContract()) { uri ->
+    private val importDoc = registerForActivityResult(HandleFileContract()) {
         kotlin.runCatching {
-            uri?.readText(this)?.let {
-                supportFragmentManager.showDialog(
+            it.uri?.readText(this)?.let {
+                showDialogFragment(
                     ImportReplaceRuleDialog(it)
                 )
             }
@@ -82,23 +82,24 @@ class ReplaceRuleActivity : VMBaseActivity<ActivityReplaceRuleBinding, ReplaceRu
             toastOnUi("readTextError:${it.localizedMessage}")
         }
     }
-    private val exportResult = registerForActivityResult(HandleFileContract()) { uri ->
-        uri ?: return@registerForActivityResult
-        alert(R.string.export_success) {
-            if (uri.toString().isAbsUrl()) {
-                DirectLinkUpload.getSummary()?.let { summary ->
-                    setMessage(summary)
+    private val exportResult = registerForActivityResult(HandleFileContract()) {
+        it.uri?.let { uri ->
+            alert(R.string.export_success) {
+                if (uri.toString().isAbsUrl()) {
+                    DirectLinkUpload.getSummary()?.let { summary ->
+                        setMessage(summary)
+                    }
+                }
+                val alertBinding = DialogEditTextBinding.inflate(layoutInflater).apply {
+                    editView.hint = getString(R.string.path)
+                    editView.setText(uri.toString())
+                }
+                customView { alertBinding.root }
+                okButton {
+                    sendToClip(uri.toString())
                 }
             }
-            val alertBinding = DialogEditTextBinding.inflate(layoutInflater).apply {
-                editView.hint = getString(R.string.path)
-                editView.setText(uri.toString())
-            }
-            customView { alertBinding.root }
-            okButton {
-                sendToClip(uri.toString())
-            }
-        }.show()
+        }
     }
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
@@ -121,7 +122,7 @@ class ReplaceRuleActivity : VMBaseActivity<ActivityReplaceRuleBinding, ReplaceRu
     }
 
     private fun initRecyclerView() {
-        ATH.applyEdgeEffectColor(binding.recyclerView)
+        binding.recyclerView.setEdgeEffectColor(primaryColor)
         binding.recyclerView.layoutManager = LinearLayoutManager(this)
         binding.recyclerView.adapter = adapter
         binding.recyclerView.addItemDecoration(VerticalDivider(this))
@@ -138,7 +139,7 @@ class ReplaceRuleActivity : VMBaseActivity<ActivityReplaceRuleBinding, ReplaceRu
     }
 
     private fun initSearchView() {
-        ATH.setTint(searchView, primaryTextColor)
+        searchView.applyTint(primaryTextColor)
         searchView.onActionViewExpanded()
         searchView.queryHint = getString(R.string.replace_purify_search)
         searchView.clearFocus()
@@ -157,7 +158,7 @@ class ReplaceRuleActivity : VMBaseActivity<ActivityReplaceRuleBinding, ReplaceRu
         adapter.revertSelection()
     }
 
-    override fun onClickMainAction() {
+    override fun onClickSelectBarMainAction() {
         delSourceDialog()
     }
 
@@ -172,7 +173,7 @@ class ReplaceRuleActivity : VMBaseActivity<ActivityReplaceRuleBinding, ReplaceRu
         alert(titleResource = R.string.draw, messageResource = R.string.sure_del) {
             okButton { viewModel.delSelection(adapter.selection) }
             noButton()
-        }.show()
+        }
     }
 
     private fun observeReplaceRuleData(searchKey: String? = null) {
@@ -216,9 +217,7 @@ class ReplaceRuleActivity : VMBaseActivity<ActivityReplaceRuleBinding, ReplaceRu
         when (item.itemId) {
             R.id.menu_add_replace_rule ->
                 editActivity.launch(ReplaceEditActivity.startIntent(this))
-            R.id.menu_group_manage ->
-                GroupManageDialog().show(supportFragmentManager, "groupManage")
-
+            R.id.menu_group_manage -> showDialogFragment<GroupManageDialog>()
             R.id.menu_del_selection -> viewModel.delSelection(adapter.selection)
             R.id.menu_import_onLine -> showImportDialog()
             R.id.menu_import_local -> importDoc.launch {
@@ -283,18 +282,18 @@ class ReplaceRuleActivity : VMBaseActivity<ActivityReplaceRuleBinding, ReplaceRu
                         cacheUrls.add(0, it)
                         aCache.put(importRecordKey, cacheUrls.joinToString(","))
                     }
-                    supportFragmentManager.showDialog(
+                    showDialogFragment(
                         ImportReplaceRuleDialog(it)
                     )
                 }
             }
             cancelButton()
-        }.show()
+        }
     }
 
     private fun showHelp() {
         val text = String(assets.open("help/replaceRuleHelp.md").readBytes())
-        TextDialog.show(supportFragmentManager, text, TextDialog.MD)
+        showDialogFragment(TextDialog(text, TextDialog.Mode.MD))
     }
 
     override fun onQueryTextChange(newText: String?): Boolean {

@@ -10,10 +10,9 @@ import io.legado.app.help.AppConfig
 import io.legado.app.lib.theme.getPrimaryDisabledTextColor
 import io.legado.app.lib.theme.getPrimaryTextColor
 import io.legado.app.ui.document.entity.FileItem
-import io.legado.app.ui.document.utils.ConvertUtils
 import io.legado.app.ui.document.utils.FilePickerIcon
+import io.legado.app.utils.ConvertUtils
 import io.legado.app.utils.FileUtils
-
 import java.io.File
 import java.util.*
 
@@ -60,10 +59,10 @@ class FileAdapter(context: Context, val callBack: CallBack) :
             data.add(fileParent)
         }
         currentPath?.let { currentPath ->
-            val files: Array<File?>? = FileUtils.listDirsAndFiles(currentPath)
+            val files: Array<File>? = FileUtils.listDirsAndFiles(currentPath)
             if (files != null) {
                 for (file in files) {
-                    if (file == null || (!callBack.isShowHideDir && file.name.startsWith("."))) {
+                    if (!callBack.isShowHideDir && file.name.startsWith(".")) {
                         continue
                     }
                     val fileItem = FileItem()

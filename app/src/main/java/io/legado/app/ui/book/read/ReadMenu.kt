@@ -1,27 +1,33 @@
 package io.legado.app.ui.book.read
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.content.res.ColorStateList
 import android.graphics.drawable.GradientDrawable
 import android.util.AttributeSet
+import android.view.Gravity
 import android.view.LayoutInflater
+import android.view.View.OnClickListener
+import android.view.View.OnLongClickListener
 import android.view.WindowManager
 import android.view.animation.Animation
 import android.widget.FrameLayout
 import android.widget.SeekBar
+import androidx.appcompat.widget.PopupMenu
 import androidx.core.view.isGone
 import androidx.core.view.isVisible
 import io.legado.app.R
 import io.legado.app.constant.PreferKey
 import io.legado.app.databinding.ViewReadMenuBinding
-import io.legado.app.help.AppConfig
-import io.legado.app.help.LocalConfig
-import io.legado.app.help.ThemeConfig
+import io.legado.app.help.*
+import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.theme.*
 import io.legado.app.model.ReadBook
+import io.legado.app.ui.book.info.BookInfoActivity
+import io.legado.app.ui.browser.WebViewActivity
 import io.legado.app.ui.widget.seekbar.SeekBarChangeListener
 import io.legado.app.utils.*
-import splitties.views.onLongClick
+import splitties.views.*
 
 /**
  * 阅读界面菜单
@@ -44,7 +50,23 @@ class ReadMenu @JvmOverloads constructor(
         .setPressedColor(ColorUtils.darkenColor(bgColor))
         .create()
     private var onMenuOutEnd: (() -> Unit)? = null
-    val showBrightnessView get() = context.getPrefBoolean(PreferKey.showBrightnessView, true)
+    private val showBrightnessView
+        get() = context.getPrefBoolean(
+            PreferKey.showBrightnessView,
+            true
+        )
+    private val sourceMenu by lazy {
+        PopupMenu(context, binding.tvSourceAction).apply {
+            inflate(R.menu.book_read_source)
+            setOnMenuItemClickListener {
+                when (it.itemId) {
+                    R.id.menu_edit_source -> callBack.openSourceEditActivity()
+                    R.id.menu_disable_source -> callBack.disableSource()
+                }
+                true
+            }
+        }
+    }
 
     init {
         initView()
@@ -83,7 +105,6 @@ class ReadMenu @JvmOverloads constructor(
         ivSetting.setColorFilter(textColor)
         tvSetting.setTextColor(textColor)
         vwBg.setOnClickListener(null)
-        vwNavigationBar.setOnClickListener(null)
         llBrightness.setOnClickListener(null)
         seekBrightness.post {
             seekBrightness.progress = AppConfig.readBrightness
@@ -137,15 +158,59 @@ class ReadMenu @JvmOverloads constructor(
     }
 
     private fun bindEvent() = binding.run {
-        tvChapterName.setOnClickListener {
-            callBack.openSourceEditActivity()
+        titleBar.toolbar.setOnClickListener {
+            ReadBook.book?.let {
+                context.startActivity<BookInfoActivity> {
+                    putExtra("name", it.name)
+                    putExtra("author", it.author)
+                }
+            }
         }
-        tvChapterUrl.setOnClickListener {
-            context.openUrl(binding.tvChapterUrl.text.toString())
+        val chapterViewClickListener = OnClickListener {
+            if (ReadBook.isLocalBook) {
+                return@OnClickListener
+            }
+            if (AppConfig.readUrlInBrowser) {
+                context.openUrl(tvChapterUrl.text.toString().substringBefore(",{"))
+            } else {
+                context.startActivity<WebViewActivity> {
+                    val url = tvChapterUrl.text.toString()
+                    putExtra("title", tvChapterName.text)
+                    putExtra("url", url)
+                    IntentData.put(url, ReadBook.bookSource?.getHeaderMap(true))
+                }
+            }
         }
+        val chapterViewLongClickListener = OnLongClickListener {
+            if (ReadBook.isLocalBook) {
+                return@OnLongClickListener true
+            }
+            context.alert(R.string.open_fun) {
+                setMessage(R.string.use_browser_open)
+                okButton {
+                    AppConfig.readUrlInBrowser = true
+                }
+                noButton {
+                    AppConfig.readUrlInBrowser = false
+                }
+            }
+            true
+        }
+        tvChapterName.setOnClickListener(chapterViewClickListener)
+        tvChapterName.setOnLongClickListener(chapterViewLongClickListener)
+        tvChapterUrl.setOnClickListener(chapterViewClickListener)
+        tvChapterUrl.setOnLongClickListener(chapterViewLongClickListener)
         //登录
         tvLogin.setOnClickListener {
             callBack.showLogin()
+        }
+        //购买
+        tvPay.setOnClickListener {
+            callBack.payAction()
+        }
+        //书源操作
+        tvSourceAction.onClick {
+            sourceMenu.show()
         }
         //亮度跟随
         ivBrightnessAuto.setOnClickListener {
@@ -242,17 +307,33 @@ class ReadMenu @JvmOverloads constructor(
         menuBottomIn = AnimationUtilsSupport.loadAnimation(context, R.anim.anim_readbook_bottom_in)
         menuTopIn.setAnimationListener(object : Animation.AnimationListener {
             override fun onAnimationStart(animation: Animation) {
+                binding.tvSourceAction.isGone = ReadBook.isLocalBook
+                binding.tvLogin.isGone = ReadBook.bookSource?.loginUrl.isNullOrEmpty()
+                binding.tvPay.isGone = ReadBook.bookSource?.loginUrl.isNullOrEmpty()
+                        || ReadBook.curTextChapter?.isVip != true
+                        || ReadBook.curTextChapter?.isPay == true
                 callBack.upSystemUiVisibility()
                 binding.llBrightness.visible(showBrightnessView)
             }
 
+            @SuppressLint("RtlHardcoded")
             override fun onAnimationEnd(animation: Animation) {
-                binding.vwMenuBg.setOnClickListener { runMenuOut() }
-                binding.vwNavigationBar.run {
-                    layoutParams = layoutParams.apply {
-                        height = activity?.navigationBarHeight ?: 0
+                val navigationBarHeight =
+                    if (ReadBookConfig.hideNavigationBar) {
+                        activity?.navigationBarHeight ?: 0
+                    } else {
+                        0
+                    }
+                binding.run {
+                    vwMenuBg.setOnClickListener { runMenuOut() }
+                    root.padding = 0
+                    when (activity?.navigationBarGravity) {
+                        Gravity.BOTTOM -> root.bottomPadding = navigationBarHeight
+                        Gravity.LEFT -> root.leftPadding = navigationBarHeight
+                        Gravity.RIGHT -> root.rightPadding = navigationBarHeight
                     }
                 }
+                callBack.upSystemUiVisibility()
                 if (!LocalConfig.readMenuHelpVersionIsLast) {
                     callBack.showReadMenuHelp()
                 }
@@ -283,12 +364,8 @@ class ReadMenu @JvmOverloads constructor(
         })
     }
 
-    fun setTitle(title: String) {
-        binding.titleBar.title = title
-    }
-
     fun upBookView() {
-        binding.tvLogin.isGone = ReadBook.bookSource?.loginUrl.isNullOrEmpty()
+        binding.titleBar.title = ReadBook.book?.name
         ReadBook.curTextChapter?.let {
             binding.tvChapterName.text = it.title
             binding.tvChapterName.visible()
@@ -336,6 +413,8 @@ class ReadMenu @JvmOverloads constructor(
         fun onClickReadAloud()
         fun showReadMenuHelp()
         fun showLogin()
+        fun payAction()
+        fun disableSource()
     }
 
 }

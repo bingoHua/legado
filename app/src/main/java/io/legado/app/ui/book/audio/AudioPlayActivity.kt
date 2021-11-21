@@ -24,6 +24,7 @@ import io.legado.app.lib.dialogs.alert
 import io.legado.app.model.AudioPlay
 import io.legado.app.model.BookCover
 import io.legado.app.service.AudioPlayService
+import io.legado.app.ui.about.AppLogDialog
 import io.legado.app.ui.book.changesource.ChangeSourceDialog
 import io.legado.app.ui.book.source.edit.BookSourceEditActivity
 import io.legado.app.ui.book.toc.TocActivityResult
@@ -60,8 +61,7 @@ class AudioPlayActivity :
         }
     }
     private val sourceEditResult =
-        registerForActivityResult(StartActivityForResult(BookSourceEditActivity::class.java)) {
-            it ?: return@registerForActivityResult
+        registerForActivityResult(StartActivityContract(BookSourceEditActivity::class.java)) {
             if (it.resultCode == RESULT_OK) {
                 viewModel.upSource()
             }
@@ -93,19 +93,21 @@ class AudioPlayActivity :
     override fun onCompatOptionsItemSelected(item: MenuItem): Boolean {
         when (item.itemId) {
             R.id.menu_change_source -> AudioPlay.book?.let {
-                supportFragmentManager.showDialog(ChangeSourceDialog(it.name, it.author))
+                showDialogFragment(ChangeSourceDialog(it.name, it.author))
             }
             R.id.menu_login -> AudioPlay.bookSource?.let {
                 startActivity<SourceLoginActivity> {
-                    putExtra("sourceUrl", it.bookSourceUrl)
+                    putExtra("type", "bookSource")
+                    putExtra("key", it.bookSourceUrl)
                 }
             }
             R.id.menu_copy_audio_url -> sendToClip(AudioPlayService.url)
             R.id.menu_edit_source -> AudioPlay.bookSource?.let {
                 sourceEditResult.launch {
-                    putExtra("data", it.bookSourceUrl)
+                    putExtra("sourceUrl", it.bookSourceUrl)
                 }
             }
+            R.id.menu_log -> showDialogFragment<AppLogDialog>()
         }
         return super.onCompatOptionsItemSelected(item)
     }
@@ -201,7 +203,7 @@ class AudioPlayActivity :
                         setResult(Activity.RESULT_OK)
                     }
                     noButton { viewModel.removeFromBookshelf { super.finish() } }
-                }.show()
+                }
             } else {
                 super.finish()
             }
@@ -220,9 +222,6 @@ class AudioPlayActivity :
             if (it) {
                 playButton()
             }
-        }
-        observeEventSticky<String>(EventBus.AUDIO_ERROR) {
-            binding.tvErrorMessage.text = it
         }
         observeEventSticky<Int>(EventBus.AUDIO_STATE) {
             AudioPlay.status = it

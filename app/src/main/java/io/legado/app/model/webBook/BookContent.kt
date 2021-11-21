@@ -68,11 +68,11 @@ object BookContent {
                 nextUrlList.add(nextUrl)
                 scope.ensureActive()
                 val res = AnalyzeUrl(
-                    ruleUrl = nextUrl,
-                    book = book,
+                    mUrl = nextUrl,
                     source = bookSource,
+                    ruleData = book,
                     headerMapF = bookSource.getHeaderMap()
-                ).getStrResponse()
+                ).getStrResponseAwait()
                 res.body?.let { nextBody ->
                     contentData = analyzeContent(
                         book, nextUrl, res.url, nextBody, contentRule,
@@ -91,12 +91,12 @@ object BookContent {
                     async(IO) {
                         val urlStr = contentData.second[it]
                         val analyzeUrl = AnalyzeUrl(
-                            ruleUrl = urlStr,
-                            book = book,
+                            mUrl = urlStr,
                             source = bookSource,
+                            ruleData = book,
                             headerMapF = bookSource.getHeaderMap()
                         )
-                        val res = analyzeUrl.getStrResponse()
+                        val res = analyzeUrl.getStrResponseAwait()
                         analyzeContent(
                             book, urlStr, res.url, res.body!!, contentRule,
                             bookChapter, bookSource, mNextChapterUrl, false
@@ -112,7 +112,7 @@ object BookContent {
         var contentStr = content.toString()
         val replaceRegex = contentRule.replaceRegex
         if (!replaceRegex.isNullOrEmpty()) {
-            contentStr = analyzeRule.getString(replaceRegex, value = contentStr)
+            contentStr = analyzeRule.getString(replaceRegex, contentStr)
         }
         Debug.log(bookSource.bookSourceUrl, "┌获取章节名称")
         Debug.log(bookSource.bookSourceUrl, "└${bookChapter.title}")
@@ -150,7 +150,7 @@ object BookContent {
         val nextUrlRule = contentRule.nextContentUrl
         if (!nextUrlRule.isNullOrEmpty()) {
             Debug.log(bookSource.bookSourceUrl, "┌获取正文下一页链接", printLog)
-            analyzeRule.getStringList(nextUrlRule, true)?.let {
+            analyzeRule.getStringList(nextUrlRule, isUrl = true)?.let {
                 nextUrlList.addAll(it)
             }
             Debug.log(bookSource.bookSourceUrl, "└" + nextUrlList.joinToString("，"), printLog)

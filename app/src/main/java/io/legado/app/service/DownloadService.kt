@@ -6,16 +6,14 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.net.Uri
-import android.os.Build
 import android.os.Environment
 import androidx.core.app.NotificationCompat
-import androidx.core.content.FileProvider
 import io.legado.app.R
 import io.legado.app.base.BaseService
 import io.legado.app.constant.AppConst
 import io.legado.app.constant.IntentAction
-import io.legado.app.utils.RealPathUtil
-import io.legado.app.utils.msg
+import io.legado.app.utils.IntentType
+import io.legado.app.utils.openFileUri
 import io.legado.app.utils.servicePendingIntent
 import io.legado.app.utils.toastOnUi
 import kotlinx.coroutines.Job
@@ -25,13 +23,13 @@ import kotlinx.coroutines.launch
 import splitties.init.appCtx
 import splitties.systemservices.downloadManager
 import splitties.systemservices.notificationManager
-import java.io.File
 
-
+/**
+ * 下载文件
+ */
 class DownloadService : BaseService() {
     private val groupKey = "${appCtx.packageName}.download"
-    private val downloadUrls = hashMapOf<Long, String>()
-    private val downloadNames = hashMapOf<Long, String>()
+    private val downloads = hashMapOf<Long, Pair<String, String>>()
     private val completeDownloads = hashSetOf<Long>()
     private var upStateJob: Job? = null
     private val downloadReceiver = object : BroadcastReceiver() {
@@ -59,12 +57,10 @@ class DownloadService : BaseService() {
             )
             IntentAction.play -> {
                 val id = intent.getLongExtra("downloadId", 0)
-                if (completeDownloads.contains(id)
-                    && downloadNames[id]?.endsWith(".apk") == true
-                ) {
-                    installApk(id)
+                if (completeDownloads.contains(id)) {
+                    openDownload(id, downloads[id]?.second)
                 } else {
-                    toastOnUi("下载的文件在Download文件夹")
+                    toastOnUi("未完成,下载的文件夹Download")
                 }
             }
             IntentAction.stop -> {
@@ -78,12 +74,12 @@ class DownloadService : BaseService() {
     @Synchronized
     private fun startDownload(url: String?, fileName: String?) {
         if (url == null || fileName == null) {
-            if (downloadNames.isEmpty()) {
+            if (downloads.isEmpty()) {
                 stopSelf()
             }
             return
         }
-        if (downloadUrls.values.contains(url)) {
+        if (downloads.values.any { it.first == url }) {
             toastOnUi("已在下载列表")
             return
         }
@@ -95,8 +91,7 @@ class DownloadService : BaseService() {
         request.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, fileName)
         // 添加一个下载任务
         val downloadId = downloadManager.enqueue(request)
-        downloadUrls[downloadId] = url
-        downloadNames[downloadId] = fileName
+        downloads[downloadId] = Pair(url, fileName)
         queryState()
         if (upStateJob == null) {
             checkDownloadState()
@@ -108,8 +103,8 @@ class DownloadService : BaseService() {
         if (!completeDownloads.contains(downloadId)) {
             downloadManager.remove(downloadId)
         }
-        downloadUrls.remove(downloadId)
-        downloadNames.remove(downloadId)
+        downloads.remove(downloadId)
+        completeDownloads.remove(downloadId)
         notificationManager.cancel(downloadId.toInt())
     }
 
@@ -117,10 +112,11 @@ class DownloadService : BaseService() {
     private fun successDownload(downloadId: Long) {
         if (!completeDownloads.contains(downloadId)) {
             completeDownloads.add(downloadId)
-            if (downloadNames[downloadId]?.endsWith(".apk") == true) {
-                installApk(downloadId)
+            val fileName = downloads[downloadId]?.second
+            if (fileName?.endsWith(".apk") == true) {
+                openDownload(downloadId, fileName)
             } else {
-                toastOnUi("${downloadNames[downloadId]} ${getString(R.string.download_success)}")
+                toastOnUi("$fileName ${getString(R.string.download_success)}")
             }
         }
     }
@@ -138,62 +134,45 @@ class DownloadService : BaseService() {
     //查询下载进度
     @Synchronized
     private fun queryState() {
-        if (downloadNames.isEmpty()) {
+        if (downloads.isEmpty()) {
             stopSelf()
             return
         }
-        val ids = downloadNames.keys
+        val ids = downloads.keys
         val query = DownloadManager.Query()
         query.setFilterById(*ids.toLongArray())
         downloadManager.query(query).use { cursor ->
             if (cursor.moveToFirst()) {
+                val idIndex = cursor.getColumnIndex(DownloadManager.COLUMN_ID)
+                val progressIndex =
+                    cursor.getColumnIndex(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR)
+                val fileSizeIndex = cursor.getColumnIndex(DownloadManager.COLUMN_TOTAL_SIZE_BYTES)
+                val statusIndex = cursor.getColumnIndex(DownloadManager.COLUMN_STATUS)
                 do {
-                    val id = cursor.getLong(cursor.getColumnIndex(DownloadManager.COLUMN_ID))
-                    val progress = cursor
-                        .getInt(cursor.getColumnIndex(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR))
-                    val max = cursor
-                        .getInt(cursor.getColumnIndex(DownloadManager.COLUMN_TOTAL_SIZE_BYTES))
-                    val status =
-                        when (cursor.getInt(cursor.getColumnIndex(DownloadManager.COLUMN_STATUS))) {
-                            DownloadManager.STATUS_PAUSED -> getString(R.string.pause)
-                            DownloadManager.STATUS_PENDING -> getString(R.string.wait_download)
-                            DownloadManager.STATUS_RUNNING -> getString(R.string.downloading)
-                            DownloadManager.STATUS_SUCCESSFUL -> {
-                                successDownload(id)
-                                getString(R.string.download_success)
-                            }
-                            DownloadManager.STATUS_FAILED -> getString(R.string.download_error)
-                            else -> getString(R.string.unknown_state)
+                    val id = cursor.getLong(idIndex)
+                    val progress = cursor.getInt(progressIndex)
+                    val max = cursor.getInt(fileSizeIndex)
+                    val status = when (cursor.getInt(statusIndex)) {
+                        DownloadManager.STATUS_PAUSED -> getString(R.string.pause)
+                        DownloadManager.STATUS_PENDING -> getString(R.string.wait_download)
+                        DownloadManager.STATUS_RUNNING -> getString(R.string.downloading)
+                        DownloadManager.STATUS_SUCCESSFUL -> {
+                            successDownload(id)
+                            getString(R.string.download_success)
                         }
-                    upDownloadNotification(id, "${downloadNames[id]} $status", max, progress)
+                        DownloadManager.STATUS_FAILED -> getString(R.string.download_error)
+                        else -> getString(R.string.unknown_state)
+                    }
+                    upDownloadNotification(id, "${downloads[id]?.second} $status", max, progress)
                 } while (cursor.moveToNext())
             }
         }
     }
 
-    private fun installApk(downloadId: Long) {
-        downloadManager.getUriForDownloadedFile(downloadId)?.let {
-            val filePath = RealPathUtil.getPath(this, it) ?: return
-            val file = File(filePath)
-            //调用系统安装apk
-            val intent = Intent()
-            intent.action = Intent.ACTION_VIEW
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {   //7.0版本以上
-                val contentUrl = FileProvider.getUriForFile(this, AppConst.authority, file)
-                intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                intent.setDataAndType(contentUrl, "application/vnd.android.package-archive")
-            } else {
-                val uri: Uri = Uri.fromFile(file)
-                intent.setDataAndType(uri, "application/vnd.android.package-archive")
-            }
-
-            try {
-                startActivity(intent)
-            } catch (e: Exception) {
-                toastOnUi(e.msg)
-            }
+    private fun openDownload(downloadId: Long, fileName: String?) {
+        downloadManager.getUriForDownloadedFile(downloadId)?.let { uri ->
+            val type = IntentType.from(fileName)
+            openFileUri(uri, type)
         }
     }
 

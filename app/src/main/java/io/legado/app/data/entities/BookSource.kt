@@ -5,10 +5,12 @@ import android.text.TextUtils
 import androidx.room.*
 import io.legado.app.constant.BookType
 import io.legado.app.data.entities.rule.*
+import io.legado.app.help.SourceAnalyzer
 import io.legado.app.utils.*
 import kotlinx.parcelize.IgnoredOnParcel
 import kotlinx.parcelize.Parcelize
 import splitties.init.appCtx
+import timber.log.Timber
 
 @Parcelize
 @TypeConverters(BookSource.Converters::class)
@@ -17,10 +19,10 @@ import splitties.init.appCtx
     indices = [(Index(value = ["bookSourceUrl"], unique = false))]
 )
 data class BookSource(
-    var bookSourceName: String = "",                // 名称
-    var bookSourceGroup: String? = null,            // 分组
     @PrimaryKey
     var bookSourceUrl: String = "",                 // 地址，包括 http/https
+    var bookSourceName: String = "",                // 名称
+    var bookSourceGroup: String? = null,            // 分组
     var bookSourceType: Int = BookType.default,     // 类型，0 文本，1 音频, 3 图片
     var bookUrlPattern: String? = null,             // 详情页url正则
     var customOrder: Int = 0,                       // 手动排序编号
@@ -29,7 +31,7 @@ data class BookSource(
     override var concurrentRate: String? = null,    // 并发率
     override var header: String? = null,            // 请求头
     override var loginUrl: String? = null,          // 登录地址
-    override var loginUi: List<RowUi>? = null,      // 登录UI
+    override var loginUi: String? = null,      // 登录UI
     var loginCheckJs: String? = null,               // 登录检测js
     var bookSourceComment: String? = null,          // 注释
     var lastUpdateTime: Long = 0,                   // 最后更新时间，用于排序
@@ -43,6 +45,9 @@ data class BookSource(
     var ruleToc: TocRule? = null,                   // 目录页规则
     var ruleContent: ContentRule? = null            // 正文页规则
 ) : Parcelable, BaseSource {
+
+    @Ignore
+    constructor() : this(bookSourceUrl = "")
 
     override fun getTag(): String {
         return bookSourceName
@@ -91,8 +96,8 @@ data class BookSource(
                     }
                 }
             }.onFailure {
-                it.printOnDebug()
-                kinds.add(ExploreKind(it.localizedMessage ?: ""))
+                kinds.add(ExploreKind("ERROR:${it.localizedMessage}", it.stackTraceToString()))
+                Timber.e(it)
             }
         }
         return@lazy kinds
@@ -104,12 +109,6 @@ data class BookSource(
 
     override fun equals(other: Any?) =
         if (other is BookSource) other.bookSourceUrl == bookSourceUrl else false
-
-    fun getLoginUiStr(): String? {
-        return loginUi?.let {
-            GSON.toJson(it)
-        }
-    }
 
     fun getSearchRule() = ruleSearch ?: SearchRule()
 
@@ -159,12 +158,18 @@ data class BookSource(
 
     private fun equal(a: String?, b: String?) = a == b || (a.isNullOrEmpty() && b.isNullOrEmpty())
 
-    class Converters {
-        @TypeConverter
-        fun loginUiRuleToString(loginUi: List<RowUi>?): String = GSON.toJson(loginUi)
+    companion object {
 
-        @TypeConverter
-        fun stringToLoginRule(json: String?): List<RowUi>? = GSON.fromJsonArray(json)
+        fun fromJson(json: String): BookSource? {
+            return SourceAnalyzer.jsonToBookSource(json)
+        }
+
+        fun fromJsonArray(json: String): List<BookSource> {
+            return SourceAnalyzer.jsonToBookSources(json)
+        }
+    }
+
+    class Converters {
 
         @TypeConverter
         fun exploreRuleToString(exploreRule: ExploreRule?): String = GSON.toJson(exploreRule)

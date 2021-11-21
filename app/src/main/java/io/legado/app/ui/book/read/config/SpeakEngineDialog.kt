@@ -1,9 +1,7 @@
 package io.legado.app.ui.book.read.config
 
-import android.annotation.SuppressLint
 import android.content.Context
 import android.os.Bundle
-import android.view.LayoutInflater
 import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
@@ -17,7 +15,6 @@ import io.legado.app.base.adapter.RecyclerAdapter
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.HttpTTS
 import io.legado.app.databinding.DialogEditTextBinding
-import io.legado.app.databinding.DialogHttpTtsEditBinding
 import io.legado.app.databinding.DialogRecyclerViewBinding
 import io.legado.app.databinding.ItemHttpTtsBinding
 import io.legado.app.help.AppConfig
@@ -25,18 +22,16 @@ import io.legado.app.help.DirectLinkUpload
 import io.legado.app.lib.dialogs.SelectItem
 import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.dialogs.selector
-import io.legado.app.lib.theme.ATH
 import io.legado.app.lib.theme.primaryColor
-import io.legado.app.model.ReadAloud
 import io.legado.app.ui.document.HandleFileContract
-import io.legado.app.ui.widget.dialog.TextDialog
 import io.legado.app.utils.*
 import io.legado.app.utils.viewbindingdelegate.viewBinding
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 
 
-class SpeakEngineDialog : BaseDialogFragment(), Toolbar.OnMenuItemClickListener {
+class SpeakEngineDialog : BaseDialogFragment(R.layout.dialog_recycler_view),
+    Toolbar.OnMenuItemClickListener {
 
     private val binding by viewBinding(DialogRecyclerViewBinding::bind)
     private val viewModel: SpeakEngineViewModel by viewModels()
@@ -44,41 +39,33 @@ class SpeakEngineDialog : BaseDialogFragment(), Toolbar.OnMenuItemClickListener 
     private val adapter by lazy { Adapter(requireContext()) }
     private var ttsEngine: String? = AppConfig.ttsEngine
     private val importDocResult = registerForActivityResult(HandleFileContract()) {
-        it?.let {
-            viewModel.importLocal(it)
+        it.uri?.let { uri ->
+            viewModel.importLocal(uri)
         }
     }
-    private val exportDirResult = registerForActivityResult(HandleFileContract()) { uri ->
-        uri ?: return@registerForActivityResult
-        alert(R.string.export_success) {
-            if (uri.toString().isAbsUrl()) {
-                DirectLinkUpload.getSummary()?.let { summary ->
-                    setMessage(summary)
+    private val exportDirResult = registerForActivityResult(HandleFileContract()) {
+        it.uri?.let { uri ->
+            alert(R.string.export_success) {
+                if (uri.toString().isAbsUrl()) {
+                    DirectLinkUpload.getSummary()?.let { summary ->
+                        setMessage(summary)
+                    }
+                }
+                val alertBinding = DialogEditTextBinding.inflate(layoutInflater).apply {
+                    editView.hint = getString(R.string.path)
+                    editView.setText(uri.toString())
+                }
+                customView { alertBinding.root }
+                okButton {
+                    requireContext().sendToClip(uri.toString())
                 }
             }
-            val alertBinding = DialogEditTextBinding.inflate(layoutInflater).apply {
-                editView.hint = getString(R.string.path)
-                editView.setText(uri.toString())
-            }
-            customView { alertBinding.root }
-            okButton {
-                requireContext().sendToClip(uri.toString())
-            }
-        }.show()
+        }
     }
 
     override fun onStart() {
         super.onStart()
-        val dm = requireActivity().windowSize
-        dialog?.window?.setLayout((dm.widthPixels * 0.9).toInt(), (dm.heightPixels * 0.9).toInt())
-    }
-
-    override fun onCreateView(
-        inflater: LayoutInflater,
-        container: ViewGroup?,
-        savedInstanceState: Bundle?
-    ): View? {
-        return inflater.inflate(R.layout.dialog_recycler_view, container)
+        setLayout(0.9f, 0.9f)
     }
 
     override fun onFragmentCreated(view: View, savedInstanceState: Bundle?) {
@@ -90,7 +77,7 @@ class SpeakEngineDialog : BaseDialogFragment(), Toolbar.OnMenuItemClickListener 
     private fun initView() = binding.run {
         toolBar.setBackgroundColor(primaryColor)
         toolBar.setTitle(R.string.speak_engine)
-        ATH.applyEdgeEffectColor(recyclerView)
+        recyclerView.setEdgeEffectColor(primaryColor)
         recyclerView.layoutManager = LinearLayoutManager(requireContext())
         recyclerView.adapter = adapter
         tvFooterLeft.setText(R.string.system_tts)
@@ -125,7 +112,7 @@ class SpeakEngineDialog : BaseDialogFragment(), Toolbar.OnMenuItemClickListener 
 
     override fun onMenuItemClick(item: MenuItem?): Boolean {
         when (item?.itemId) {
-            R.id.menu_add -> editHttpTTS()
+            R.id.menu_add -> showDialogFragment<HttpTtsEditDialog>()
             R.id.menu_default -> viewModel.importDefault()
             R.id.menu_import_local -> importDocResult.launch {
                 mode = HandleFileContract.FILE
@@ -181,33 +168,7 @@ class SpeakEngineDialog : BaseDialogFragment(), Toolbar.OnMenuItemClickListener 
                     viewModel.importOnLine(url)
                 }
             }
-        }.show()
-    }
-
-    @SuppressLint("InflateParams")
-    private fun editHttpTTS(v: HttpTTS? = null) {
-        val httpTTS = v?.copy() ?: HttpTTS()
-        requireContext().alert(titleResource = R.string.speak_engine) {
-            val alertBinding = DialogHttpTtsEditBinding.inflate(layoutInflater)
-            alertBinding.tvName.setText(httpTTS.name)
-            alertBinding.tvUrl.setText(httpTTS.url)
-            customView { alertBinding.root }
-            cancelButton()
-            okButton {
-                alertBinding.apply {
-                    httpTTS.name = tvName.text.toString()
-                    httpTTS.url = tvUrl.text.toString()
-                    appDb.httpTTSDao.insert(httpTTS)
-                    ReadAloud.upReadAloudClass()
-                }
-            }
-            neutralButton(R.string.help) {
-                val helpStr = String(
-                    requireContext().assets.open("help/httpTTSHelp.md").readBytes()
-                )
-                TextDialog.show(childFragmentManager, helpStr, TextDialog.MD)
-            }
-        }.show()
+        }
     }
 
     inner class Adapter(context: Context) :
@@ -238,7 +199,8 @@ class SpeakEngineDialog : BaseDialogFragment(), Toolbar.OnMenuItemClickListener 
                     }
                 }
                 ivEdit.setOnClickListener {
-                    editHttpTTS(getItemByLayoutPosition(holder.layoutPosition))
+                    val id = getItemByLayoutPosition(holder.layoutPosition)!!.id
+                    showDialogFragment(HttpTtsEditDialog(id))
                 }
                 ivMenuDelete.setOnClickListener {
                     getItemByLayoutPosition(holder.layoutPosition)?.let { httpTTS ->

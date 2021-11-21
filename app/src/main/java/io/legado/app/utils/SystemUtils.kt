@@ -2,7 +2,6 @@ package io.legado.app.utils
 
 import android.annotation.SuppressLint
 import android.app.Activity
-import android.content.Context
 import android.content.Context.POWER_SERVICE
 import android.content.Intent
 import android.net.Uri
@@ -12,20 +11,6 @@ import android.provider.Settings
 
 @Suppress("unused")
 object SystemUtils {
-
-    fun getScreenOffTime(context: Context): Int {
-        var screenOffTime = 0
-        kotlin.runCatching {
-            screenOffTime = Settings.System.getInt(
-                context.contentResolver,
-                Settings.System.SCREEN_OFF_TIMEOUT
-            )
-        }.onFailure {
-            it.printOnDebug()
-        }
-
-        return screenOffTime
-    }
 
     fun ignoreBatteryOptimization(activity: Activity) {
         if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.M) return

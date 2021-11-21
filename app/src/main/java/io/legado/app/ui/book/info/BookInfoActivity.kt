@@ -85,7 +85,7 @@ class BookInfoActivity :
         }
     }
     private val infoEditResult = registerForActivityResult(
-        StartActivityForResult(BookInfoEditActivity::class.java)
+        StartActivityContract(BookInfoEditActivity::class.java)
     ) {
         if (it.resultCode == RESULT_OK) {
             viewModel.upEditBook()
@@ -158,7 +158,8 @@ class BookInfoActivity :
             }
             R.id.menu_login -> viewModel.bookSource?.let {
                 startActivity<SourceLoginActivity> {
-                    putExtra("sourceUrl", it.bookSourceUrl)
+                    putExtra("type", "bookSource")
+                    putExtra("key", it.bookSourceUrl)
                 }
             }
             R.id.menu_top -> viewModel.topBook()
@@ -181,7 +182,7 @@ class BookInfoActivity :
                 }
             }
             R.id.menu_clear_cache -> viewModel.clearCache()
-            R.id.menu_log -> supportFragmentManager.showDialog<AppLogDialog>()
+            R.id.menu_log -> showDialogFragment<AppLogDialog>()
         }
         return super.onCompatOptionsItemSelected(item)
     }
@@ -255,7 +256,7 @@ class BookInfoActivity :
     private fun initOnClick() = binding.run {
         ivCover.setOnClickListener {
             viewModel.bookData.value?.let {
-                supportFragmentManager.showDialog(
+                showDialogFragment(
                     ChangeCoverDialog(it.name, it.author)
                 )
             }
@@ -283,7 +284,7 @@ class BookInfoActivity :
         }
         tvChangeSource.setOnClickListener {
             viewModel.bookData.value?.let {
-                supportFragmentManager.showDialog(ChangeSourceDialog(it.name, it.author))
+                showDialogFragment(ChangeSourceDialog(it.name, it.author))
             }
         }
         tvTocView.setOnClickListener {
@@ -299,7 +300,7 @@ class BookInfoActivity :
         }
         tvChangeGroup.setOnClickListener {
             viewModel.bookData.value?.let {
-                supportFragmentManager.showDialog(
+                showDialogFragment(
                     GroupSelectDialog(it.group)
                 )
             }
@@ -333,7 +334,7 @@ class BookInfoActivity :
                 neutralButton(R.string.delete) {
                     viewModel.bookSource?.setVariable(null)
                 }
-            }.show()
+            }
         }
     }
 
@@ -358,7 +359,7 @@ class BookInfoActivity :
                         ?.putVariable("custom", null)
                     viewModel.saveBook()
                 }
-            }.show()
+            }
         }
     }
 
@@ -384,7 +385,7 @@ class BookInfoActivity :
                         }
                     }
                     negativeButton(R.string.no)
-                }.show()
+                }
             } else {
                 viewModel.delBook {
                     upTvBookshelf()

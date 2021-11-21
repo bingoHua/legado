@@ -18,8 +18,8 @@ import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookGroup
 import io.legado.app.databinding.FragmentBookshelf1Binding
 import io.legado.app.help.AppConfig
-import io.legado.app.lib.theme.ATH
 import io.legado.app.lib.theme.accentColor
+import io.legado.app.lib.theme.primaryColor
 import io.legado.app.ui.book.audio.AudioPlayActivity
 import io.legado.app.ui.book.group.GroupEditDialog
 import io.legado.app.ui.book.info.BookInfoActivity
@@ -41,10 +41,20 @@ class BookshelfFragment2 : BaseBookshelfFragment(R.layout.fragment_bookshelf1),
     BaseBooksAdapter.CallBack {
 
     private val binding by viewBinding(FragmentBookshelf1Binding::bind)
-    private lateinit var booksAdapter: BaseBooksAdapter<*>
-    override var groupId = AppConst.bookGroupNoneId
-    private var booksFlowJob: Job? = null
+    private val bookshelfLayout by lazy {
+        getPrefInt(PreferKey.bookshelfLayout)
+    }
+    private val booksAdapter: BaseBooksAdapter<*> by lazy {
+        if (bookshelfLayout == 0) {
+            BooksAdapterList(requireContext(), this)
+        } else {
+            BooksAdapterGrid(requireContext(), this)
+        }
+    }
     private var bookGroups: List<BookGroup> = emptyList()
+    private var groupsFlowJob: Job? = null
+    private var booksFlowJob: Job? = null
+    override var groupId = AppConst.bookGroupNoneId
     override var books: List<Book> = emptyList()
 
     override fun onFragmentCreated(view: View, savedInstanceState: Bundle?) {
@@ -55,19 +65,16 @@ class BookshelfFragment2 : BaseBookshelfFragment(R.layout.fragment_bookshelf1),
     }
 
     private fun initRecyclerView() {
-        ATH.applyEdgeEffectColor(binding.rvBookshelf)
+        binding.rvBookshelf.setEdgeEffectColor(primaryColor)
         binding.refreshLayout.setColorSchemeColors(accentColor)
         binding.refreshLayout.setOnRefreshListener {
             binding.refreshLayout.isRefreshing = false
             activityViewModel.upToc(books)
         }
-        val bookshelfLayout = getPrefInt(PreferKey.bookshelfLayout)
         if (bookshelfLayout == 0) {
             binding.rvBookshelf.layoutManager = LinearLayoutManager(context)
-            booksAdapter = BooksAdapterList(requireContext(), this)
         } else {
             binding.rvBookshelf.layoutManager = GridLayoutManager(context, bookshelfLayout + 2)
-            booksAdapter = BooksAdapterGrid(requireContext(), this)
         }
         binding.rvBookshelf.adapter = booksAdapter
         booksAdapter.registerAdapterDataObserver(object : RecyclerView.AdapterDataObserver() {
@@ -91,7 +98,8 @@ class BookshelfFragment2 : BaseBookshelfFragment(R.layout.fragment_bookshelf1),
 
     @SuppressLint("NotifyDataSetChanged")
     private fun initGroupData() {
-        launch {
+        groupsFlowJob?.cancel()
+        groupsFlowJob = launch {
             appDb.bookGroupDao.flowShow().collect {
                 if (it != bookGroups) {
                     bookGroups = it
@@ -192,7 +200,7 @@ class BookshelfFragment2 : BaseBookshelfFragment(R.layout.fragment_bookshelf1),
                 putExtra("name", item.name)
                 putExtra("author", item.author)
             }
-            is BookGroup -> childFragmentManager.showDialog(GroupEditDialog(item))
+            is BookGroup -> showDialogFragment(GroupEditDialog(item))
         }
     }
 

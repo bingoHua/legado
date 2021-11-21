@@ -4,7 +4,6 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.content.DialogInterface
 import android.os.Bundle
-import android.view.LayoutInflater
 import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
@@ -25,18 +24,19 @@ import io.legado.app.databinding.ItemSourceImportBinding
 import io.legado.app.help.AppConfig
 import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.theme.primaryColor
+import io.legado.app.ui.widget.dialog.CodeDialog
 import io.legado.app.ui.widget.dialog.WaitDialog
-import io.legado.app.utils.dp
-import io.legado.app.utils.putPrefBoolean
-import io.legado.app.utils.splitNotBlank
+import io.legado.app.utils.*
 import io.legado.app.utils.viewbindingdelegate.viewBinding
-import io.legado.app.utils.visible
+import splitties.views.onClick
 
 
 /**
  * 导入书源弹出窗口
  */
-class ImportBookSourceDialog() : BaseDialogFragment(), Toolbar.OnMenuItemClickListener {
+class ImportBookSourceDialog() : BaseDialogFragment(R.layout.dialog_recycler_view),
+    Toolbar.OnMenuItemClickListener,
+    CodeDialog.Callback {
 
     constructor(source: String, finishOnDismiss: Boolean = false) : this() {
         arguments = Bundle().apply {
@@ -51,18 +51,10 @@ class ImportBookSourceDialog() : BaseDialogFragment(), Toolbar.OnMenuItemClickLi
 
     override fun onStart() {
         super.onStart()
-        dialog?.window?.setLayout(
+        setLayout(
             ViewGroup.LayoutParams.MATCH_PARENT,
             ViewGroup.LayoutParams.WRAP_CONTENT
         )
-    }
-
-    override fun onCreateView(
-        inflater: LayoutInflater,
-        container: ViewGroup?,
-        savedInstanceState: Bundle?
-    ): View? {
-        return inflater.inflate(R.layout.dialog_recycler_view, container)
     }
 
     override fun onDismiss(dialog: DialogInterface) {
@@ -195,7 +187,16 @@ class ImportBookSourceDialog() : BaseDialogFragment(), Toolbar.OnMenuItemClickLi
                 }
             }
             noButton()
-        }.show()
+        }
+    }
+
+    override fun onCodeSave(code: String, requestId: String?) {
+        requestId?.toInt()?.let {
+            BookSource.fromJson(code)?.let { source ->
+                viewModel.allSources[it] = source
+                adapter.setItem(it, source)
+            }
+        }
     }
 
     inner class SourcesAdapter(context: Context) :
@@ -216,12 +217,11 @@ class ImportBookSourceDialog() : BaseDialogFragment(), Toolbar.OnMenuItemClickLi
                 cbSourceName.text = item.bookSourceName
                 val localSource = viewModel.checkSources[holder.layoutPosition]
                 tvSourceState.text = when {
-                    localSource == null -> "新书源"
+                    localSource == null -> "新增"
                     item.lastUpdateTime > localSource.lastUpdateTime -> "更新"
-                    else -> "已存在"
+                    else -> "已有"
                 }
             }
-
         }
 
         override fun registerListener(holder: ItemViewHolder, binding: ItemSourceImportBinding) {
@@ -231,6 +231,21 @@ class ImportBookSourceDialog() : BaseDialogFragment(), Toolbar.OnMenuItemClickLi
                         viewModel.selectStatus[holder.layoutPosition] = isChecked
                         upSelectText()
                     }
+                }
+                root.onClick {
+                    cbSourceName.isChecked = !cbSourceName.isChecked
+                    viewModel.selectStatus[holder.layoutPosition] = cbSourceName.isChecked
+                    upSelectText()
+                }
+                tvOpen.setOnClickListener {
+                    val source = viewModel.allSources[holder.layoutPosition]
+                    showDialogFragment(
+                        CodeDialog(
+                            GSON.toJson(source),
+                            disableEdit = false,
+                            requestId = holder.layoutPosition.toString()
+                        )
+                    )
                 }
             }
         }

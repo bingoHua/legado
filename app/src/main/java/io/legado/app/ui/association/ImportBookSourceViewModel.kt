@@ -9,14 +9,14 @@ import io.legado.app.constant.AppPattern
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.BookSource
 import io.legado.app.help.AppConfig
-import io.legado.app.help.BookSourceAnalyzer
 import io.legado.app.help.ContentProcessor
 import io.legado.app.help.SourceHelp
-import io.legado.app.help.http.newCall
+import io.legado.app.help.http.newCallResponseBody
 import io.legado.app.help.http.okHttpClient
 import io.legado.app.help.http.text
 import io.legado.app.model.NoStackTraceException
 import io.legado.app.utils.*
+import timber.log.Timber
 
 class ImportBookSourceViewModel(app: Application) : BaseViewModel(app) {
     var isAddGroup = false
@@ -98,19 +98,14 @@ class ImportBookSourceViewModel(app: Application) : BaseViewModel(app) {
                             importSourceUrl(it)
                         }
                     } else {
-                        BookSourceAnalyzer.jsonToBookSource(mText)?.let {
+                        BookSource.fromJson(mText)?.let {
                             allSources.add(it)
                         }
                     }
                 }
                 mText.isJsonArray() -> {
-                    val items: List<Map<String, Any>> = jsonPath.parse(mText).read("$")
-                    for (item in items) {
-                        val jsonItem = jsonPath.parse(item)
-                        BookSourceAnalyzer.jsonToBookSource(jsonItem.jsonString())?.let {
-                            allSources.add(it)
-                        }
-                    }
+                    val items = BookSource.fromJsonArray(mText)
+                    allSources.addAll(items)
                 }
                 mText.isAbsUrl() -> {
                     importSourceUrl(mText)
@@ -118,7 +113,7 @@ class ImportBookSourceViewModel(app: Application) : BaseViewModel(app) {
                 else -> throw NoStackTraceException(context.getString(R.string.wrong_format))
             }
         }.onError {
-            it.printOnDebug()
+            Timber.e(it)
             errorLiveData.postValue(it.localizedMessage ?: "")
         }.onSuccess {
             comparisonSource()
@@ -126,7 +121,7 @@ class ImportBookSourceViewModel(app: Application) : BaseViewModel(app) {
     }
 
     private suspend fun importSourceUrl(url: String) {
-        okHttpClient.newCall {
+        okHttpClient.newCallResponseBody {
             url(url)
         }.text("utf-8").let { body ->
             when {
@@ -134,13 +129,13 @@ class ImportBookSourceViewModel(app: Application) : BaseViewModel(app) {
                     val items: List<Map<String, Any>> = jsonPath.parse(body).read("$")
                     for (item in items) {
                         val jsonItem = jsonPath.parse(item)
-                        BookSourceAnalyzer.jsonToBookSource(jsonItem.jsonString())?.let { source ->
+                        BookSource.fromJson(jsonItem.jsonString())?.let { source ->
                             allSources.add(source)
                         }
                     }
                 }
                 body.isJsonObject() -> {
-                    BookSourceAnalyzer.jsonToBookSource(body)?.let {
+                    BookSource.fromJson(body)?.let {
                         allSources.add(it)
                     }
                 }

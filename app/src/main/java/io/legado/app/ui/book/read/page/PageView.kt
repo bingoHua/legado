@@ -7,15 +7,14 @@ import android.view.LayoutInflater
 import android.widget.FrameLayout
 import androidx.core.view.isGone
 import androidx.core.view.isInvisible
-import io.legado.app.App
 import io.legado.app.R
-import io.legado.app.base.BaseActivity
 import io.legado.app.constant.AppConst.timeFormat
 import io.legado.app.data.entities.Bookmark
 import io.legado.app.databinding.ViewBookPageBinding
 import io.legado.app.help.ReadBookConfig
 import io.legado.app.help.ReadTipConfig
 import io.legado.app.model.ReadBook
+import io.legado.app.ui.book.read.ReadBookActivity
 import io.legado.app.ui.book.read.page.entities.TextPage
 import io.legado.app.ui.book.read.page.provider.ChapterProvider
 import io.legado.app.ui.widget.BatteryView
@@ -26,7 +25,9 @@ import java.util.*
  * 阅读界面
  */
 class PageView(context: Context) : FrameLayout(context) {
+
     private val binding = ViewBookPageBinding.inflate(LayoutInflater.from(context), this, true)
+    private val readBookActivity get() = activity as? ReadBookActivity
     private var battery = 100
     private var tvTitle: BatteryView? = null
     private var tvTime: BatteryView? = null
@@ -84,11 +85,6 @@ class PageView(context: Context) : FrameLayout(context) {
             )
             vwTopDivider.visible(it.showHeaderLine)
             vwBottomDivider.visible(it.showFooterLine)
-            pageNvBar.layoutParams = pageNvBar.layoutParams.apply {
-                height =
-                    if (it.hideNavigationBar) 0
-                    else App.navigationBarHeight
-            }
         }
         contentTextView.upVisibleRect()
         upTime()
@@ -100,8 +96,7 @@ class PageView(context: Context) : FrameLayout(context) {
      */
     fun upStatusBar() = with(binding.vwStatusBar) {
         setPadding(paddingLeft, context.statusBarHeight, paddingRight, paddingBottom)
-        isGone =
-            ReadBookConfig.hideStatusBar || (activity as? BaseActivity<*>)?.isInMultiWindow == true
+        isGone = ReadBookConfig.hideStatusBar || readBookActivity?.isInMultiWindow == true
     }
 
     private fun upTipStyle() = binding.run {
@@ -274,6 +269,10 @@ class PageView(context: Context) : FrameLayout(context) {
 
     fun createBookmark(): Bookmark? {
         return binding.contentTextView.createBookmark()
+    }
+
+    fun relativePage(relativePos: Int): TextPage {
+        return binding.contentTextView.relativePage(relativePos)
     }
 
     val selectedText: String get() = binding.contentTextView.selectedText

@@ -20,6 +20,7 @@ import io.legado.app.model.webBook.WebBook
 import io.legado.app.utils.*
 import kotlinx.coroutines.runBlocking
 import splitties.init.appCtx
+import timber.log.Timber
 
 object BookController {
 
@@ -132,7 +133,7 @@ object BookController {
             val contentProcessor = ContentProcessor.get(book.name, book.origin)
             saveBookReadIndex(book, index)
             return returnData.setData(
-                contentProcessor.getContent(book, chapter, content)
+                contentProcessor.getContent(book, chapter, content, includeTitle = false)
                     .joinToString("\n")
             )
         }
@@ -145,7 +146,8 @@ object BookController {
             val contentProcessor = ContentProcessor.get(book.name, book.origin)
             saveBookReadIndex(book, index)
             returnData.setData(
-                contentProcessor.getContent(book, chapter, content).joinToString("\n")
+                contentProcessor.getContent(book, chapter, content, includeTitle = false)
+                    .joinToString("\n")
             )
         } catch (e: Exception) {
             returnData.setErrorMsg(e.msg)
@@ -208,7 +210,7 @@ object BookController {
             if (book.isUmd()) UmdFile.upBookInfo(book)
             appDb.bookDao.insert(book)
         } catch (e: Exception) {
-            e.printOnDebug()
+            Timber.e(e)
             return returnData.setErrorMsg(
                 e.localizedMessage ?: appCtx.getString(R.string.unknown_error)
             )

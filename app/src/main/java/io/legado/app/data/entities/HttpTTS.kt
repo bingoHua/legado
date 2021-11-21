@@ -1,46 +1,82 @@
 package io.legado.app.data.entities
 
 import androidx.room.Entity
+import androidx.room.Ignore
 import androidx.room.PrimaryKey
-import androidx.room.TypeConverter
-import androidx.room.TypeConverters
-import io.legado.app.data.entities.rule.RowUi
+import com.jayway.jsonpath.DocumentContext
 import io.legado.app.utils.GSON
-import io.legado.app.utils.fromJsonArray
+import io.legado.app.utils.jsonPath
+import io.legado.app.utils.readLong
+import io.legado.app.utils.readString
 
-@TypeConverters(HttpTTS.Converters::class)
+/**
+ * 在线朗读引擎
+ */
 @Entity(tableName = "httpTTS")
 data class HttpTTS(
     @PrimaryKey
     val id: Long = System.currentTimeMillis(),
     var name: String = "",
     var url: String = "",
-    override var concurrentRate: String? = null,
+    var contentType: String? = null,
+    override var concurrentRate: String? = "0",
     override var loginUrl: String? = null,
-    override var loginUi: List<RowUi>? = null,
+    override var loginUi: String? = null,
     override var header: String? = null,
     var loginCheckJs: String? = null,
 ) : BaseSource {
+
+    @Ignore
+    constructor() : this(name = "")
 
     override fun getTag(): String {
         return name
     }
 
     override fun getKey(): String {
-        return md5Encode(url)
+        return "httpTts:$id"
     }
 
     override fun getSource(): BaseSource {
         return this
     }
 
-    class Converters {
+    @Suppress("MemberVisibilityCanBePrivate")
+    companion object {
 
-        @TypeConverter
-        fun loginUiRuleToString(loginUi: List<RowUi>?): String = GSON.toJson(loginUi)
+        fun fromJsonDoc(doc: DocumentContext): HttpTTS? {
+            return kotlin.runCatching {
+                val loginUi = doc.read<Any>("$.loginUi")
+                HttpTTS(
+                    id = doc.readLong("$.id") ?: System.currentTimeMillis(),
+                    name = doc.readString("$.name")!!,
+                    url = doc.readString("$.url")!!,
+                    contentType = doc.readString("$.contentType"),
+                    concurrentRate = doc.readString("$.concurrentRate"),
+                    loginUrl = doc.readString("$.loginUrl"),
+                    loginUi = if (loginUi is List<*>) GSON.toJson(loginUi) else loginUi?.toString(),
+                    header = doc.readString("$.header"),
+                    loginCheckJs = doc.readString("$.loginCheckJs")
+                )
+            }.getOrNull()
+        }
 
-        @TypeConverter
-        fun stringToLoginRule(json: String?): List<RowUi>? = GSON.fromJsonArray(json)
+        fun fromJson(json: String): HttpTTS? {
+            return fromJsonDoc(jsonPath.parse(json))
+        }
+
+        fun fromJsonArray(jsonArray: String): ArrayList<HttpTTS> {
+            val sources = arrayListOf<HttpTTS>()
+            val doc = jsonPath.parse(jsonArray).read<List<*>>("$")
+            doc.forEach {
+                val jsonItem = jsonPath.parse(it)
+                fromJsonDoc(jsonItem)?.let { source ->
+                    sources.add(source)
+                }
+            }
+            return sources
+        }
 
     }
+
 }

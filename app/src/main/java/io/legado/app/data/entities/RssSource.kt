@@ -1,16 +1,16 @@
 package io.legado.app.data.entities
 
 import android.os.Parcelable
-import androidx.room.*
-import io.legado.app.data.entities.rule.RowUi
-import io.legado.app.utils.ACache
-import io.legado.app.utils.GSON
-import io.legado.app.utils.fromJsonArray
+import androidx.room.Entity
+import androidx.room.Ignore
+import androidx.room.Index
+import androidx.room.PrimaryKey
+import com.jayway.jsonpath.DocumentContext
+import io.legado.app.utils.*
 import kotlinx.parcelize.Parcelize
 import splitties.init.appCtx
 
 @Parcelize
-@TypeConverters(RssSource.Converters::class)
 @Entity(tableName = "rssSources", indices = [(Index(value = ["sourceUrl"], unique = false))])
 data class RssSource(
     @PrimaryKey
@@ -23,12 +23,12 @@ data class RssSource(
     override var concurrentRate: String? = null,    //并发率
     override var header: String? = null,            // 请求头
     override var loginUrl: String? = null,          // 登录地址
-    override var loginUi: List<RowUi>? = null,               //登录UI
+    override var loginUi: String? = null,               //登录UI
     var loginCheckJs: String? = null,               //登录检测js
     var sortUrl: String? = null,
     var singleUrl: Boolean = false,
-    var articleStyle: Int = 0,
     //列表规则
+    var articleStyle: Int = 0,                      //列表样式,0,1,2
     var ruleArticles: String? = null,
     var ruleNextPage: String? = null,
     var ruleTitle: String? = null,
@@ -39,11 +39,13 @@ data class RssSource(
     var ruleLink: String? = null,
     var ruleContent: String? = null,
     var style: String? = null,
-    var enableJs: Boolean = false,
-    var loadWithBaseUrl: Boolean = false,
-
+    var enableJs: Boolean = true,
+    var loadWithBaseUrl: Boolean = true,
     var customOrder: Int = 0
 ) : Parcelable, BaseSource {
+
+    @Ignore
+    constructor() : this("")
 
     override fun getTag(): String {
         return sourceName
@@ -115,11 +117,58 @@ data class RssSource(
         }
     }
 
-    class Converters {
-        @TypeConverter
-        fun loginUiRuleToString(loginUi: List<RowUi>?): String = GSON.toJson(loginUi)
+    @Suppress("MemberVisibilityCanBePrivate")
+    companion object {
 
-        @TypeConverter
-        fun stringToLoginRule(json: String?): List<RowUi>? = GSON.fromJsonArray(json)
+        fun fromJsonDoc(doc: DocumentContext): RssSource? {
+            return kotlin.runCatching {
+                val loginUi = doc.read<Any>("$.loginUi")
+                RssSource(
+                    sourceUrl = doc.readString("$.sourceUrl")!!,
+                    sourceName = doc.readString("$.sourceName")!!,
+                    sourceIcon = doc.readString("$.sourceIcon") ?: "",
+                    sourceGroup = doc.readString("$.sourceGroup"),
+                    sourceComment = doc.readString("$.sourceComment"),
+                    enabled = doc.readBool("$.enabled") ?: true,
+                    concurrentRate = doc.readString("$.concurrentRate"),
+                    header = doc.readString("$.header"),
+                    loginUrl = doc.readString("$.loginUrl"),
+                    loginUi = if (loginUi is List<*>) GSON.toJson(loginUi) else loginUi?.toString(),
+                    loginCheckJs = doc.readString("$.loginCheckJs"),
+                    sortUrl = doc.readString("$.sortUrl"),
+                    singleUrl = doc.readBool("$.singleUrl") ?: false,
+                    articleStyle = doc.readInt("$.articleStyle") ?: 0,
+                    ruleArticles = doc.readString("$.ruleArticles"),
+                    ruleNextPage = doc.readString("$.ruleNextPage"),
+                    ruleTitle = doc.readString("$.ruleTitle"),
+                    rulePubDate = doc.readString("$.rulePubDate"),
+                    ruleDescription = doc.readString("$.ruleDescription"),
+                    ruleImage = doc.readString("$.ruleImage"),
+                    ruleLink = doc.readString("$.ruleLink"),
+                    ruleContent = doc.readString("$.ruleContent"),
+                    style = doc.readString("$.style"),
+                    enableJs = doc.readBool("$.enableJs") ?: true,
+                    loadWithBaseUrl = doc.readBool("$.loadWithBaseUrl") ?: true,
+                    customOrder = doc.readInt("$.customOrder") ?: 0
+                )
+            }.getOrNull()
+        }
+
+        fun fromJson(json: String): RssSource? {
+            return fromJsonDoc(jsonPath.parse(json))
+        }
+
+        fun fromJsonArray(jsonArray: String): ArrayList<RssSource> {
+            val sources = arrayListOf<RssSource>()
+            val doc = jsonPath.parse(jsonArray).read<List<*>>("$")
+            doc.forEach {
+                val jsonItem = jsonPath.parse(it)
+                fromJsonDoc(jsonItem)?.let { source ->
+                    sources.add(source)
+                }
+            }
+            return sources
+        }
     }
+
 }

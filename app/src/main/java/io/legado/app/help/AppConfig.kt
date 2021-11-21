@@ -57,7 +57,7 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
             "1" -> false
             "2" -> true
             "3" -> false
-            else -> context.sysIsDarkMode()
+            else -> sysConfiguration.isNightMode
         }
     }
 
@@ -182,6 +182,12 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
             appCtx.putPrefInt(PreferKey.barElevation, value)
         }
 
+    var readUrlInBrowser: Boolean
+        get() = appCtx.getPrefBoolean(PreferKey.readUrlOpenInBrowser)
+        set(value) {
+            appCtx.putPrefBoolean(PreferKey.readUrlOpenInBrowser, value)
+        }
+
     var exportCharset: String
         get() {
             val c = appCtx.getPrefString(PreferKey.exportCharset)
@@ -251,6 +257,9 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
 
     val fullScreenGesturesSupport: Boolean
         get() = appCtx.getPrefBoolean(PreferKey.fullScreenGesturesSupport, false)
+
+    val doublePageHorizontal: Boolean
+        get() = appCtx.getPrefBoolean(PreferKey.doublePageHorizontal, true)
 
     private fun getPrefUserAgent(): String {
         val ua = appCtx.getPrefString(PreferKey.userAgent)

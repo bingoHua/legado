@@ -7,11 +7,14 @@ import io.legado.app.base.BaseViewModel
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.HttpTTS
 import io.legado.app.help.DefaultData
-import io.legado.app.help.http.newCall
+import io.legado.app.help.http.newCallResponseBody
 import io.legado.app.help.http.okHttpClient
 import io.legado.app.help.http.text
 import io.legado.app.model.NoStackTraceException
-import io.legado.app.utils.*
+import io.legado.app.utils.isJsonArray
+import io.legado.app.utils.isJsonObject
+import io.legado.app.utils.readText
+import io.legado.app.utils.toastOnUi
 
 class SpeakEngineViewModel(application: Application) : BaseViewModel(application) {
 
@@ -25,7 +28,7 @@ class SpeakEngineViewModel(application: Application) : BaseViewModel(application
 
     fun importOnLine(url: String) {
         execute {
-            okHttpClient.newCall {
+            okHttpClient.newCallResponseBody {
                 url(url)
             }.text("utf-8").let { json ->
                 import(json)
@@ -39,25 +42,23 @@ class SpeakEngineViewModel(application: Application) : BaseViewModel(application
 
     fun importLocal(uri: Uri) {
         execute {
-            uri.readText(context)?.let {
-                import(it)
-            }
+            import(uri.readText(context))
         }.onSuccess {
             context.toastOnUi("导入成功")
         }.onError {
-            context.toastOnUi("导入失败")
+            context.toastOnUi("导入失败\n${it.localizedMessage}")
         }
     }
 
     fun import(text: String) {
         when {
             text.isJsonArray() -> {
-                GSON.fromJsonArray<HttpTTS>(text)?.let {
+                HttpTTS.fromJsonArray(text).let {
                     appDb.httpTTSDao.insert(*it.toTypedArray())
                 }
             }
             text.isJsonObject() -> {
-                GSON.fromJsonObject<HttpTTS>(text)?.let {
+                HttpTTS.fromJson(text)?.let {
                     appDb.httpTTSDao.insert(it)
                 }
             }

@@ -31,12 +31,16 @@ abstract class BaseBookshelfFragment(layoutId: Int) : VMBaseFragment<BookshelfVi
     override val viewModel by viewModels<BookshelfViewModel>()
 
     private val importBookshelf = registerForActivityResult(HandleFileContract()) {
-        it?.readText(requireContext())?.let { text ->
-            viewModel.importBookshelf(text, groupId)
+        kotlin.runCatching {
+            it.uri?.readText(requireContext())?.let { text ->
+                viewModel.importBookshelf(text, groupId)
+            }
+        }.onFailure {
+            toastOnUi(it.localizedMessage ?: "ERROR")
         }
     }
     private val exportResult = registerForActivityResult(HandleFileContract()) {
-        it?.let { uri ->
+        it.uri?.let { uri ->
             alert(R.string.export_success) {
                 if (uri.toString().isAbsUrl()) {
                     DirectLinkUpload.getSummary()?.let { summary ->
@@ -51,7 +55,7 @@ abstract class BaseBookshelfFragment(layoutId: Int) : VMBaseFragment<BookshelfVi
                 okButton {
                     requireContext().sendToClip(uri.toString())
                 }
-            }.show()
+            }
         }
     }
     abstract val groupId: Long
@@ -69,7 +73,7 @@ abstract class BaseBookshelfFragment(layoutId: Int) : VMBaseFragment<BookshelfVi
             R.id.menu_search -> startActivity<SearchActivity>()
             R.id.menu_update_toc -> activityViewModel.upToc(books)
             R.id.menu_bookshelf_layout -> configBookshelf()
-            R.id.menu_group_manage -> childFragmentManager.showDialog<GroupManageDialog>()
+            R.id.menu_group_manage -> showDialogFragment<GroupManageDialog>()
             R.id.menu_add_local -> startActivity<ImportBookActivity>()
             R.id.menu_add_url -> addBookByUrl()
             R.id.menu_arrange_bookshelf -> startActivity<ArrangeBookActivity> {
@@ -78,18 +82,14 @@ abstract class BaseBookshelfFragment(layoutId: Int) : VMBaseFragment<BookshelfVi
             R.id.menu_download -> startActivity<CacheActivity> {
                 putExtra("groupId", groupId)
             }
-            R.id.menu_export_bookshelf -> viewModel.exportBookshelf(books) {
+            R.id.menu_export_bookshelf -> viewModel.exportBookshelf(books) { file ->
                 exportResult.launch {
                     mode = HandleFileContract.EXPORT
-                    fileData = Triple(
-                        "bookshelf.json",
-                        it.toByteArray(),
-                        "application/json"
-                    )
+                    fileData = Triple("bookshelf.json", file, "application/json")
                 }
             }
             R.id.menu_import_bookshelf -> importBookshelfAlert(groupId)
-            R.id.menu_log -> childFragmentManager.showDialog<AppLogDialog>()
+            R.id.menu_log -> showDialogFragment<AppLogDialog>()
         }
     }
 
@@ -106,7 +106,7 @@ abstract class BaseBookshelfFragment(layoutId: Int) : VMBaseFragment<BookshelfVi
                 }
             }
             noButton()
-        }.show()
+        }
     }
 
     @SuppressLint("InflateParams")
@@ -148,7 +148,7 @@ abstract class BaseBookshelfFragment(layoutId: Int) : VMBaseFragment<BookshelfVi
                 }
             }
             noButton()
-        }.show()
+        }
     }
 
 
@@ -170,7 +170,7 @@ abstract class BaseBookshelfFragment(layoutId: Int) : VMBaseFragment<BookshelfVi
                     allowExtensions = arrayOf("txt", "json")
                 }
             }
-        }.show()
+        }
     }
 
 }

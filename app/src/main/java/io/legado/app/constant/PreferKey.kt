@@ -2,6 +2,7 @@ package io.legado.app.constant
 
 object PreferKey {
     const val language = "language"
+    const val fontScale = "fontScale"
     const val themeMode = "themeMode"
     const val userAgent = "userAgent"
     const val showUnread = "showUnread"
@@ -88,6 +89,8 @@ object PreferKey {
     const val brightness = "brightness"
     const val nightBrightness = "nightBrightness"
     const val expandTextMenu = "expandTextMenu"
+    const val doublePageHorizontal = "doublePageHorizontal"
+    const val readUrlOpenInBrowser = "readUrlInBrowser"
 
     const val cPrimary = "colorPrimary"
     const val cAccent = "colorAccent"

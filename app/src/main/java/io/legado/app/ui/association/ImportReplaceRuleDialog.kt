@@ -4,7 +4,6 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.content.DialogInterface
 import android.os.Bundle
-import android.view.LayoutInflater
 import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
@@ -24,14 +23,15 @@ import io.legado.app.databinding.DialogRecyclerViewBinding
 import io.legado.app.databinding.ItemSourceImportBinding
 import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.theme.primaryColor
+import io.legado.app.ui.widget.dialog.CodeDialog
 import io.legado.app.ui.widget.dialog.WaitDialog
-import io.legado.app.utils.dp
-import io.legado.app.utils.putPrefBoolean
-import io.legado.app.utils.splitNotBlank
+import io.legado.app.utils.*
 import io.legado.app.utils.viewbindingdelegate.viewBinding
-import io.legado.app.utils.visible
+import splitties.views.onClick
 
-class ImportReplaceRuleDialog() : BaseDialogFragment(), Toolbar.OnMenuItemClickListener {
+class ImportReplaceRuleDialog() : BaseDialogFragment(R.layout.dialog_recycler_view),
+    Toolbar.OnMenuItemClickListener,
+    CodeDialog.Callback {
 
     constructor(source: String, finishOnDismiss: Boolean = false) : this() {
         arguments = Bundle().apply {
@@ -46,7 +46,7 @@ class ImportReplaceRuleDialog() : BaseDialogFragment(), Toolbar.OnMenuItemClickL
 
     override fun onStart() {
         super.onStart()
-        dialog?.window?.setLayout(
+        setLayout(
             ViewGroup.LayoutParams.MATCH_PARENT,
             ViewGroup.LayoutParams.WRAP_CONTENT
         )
@@ -57,14 +57,6 @@ class ImportReplaceRuleDialog() : BaseDialogFragment(), Toolbar.OnMenuItemClickL
         if (arguments?.getBoolean("finishOnDismiss") == true) {
             activity?.finish()
         }
-    }
-
-    override fun onCreateView(
-        inflater: LayoutInflater,
-        container: ViewGroup?,
-        savedInstanceState: Bundle?
-    ): View? {
-        return inflater.inflate(R.layout.dialog_recycler_view, container)
     }
 
     @SuppressLint("NotifyDataSetChanged")
@@ -171,7 +163,7 @@ class ImportReplaceRuleDialog() : BaseDialogFragment(), Toolbar.OnMenuItemClickL
                 }
             }
             noButton()
-        }.show()
+        }
     }
 
     private fun upSelectText() {
@@ -190,6 +182,15 @@ class ImportReplaceRuleDialog() : BaseDialogFragment(), Toolbar.OnMenuItemClickL
         }
     }
 
+    override fun onCodeSave(code: String, requestId: String?) {
+        requestId?.toInt()?.let {
+            GSON.fromJsonObject<ReplaceRule>(code)?.let { rule ->
+                viewModel.allRules[it] = rule
+                adapter.setItem(it, rule)
+            }
+        }
+    }
+
     inner class SourcesAdapter(context: Context) :
         RecyclerAdapter<ReplaceRule, ItemSourceImportBinding>(context) {
 
@@ -197,6 +198,7 @@ class ImportReplaceRuleDialog() : BaseDialogFragment(), Toolbar.OnMenuItemClickL
             return ItemSourceImportBinding.inflate(inflater, parent, false)
         }
 
+        @SuppressLint("SetTextI18n")
         override fun convert(
             holder: ItemViewHolder,
             binding: ItemSourceImportBinding,
@@ -205,15 +207,19 @@ class ImportReplaceRuleDialog() : BaseDialogFragment(), Toolbar.OnMenuItemClickL
         ) {
             binding.run {
                 cbSourceName.isChecked = viewModel.selectStatus[holder.layoutPosition]
-                cbSourceName.text = item.name
+                cbSourceName.text = if (item.group.isNullOrBlank()) {
+                    item.name
+                } else {
+                    "${item.name}(${item.group})"
+                }
                 val localRule = viewModel.checkRules[holder.layoutPosition]
                 tvSourceState.text = when {
-                    localRule == null -> "新规则"
+                    localRule == null -> "新增"
                     item.pattern != localRule.pattern
                             || item.replacement != localRule.replacement
                             || item.isRegex != localRule.isRegex
                             || item.scope != localRule.scope -> "更新"
-                    else -> "已存在"
+                    else -> "已有"
                 }
             }
         }
@@ -225,6 +231,21 @@ class ImportReplaceRuleDialog() : BaseDialogFragment(), Toolbar.OnMenuItemClickL
                         viewModel.selectStatus[holder.layoutPosition] = isChecked
                         upSelectText()
                     }
+                }
+                root.onClick {
+                    cbSourceName.isChecked = !cbSourceName.isChecked
+                    viewModel.selectStatus[holder.layoutPosition] = cbSourceName.isChecked
+                    upSelectText()
+                }
+                tvOpen.setOnClickListener {
+                    val source = viewModel.allRules[holder.layoutPosition]
+                    showDialogFragment(
+                        CodeDialog(
+                            GSON.toJson(source),
+                            disableEdit = false,
+                            requestId = holder.layoutPosition.toString()
+                        )
+                    )
                 }
             }
         }

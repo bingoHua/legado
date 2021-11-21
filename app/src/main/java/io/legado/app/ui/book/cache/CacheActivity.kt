@@ -6,7 +6,6 @@ import android.view.Menu
 import android.view.MenuItem
 import androidx.activity.viewModels
 import androidx.recyclerview.widget.LinearLayoutManager
-import com.google.android.material.snackbar.Snackbar
 import io.legado.app.R
 import io.legado.app.base.VMBaseActivity
 import io.legado.app.constant.AppConst
@@ -47,19 +46,19 @@ class CacheActivity : VMBaseActivity<ActivityCacheBookBinding, CacheViewModel>()
     private val adapter by lazy { CacheAdapter(this, this) }
     private var booksFlowJob: Job? = null
     private var menu: Menu? = null
-    private var exportPosition = -1
     private val groupList: ArrayList<BookGroup> = arrayListOf()
     private var groupId: Long = -1
 
-    private val exportDir = registerForActivityResult(HandleFileContract()) { uri ->
-        uri ?: return@registerForActivityResult
-        if (uri.isContentScheme()) {
-            ACache.get(this@CacheActivity).put(exportBookPathKey, uri.toString())
-            startExport(uri.toString())
-        } else {
-            uri.path?.let { path ->
-                ACache.get(this@CacheActivity).put(exportBookPathKey, path)
-                startExport(path)
+    private val exportDir = registerForActivityResult(HandleFileContract()) { result ->
+        result.uri?.let { uri ->
+            if (uri.isContentScheme()) {
+                ACache.get(this@CacheActivity).put(exportBookPathKey, uri.toString())
+                startExport(uri.toString(), result.requestCode)
+            } else {
+                uri.path?.let { path ->
+                    ACache.get(this@CacheActivity).put(exportBookPathKey, path)
+                    startExport(path, result.requestCode)
+                }
             }
         }
     }
@@ -129,13 +128,12 @@ class CacheActivity : VMBaseActivity<ActivityCacheBookBinding, CacheViewModel>()
             R.id.menu_export_no_chapter_name -> AppConfig.exportNoChapterName = !item.isChecked
             R.id.menu_export_web_dav -> AppConfig.exportToWebDav = !item.isChecked
             R.id.menu_export_folder -> {
-                exportPosition = -1
-                selectExportFolder()
+                selectExportFolder(-1)
             }
             R.id.menu_export_file_name -> alertExportFileName()
             R.id.menu_export_type -> showExportTypeConfig()
             R.id.menu_export_charset -> showCharsetConfig()
-            R.id.menu_log -> supportFragmentManager.showDialog<AppLogDialog>()
+            R.id.menu_log -> showDialogFragment<AppLogDialog>()
             else -> if (item.groupId == R.id.menu_group) {
                 binding.titleBar.subtitle = item.title
                 groupId = appDb.bookGroupDao.getByName(item.title.toString())?.groupId ?: 0
@@ -208,6 +206,13 @@ class CacheActivity : VMBaseActivity<ActivityCacheBookBinding, CacheViewModel>()
     }
 
     override fun observeLiveBus() {
+        viewModel.upAdapterLiveData.observe(this) {
+            adapter.getItems().forEachIndexed { index, book ->
+                if (book.bookUrl == it) {
+                    adapter.notifyItemChanged(index, true)
+                }
+            }
+        }
         observeEvent<String>(EventBus.UP_DOWNLOAD) {
             if (!CacheBook.isRun) {
                 menu?.findItem(R.id.menu_download)?.let { item ->
@@ -230,26 +235,24 @@ class CacheActivity : VMBaseActivity<ActivityCacheBookBinding, CacheViewModel>()
     }
 
     override fun export(position: Int) {
-        exportPosition = position
         val path = ACache.get(this@CacheActivity).getAsString(exportBookPathKey)
         if (path.isNullOrEmpty()) {
-            selectExportFolder()
+            selectExportFolder(position)
         } else {
-            startExport(path)
+            startExport(path, position)
         }
     }
 
     private fun exportAll() {
-        exportPosition = -10
         val path = ACache.get(this@CacheActivity).getAsString(exportBookPathKey)
         if (path.isNullOrEmpty()) {
-            selectExportFolder()
+            selectExportFolder(-10)
         } else {
-            startExport(path)
+            startExport(path, -10)
         }
     }
 
-    private fun selectExportFolder() {
+    private fun selectExportFolder(exportPosition: Int) {
         val default = arrayListOf<SelectItem<Int>>()
         val path = ACache.get(this@CacheActivity).getAsString(exportBookPathKey)
         if (!path.isNullOrEmpty()) {
@@ -257,31 +260,17 @@ class CacheActivity : VMBaseActivity<ActivityCacheBookBinding, CacheViewModel>()
         }
         exportDir.launch {
             otherActions = default
+            requestCode = exportPosition
         }
     }
 
-    private fun startExport(path: String) {
+    private fun startExport(path: String, exportPosition: Int) {
         if (exportPosition == -10) {
             if (adapter.getItems().isNotEmpty()) {
-                Snackbar.make(binding.titleBar, R.string.exporting, Snackbar.LENGTH_INDEFINITE)
-                    .show()
-                var exportSize = adapter.getItems().size
                 adapter.getItems().forEach { book ->
                     when (AppConfig.exportType) {
-                        1 -> viewModel.exportEPUB(path, book) {
-                            exportSize--
-                            toastOnUi(it)
-                            if (exportSize <= 0) {
-                                binding.titleBar.snackbar(R.string.complete)
-                            }
-                        }
-                        else -> viewModel.export(path, book) {
-                            exportSize--
-                            toastOnUi(it)
-                            if (exportSize <= 0) {
-                                binding.titleBar.snackbar(R.string.complete)
-                            }
-                        }
+                        1 -> viewModel.exportEPUB(path, book)
+                        else -> viewModel.export(path, book)
                     }
                 }
             } else {
@@ -289,15 +278,9 @@ class CacheActivity : VMBaseActivity<ActivityCacheBookBinding, CacheViewModel>()
             }
         } else if (exportPosition >= 0) {
             adapter.getItem(exportPosition)?.let { book ->
-                Snackbar.make(binding.titleBar, R.string.exporting, Snackbar.LENGTH_INDEFINITE)
-                    .show()
                 when (AppConfig.exportType) {
-                    1 -> viewModel.exportEPUB(path, book) {
-                        binding.titleBar.snackbar(it)
-                    }
-                    else -> viewModel.export(path, book) {
-                        binding.titleBar.snackbar(it)
-                    }
+                    1 -> viewModel.exportEPUB(path, book)
+                    else -> viewModel.export(path, book)
                 }
             }
         }
@@ -316,7 +299,7 @@ class CacheActivity : VMBaseActivity<ActivityCacheBookBinding, CacheViewModel>()
                 AppConfig.bookExportFileName = alertBinding.editView.text?.toString()
             }
             cancelButton()
-        }.show()
+        }
     }
 
     private fun getTypeName(): String {
@@ -343,7 +326,15 @@ class CacheActivity : VMBaseActivity<ActivityCacheBookBinding, CacheViewModel>()
                 AppConfig.exportCharset = alertBinding.editView.text?.toString() ?: "UTF-8"
             }
             cancelButton()
-        }.show()
+        }
+    }
+
+    override fun exportProgress(bookUrl: String): Int? {
+        return viewModel.exportProgress[bookUrl]
+    }
+
+    override fun exportMsg(bookUrl: String): String? {
+        return viewModel.exportMsg[bookUrl]
     }
 
 }

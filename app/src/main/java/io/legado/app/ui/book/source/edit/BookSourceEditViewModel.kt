@@ -5,12 +5,12 @@ import android.content.Intent
 import io.legado.app.base.BaseViewModel
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.BookSource
-import io.legado.app.help.BookSourceAnalyzer
 import io.legado.app.help.http.newCallStrResponse
 import io.legado.app.help.http.okHttpClient
 import io.legado.app.model.NoStackTraceException
 import io.legado.app.utils.*
 import kotlinx.coroutines.Dispatchers
+import timber.log.Timber
 
 class BookSourceEditViewModel(application: Application) : BaseViewModel(application) {
 
@@ -48,7 +48,7 @@ class BookSourceEditViewModel(application: Application) : BaseViewModel(applicat
             success?.invoke()
         }.onError {
             context.toastOnUi(it.localizedMessage)
-            it.printOnDebug()
+            Timber.e(it)
         }
     }
 
@@ -62,7 +62,7 @@ class BookSourceEditViewModel(application: Application) : BaseViewModel(applicat
             }
         }.onError {
             context.toastOnUi(it.localizedMessage ?: "Error")
-            it.printOnDebug()
+            Timber.e(it)
         }
     }
 
@@ -85,10 +85,10 @@ class BookSourceEditViewModel(application: Application) : BaseViewModel(applicat
             text.isJsonArray() -> {
                 val items: List<Map<String, Any>> = jsonPath.parse(text).read("$")
                 val jsonItem = jsonPath.parse(items[0])
-                BookSourceAnalyzer.jsonToBookSource(jsonItem.jsonString())
+                BookSource.fromJson(jsonItem.jsonString())
             }
             text.isJsonObject() -> {
-                BookSourceAnalyzer.jsonToBookSource(text)
+                BookSource.fromJson(text)
             }
             else -> {
                 null

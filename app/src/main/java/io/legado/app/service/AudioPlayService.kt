@@ -18,10 +18,7 @@ import com.google.android.exoplayer2.Player
 import com.google.android.exoplayer2.SimpleExoPlayer
 import io.legado.app.R
 import io.legado.app.base.BaseService
-import io.legado.app.constant.AppConst
-import io.legado.app.constant.EventBus
-import io.legado.app.constant.IntentAction
-import io.legado.app.constant.Status
+import io.legado.app.constant.*
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookChapter
@@ -35,6 +32,7 @@ import io.legado.app.ui.book.audio.AudioPlayActivity
 import io.legado.app.utils.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.Dispatchers.Main
+import timber.log.Timber
 
 
 class AudioPlayService : BaseService(),
@@ -130,8 +128,10 @@ class AudioPlayService : BaseService(),
                 upPlayProgressJob?.cancel()
                 val analyzeUrl = AnalyzeUrl(
                     url,
+                    source = AudioPlay.bookSource,
+                    ruleData = AudioPlay.book,
+                    chapter = AudioPlay.durChapter,
                     headerMapF = AudioPlay.headers(true),
-                    source = AudioPlay.bookSource
                 )
                 val uri = Uri.parse(analyzeUrl.url)
                 val mediaSource = ExoPlayerHelper
@@ -140,7 +140,7 @@ class AudioPlayService : BaseService(),
                 exoPlayer.playWhenReady = true
                 exoPlayer.prepare()
             }.onFailure {
-                it.printOnDebug()
+                Timber.e(it)
                 toastOnUi("$url ${it.localizedMessage}")
                 stopSelf()
             }
@@ -161,7 +161,7 @@ class AudioPlayService : BaseService(),
             postEvent(EventBus.AUDIO_STATE, Status.PAUSE)
             upNotification()
         } catch (e: Exception) {
-            e.printOnDebug()
+            Timber.e(e)
         }
     }
 
@@ -180,7 +180,7 @@ class AudioPlayService : BaseService(),
             postEvent(EventBus.AUDIO_STATE, Status.PLAY)
             upNotification()
         } catch (e: Exception) {
-            e.printOnDebug()
+            Timber.e(e)
             stopSelf()
         }
     }
@@ -249,12 +249,10 @@ class AudioPlayService : BaseService(),
         super.onPlayerError(error)
         AudioPlay.status = Status.STOP
         postEvent(EventBus.AUDIO_STATE, Status.STOP)
-        error.printOnDebug()
-    }
-
-    override fun onPlayerErrorChanged(error: PlaybackException?) {
-        super.onPlayerErrorChanged(error)
-        postEvent(EventBus.AUDIO_ERROR, error?.localizedMessage)
+        val errorMsg = "音频播放出错\n${error.errorCodeName} ${error.errorCode}"
+        AppLog.put(errorMsg, error)
+        toastOnUi(errorMsg)
+        Timber.e(error)
     }
 
     private fun setTimer(minute: Int) {

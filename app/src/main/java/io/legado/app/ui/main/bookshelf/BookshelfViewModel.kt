@@ -1,12 +1,13 @@
 package io.legado.app.ui.main.bookshelf
 
 import android.app.Application
+import com.google.gson.stream.JsonWriter
 import io.legado.app.R
 import io.legado.app.base.BaseViewModel
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookSource
-import io.legado.app.help.http.newCall
+import io.legado.app.help.http.newCallResponseBody
 import io.legado.app.help.http.okHttpClient
 import io.legado.app.help.http.text
 import io.legado.app.model.NoStackTraceException
@@ -14,6 +15,9 @@ import io.legado.app.model.webBook.WebBook
 import io.legado.app.utils.*
 import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.isActive
+import java.io.File
+import java.io.FileOutputStream
+import java.io.OutputStreamWriter
 
 class BookshelfViewModel(application: Application) : BaseViewModel(application) {
 
@@ -66,19 +70,33 @@ class BookshelfViewModel(application: Application) : BaseViewModel(application) 
         }
     }
 
-    fun exportBookshelf(books: List<Book>?, success: (json: String) -> Unit) {
+    fun exportBookshelf(books: List<Book>?, success: (file: File) -> Unit) {
         execute {
-            val exportList = arrayListOf<Map<String, String?>>()
-            books?.forEach {
-                val bookMap = hashMapOf<String, String?>()
-                bookMap["name"] = it.name
-                bookMap["author"] = it.author
-                bookMap["intro"] = it.getDisplayIntro()
-                exportList.add(bookMap)
-            }
-            GSON.toJson(exportList)
+            books?.let {
+                val path = "${context.filesDir}/books.json"
+                FileUtils.delete(path)
+                val file = FileUtils.createFileWithReplace(path)
+                @Suppress("BlockingMethodInNonBlockingContext")
+                FileOutputStream(file).use { out ->
+                    val writer = JsonWriter(OutputStreamWriter(out, "UTF-8"))
+                    writer.setIndent("  ")
+                    writer.beginArray()
+                    books.forEach {
+                        val bookMap = hashMapOf<String, String?>()
+                        bookMap["name"] = it.name
+                        bookMap["author"] = it.author
+                        bookMap["intro"] = it.getDisplayIntro()
+                        GSON.toJson(bookMap, bookMap::class.java, writer)
+                    }
+                    writer.endArray()
+                    writer.close()
+                }
+                file
+            } ?: throw NoStackTraceException("书籍不能为空")
         }.onSuccess {
             success(it)
+        }.onError {
+            context.toastOnUi("导出书籍出错\n${it.localizedMessage}")
         }
     }
 
@@ -87,7 +105,7 @@ class BookshelfViewModel(application: Application) : BaseViewModel(application) 
             val text = str.trim()
             when {
                 text.isAbsUrl() -> {
-                    okHttpClient.newCall {
+                    okHttpClient.newCallResponseBody {
                         url(text)
                     }.text().let {
                         importBookshelf(it, groupId)
@@ -108,18 +126,21 @@ class BookshelfViewModel(application: Application) : BaseViewModel(application) 
     private fun importBookshelfByJson(json: String, groupId: Long) {
         execute {
             val bookSources = appDb.bookSourceDao.allEnabled
-            GSON.fromJsonArray<Map<String, String?>>(json)?.forEach {
+            GSON.fromJsonArray<Map<String, String?>>(json)?.forEach { bookInfo ->
                 if (!isActive) return@execute
-                val name = it["name"] ?: ""
-                val author = it["author"] ?: ""
+                val name = bookInfo["name"] ?: ""
+                val author = bookInfo["author"] ?: ""
                 if (name.isNotEmpty() && appDb.bookDao.getBook(name, author) == null) {
-                    val book = WebBook.preciseSearch(this, bookSources, name, author)?.second
-                    book?.let {
-                        if (groupId > 0) {
-                            book.group = groupId
+                    WebBook.preciseSearch(this, bookSources, name, author)
+                        .onSuccess {
+                            val book = it.second
+                            if (groupId > 0) {
+                                book.group = groupId
+                            }
+                            book.save()
+                        }.onError { e ->
+                            context.toastOnUi(e.localizedMessage)
                         }
-                        book.save()
-                    }
                 }
             }
         }.onFinally {

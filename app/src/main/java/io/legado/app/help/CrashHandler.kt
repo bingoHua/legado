@@ -2,11 +2,11 @@ package io.legado.app.help
 
 import android.annotation.SuppressLint
 import android.content.Context
-import android.content.pm.PackageManager
 import android.os.Build
-import android.util.Log
+import io.legado.app.constant.AppConst
 import io.legado.app.model.ReadAloud
 import io.legado.app.utils.FileUtils
+import io.legado.app.utils.getFile
 import io.legado.app.utils.longToastOnUi
 import io.legado.app.utils.msg
 import java.io.PrintWriter
@@ -20,7 +20,6 @@ import java.util.concurrent.TimeUnit
  */
 @Suppress("DEPRECATION")
 class CrashHandler(val context: Context) : Thread.UncaughtExceptionHandler {
-    private val tag = this.javaClass.simpleName
 
     /**
      * 系统默认UncaughtExceptionHandler
@@ -58,47 +57,27 @@ class CrashHandler(val context: Context) : Thread.UncaughtExceptionHandler {
     private fun handleException(ex: Throwable?) {
         if (ex == null) return
         //收集设备参数信息
-        collectDeviceInfo(context)
-        //添加自定义信息
-        addCustomInfo()
+        collectDeviceInfo()
         //保存日志文件
         saveCrashInfo2File(ex)
         context.longToastOnUi(ex.msg)
+        Thread.sleep(3000)
     }
 
     /**
      * 收集设备参数信息
      */
-    private fun collectDeviceInfo(ctx: Context) {
-        //获取versionName,versionCode
+    private fun collectDeviceInfo() {
         kotlin.runCatching {
-            val pm = ctx.packageManager
-            val pi = pm.getPackageInfo(ctx.packageName, PackageManager.GET_ACTIVITIES)
-            if (pi != null) {
-                val versionName = if (pi.versionName == null) "null" else pi.versionName
-                val versionCode = pi.versionCode.toString() + ""
-                paramsMap["versionName"] = versionName
-                paramsMap["versionCode"] = versionCode
+            //获取系统信息
+            paramsMap["MANUFACTURER"] = Build.MANUFACTURER
+            paramsMap["BRAND"] = Build.BRAND
+            //获取app版本信息
+            AppConst.appInfo.let {
+                paramsMap["versionName"] = it.versionName
+                paramsMap["versionCode"] = it.versionCode.toString()
             }
         }
-
-        //获取所有系统信息
-        val fields = Build::class.java.declaredFields
-        kotlin.runCatching {
-            for (field in fields) {
-                field.isAccessible = true
-                field.get(null)?.toString()?.let {
-                    paramsMap[field.name] = it
-                }
-            }
-        }
-    }
-
-    /**
-     * 添加自定义参数
-     */
-    private fun addCustomInfo() {
-        Log.i(tag, "addCustomInfo: 程序出错了...")
     }
 
     /**
@@ -125,7 +104,7 @@ class CrashHandler(val context: Context) : Thread.UncaughtExceptionHandler {
         val time = format.format(Date())
         val fileName = "crash-$time-$timestamp.log"
         context.externalCacheDir?.let { rootFile ->
-            FileUtils.getFile(rootFile, "crash").listFiles()?.forEach {
+            rootFile.getFile("crash").listFiles()?.forEach {
                 if (it.lastModified() < System.currentTimeMillis() - TimeUnit.DAYS.toMillis(7)) {
                     it.delete()
                 }

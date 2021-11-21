@@ -13,6 +13,7 @@ import io.legado.app.data.entities.BookSource
 import io.legado.app.help.AppConfig
 import io.legado.app.help.BookHelp
 import io.legado.app.help.ContentProcessor
+import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.help.storage.AppWebDav
 import io.legado.app.model.NoStackTraceException
 import io.legado.app.model.ReadAloud
@@ -25,10 +26,12 @@ import io.legado.app.utils.msg
 import io.legado.app.utils.postEvent
 import io.legado.app.utils.toastOnUi
 import kotlinx.coroutines.Dispatchers.IO
+import kotlinx.coroutines.ensureActive
 
 class ReadBookViewModel(application: Application) : BaseViewModel(application) {
     var isInitFinish = false
     var searchContentQuery = ""
+    var changeSourceCoroutine: Coroutine<*>? = null
 
     fun initData(intent: Intent) {
         execute {
@@ -65,16 +68,8 @@ class ReadBookViewModel(application: Application) : BaseViewModel(application) {
             }
             syncBookProgress(book)
         } else {
-            ReadBook.book = book
-            if (ReadBook.durChapterIndex != book.durChapterIndex) {
-                ReadBook.durChapterIndex = book.durChapterIndex
-                ReadBook.durChapterPos = book.durChapterPos
-                ReadBook.clearTextChapter()
-            }
-            ReadBook.titleDate.postValue(book.name)
-            ReadBook.upWebBook(book)
+            ReadBook.upData(book)
             isInitFinish = true
-            ReadBook.chapterSize = appDb.bookChapterDao.getChapterCount(book.bookUrl)
             if (ReadBook.chapterSize == 0) {
                 if (book.tocUrl.isEmpty()) {
                     loadBookInfo(book)
@@ -145,10 +140,9 @@ class ReadBookViewModel(application: Application) : BaseViewModel(application) {
 
     fun syncBookProgress(
         book: Book,
-        syncBookProgress: Boolean = AppConfig.syncBookProgress,
         alertSync: ((progress: BookProgress) -> Unit)? = null
     ) {
-        if (syncBookProgress)
+        if (AppConfig.syncBookProgress)
             execute {
                 AppWebDav.getBookProgress(book)
             }.onSuccess {
@@ -165,12 +159,15 @@ class ReadBookViewModel(application: Application) : BaseViewModel(application) {
     }
 
     fun changeTo(source: BookSource, book: Book) {
-        execute {
+        changeSourceCoroutine?.cancel()
+        changeSourceCoroutine = execute {
             ReadBook.upMsg(context.getString(R.string.loading))
             if (book.tocUrl.isEmpty()) {
                 WebBook.getBookInfoAwait(this, source, book)
             }
+            ensureActive()
             val chapters = WebBook.getChapterListAwait(this, source, book)
+            ensureActive()
             val oldBook = ReadBook.book!!
             book.durChapterIndex = BookHelp.getDurChapter(
                 oldBook.durChapterIndex,
@@ -197,7 +194,7 @@ class ReadBookViewModel(application: Application) : BaseViewModel(application) {
         if (!AppConfig.autoChangeSource) return
         execute {
             val sources = appDb.bookSourceDao.allTextEnabled
-            WebBook.preciseSearch(this, sources, name, author)?.let {
+            WebBook.preciseSearchAwait(this, sources, name, author)?.let {
                 it.second.upInfoFromOld(ReadBook.book)
                 changeTo(it.first, it.second)
             } ?: throw NoStackTraceException("自动换源失败")
@@ -331,6 +328,15 @@ class ReadBookViewModel(application: Application) : BaseViewModel(application) {
             ReadBook.book?.let {
                 ContentProcessor.get(it.name, it.origin).upReplaceRules()
                 ReadBook.loadContent(resetPageOffset = false)
+            }
+        }
+    }
+
+    fun disableSource() {
+        execute {
+            ReadBook.bookSource?.let {
+                it.enabled = false
+                appDb.bookSourceDao.update(it)
             }
         }
     }

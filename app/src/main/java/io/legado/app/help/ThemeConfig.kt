@@ -14,6 +14,7 @@ import io.legado.app.lib.theme.ThemeStore
 import io.legado.app.model.BookCover
 import io.legado.app.utils.*
 import splitties.init.appCtx
+import timber.log.Timber
 import java.io.File
 
 object ThemeConfig {
@@ -58,11 +59,10 @@ object ThemeConfig {
         if (bgCfg.first.isNullOrBlank()) return null
         val bgImage = BitmapUtils
             .decodeBitmap(bgCfg.first!!, metrics.widthPixels, metrics.heightPixels)
-            ?: return null
         if (bgCfg.second == 0) {
             return bgImage
         }
-        return BitmapUtils.stackBlur(bgImage, bgCfg.second.toFloat())
+        return bgImage.stackBlur(bgCfg.second.toFloat())
     }
 
     fun upConfig() {
@@ -108,7 +108,7 @@ object ThemeConfig {
                 val json = configFile.readText()
                 return GSON.fromJsonArray(json)
             }.onFailure {
-                it.printOnDebug()
+                Timber.e(it)
             }
         }
         return null

@@ -17,10 +17,11 @@ import io.legado.app.help.coroutine.CompositeCoroutine
 import io.legado.app.model.webBook.WebBook
 import io.legado.app.utils.getPrefBoolean
 import io.legado.app.utils.getPrefString
-import io.legado.app.utils.printOnDebug
+
 import kotlinx.coroutines.*
 import kotlinx.coroutines.Dispatchers.IO
 import splitties.init.appCtx
+import timber.log.Timber
 import java.util.concurrent.CopyOnWriteArraySet
 import java.util.concurrent.Executors
 import kotlin.math.min
@@ -115,7 +116,12 @@ class ChangeSourceViewModel(application: Application) : BaseViewModel(applicatio
             if (searchGroup.isBlank()) {
                 bookSourceList.addAll(appDb.bookSourceDao.allEnabled)
             } else {
-                bookSourceList.addAll(appDb.bookSourceDao.getEnabledByGroup(searchGroup))
+                val sources = appDb.bookSourceDao.getEnabledByGroup(searchGroup)
+                if (sources.isEmpty()) {
+                    bookSourceList.addAll(appDb.bookSourceDao.allEnabled)
+                } else {
+                    bookSourceList.addAll(sources)
+                }
             }
             searchStateData.postValue(true)
             initSearchPool()
@@ -187,7 +193,7 @@ class ChangeSourceViewModel(application: Application) : BaseViewModel(applicatio
                     searchFinish(searchBook)
                 }
             }.onError {
-                it.printOnDebug()
+                Timber.e(it)
             }
     }
 
@@ -198,7 +204,7 @@ class ChangeSourceViewModel(application: Application) : BaseViewModel(applicatio
                 val searchBook: SearchBook = book.toSearchBook()
                 searchFinish(searchBook)
             }.onError {
-                it.printOnDebug()
+                Timber.e(it)
             }
     }
 

@@ -3,7 +3,6 @@
 package io.legado.app.utils
 
 import android.annotation.SuppressLint
-import io.legado.app.BuildConfig
 import splitties.init.appCtx
 import java.text.SimpleDateFormat
 import java.util.*
@@ -69,18 +68,4 @@ object LogUtils {
         val sdf = SimpleDateFormat(pattern)
         return sdf.format(date)
     }
-}
-
-fun Throwable.printOnDebug() {
-    if (BuildConfig.DEBUG) {
-        printStackTrace()
-    }
-}
-
-fun dLog(tag: String, msg: String) {
-    LogUtils.d(tag, msg)
-}
-
-fun eLog(tag: String, msg: String) {
-    LogUtils.e(tag, msg)
 }

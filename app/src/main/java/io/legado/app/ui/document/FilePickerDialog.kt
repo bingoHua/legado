@@ -4,10 +4,8 @@ import android.content.DialogInterface
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
-import android.view.LayoutInflater
 import android.view.MenuItem
 import android.view.View
-import android.view.ViewGroup
 import androidx.appcompat.widget.Toolbar
 import androidx.fragment.app.FragmentManager
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -26,7 +24,7 @@ import io.legado.app.utils.viewbindingdelegate.viewBinding
 import java.io.File
 
 
-class FilePickerDialog : BaseDialogFragment(),
+class FilePickerDialog : BaseDialogFragment(R.layout.dialog_file_chooser),
     Toolbar.OnMenuItemClickListener,
     FileAdapter.CallBack,
     PathAdapter.CallBack {
@@ -76,16 +74,7 @@ class FilePickerDialog : BaseDialogFragment(),
 
     override fun onStart() {
         super.onStart()
-        val dm = requireActivity().windowSize
-        dialog?.window?.setLayout((dm.widthPixels * 0.9).toInt(), (dm.heightPixels * 0.8).toInt())
-    }
-
-    override fun onCreateView(
-        inflater: LayoutInflater,
-        container: ViewGroup?,
-        savedInstanceState: Bundle?
-    ): View? {
-        return inflater.inflate(R.layout.dialog_file_chooser, container, true)
+        setLayout(0.9f, 0.8f)
     }
 
     override fun onFragmentCreated(view: View, savedInstanceState: Bundle?) {

@@ -9,8 +9,9 @@ import io.legado.app.help.JsExtensions
 import io.legado.app.help.http.CookieStore
 import io.legado.app.utils.EncoderUtils
 import io.legado.app.utils.GSON
+import io.legado.app.utils.fromJsonArray
 import io.legado.app.utils.fromJsonObject
-import io.legado.app.utils.printOnDebug
+import timber.log.Timber
 import javax.script.SimpleBindings
 
 /**
@@ -21,12 +22,16 @@ interface BaseSource : JsExtensions {
 
     var concurrentRate: String? // 并发率
     var loginUrl: String?       // 登录地址
-    var loginUi: List<RowUi>?   // 登录UI
+    var loginUi: String?   // 登录UI
     var header: String?         // 请求头
 
     fun getTag(): String
 
     fun getKey(): String
+
+    fun loginUi(): List<RowUi>? {
+        return GSON.fromJsonArray(loginUi)
+    }
 
     fun getLoginJs(): String? {
         val loginJs = loginUrl
@@ -36,6 +41,12 @@ interface BaseSource : JsExtensions {
             loginJs.startsWith("<js>") ->
                 loginJs.substring(4, loginJs.lastIndexOf("<"))
             else -> loginJs
+        }
+    }
+
+    fun login() {
+        getLoginJs()?.let {
+            evalJS(it)
         }
     }
 
@@ -83,6 +94,10 @@ interface BaseSource : JsExtensions {
         CacheManager.put("loginHeader_${getKey()}", header)
     }
 
+    fun removeLoginHeader() {
+        CacheManager.delete("loginHeader_${getKey()}")
+    }
+
     /**
      * 获取用户信息,可以用来登录
      * 用户信息采用aes加密存储
@@ -96,7 +111,7 @@ interface BaseSource : JsExtensions {
                 ?: return null
             return String(decodeBytes)
         } catch (e: Exception) {
-            e.printOnDebug()
+            Timber.e(e)
             return null
         }
     }
@@ -116,7 +131,7 @@ interface BaseSource : JsExtensions {
             CacheManager.put("userInfo_${getKey()}", encodeStr)
             true
         } catch (e: Exception) {
-            e.printOnDebug()
+            Timber.e(e)
             false
         }
     }
@@ -141,8 +156,9 @@ interface BaseSource : JsExtensions {
      * 执行JS
      */
     @Throws(Exception::class)
-    fun evalJS(jsStr: String): Any? {
+    fun evalJS(jsStr: String, bindingsConfig: SimpleBindings.() -> Unit = {}): Any? {
         val bindings = SimpleBindings()
+        bindings.apply(bindingsConfig)
         bindings["java"] = this
         bindings["source"] = this
         bindings["baseUrl"] = getKey()
