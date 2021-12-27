@@ -222,8 +222,8 @@ dependencies {
     //代码编辑com.github.AmrDeveloper:CodeView已集成到应用内
     //epubLib集成到应用内
 
-    // LeakCanary
-    debugImplementation 'com.squareup.leakcanary:leakcanary-android:2.7'
     implementation group: 'org.freemarker', name: 'freemarker-gae', version: '2.3.31'
     implementation 'com.microsoft.cognitiveservices.speech:client-sdk:1.15.0'
+    // LeakCanary
+    //debugImplementation 'com.squareup.leakcanary:leakcanary-android:2.7'
 }
