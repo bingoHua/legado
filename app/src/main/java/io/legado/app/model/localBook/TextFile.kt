@@ -8,15 +8,11 @@ import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookChapter
 import io.legado.app.data.entities.TxtTocRule
 import io.legado.app.help.DefaultData
-import io.legado.app.utils.EncodingDetect
-import io.legado.app.utils.MD5Utils
-import io.legado.app.utils.StringUtils
-import io.legado.app.utils.isContentScheme
+import io.legado.app.model.localBook.LocalBook.cacheFolder
+import io.legado.app.utils.*
 import splitties.init.appCtx
-import java.io.File
-import java.io.FileDescriptor
-import java.io.FileInputStream
-import java.io.FileNotFoundException
+import java.io.*
+import java.nio.ByteBuffer
 import java.nio.charset.Charset
 import java.util.regex.Matcher
 import java.util.regex.Pattern
@@ -24,18 +20,12 @@ import java.util.regex.Pattern
 class TextFile(private val book: Book) {
 
     private val tocRules = arrayListOf<TxtTocRule>()
-    private lateinit var charset: Charset
+    private var charset: Charset = book.fileCharset()
 
     @Throws(FileNotFoundException::class)
     fun getChapterList(): ArrayList<BookChapter> {
         return getBookFD(book).let { fd ->
             try {
-                val buffer = ByteArray(BUFFER_SIZE)
-                Os.read(fd, buffer, 0, BUFFER_SIZE)
-                if (book.charset == null) {
-                    book.charset = EncodingDetect.getEncode(buffer)
-                }
-                charset = book.fileCharset()
                 val rulePattern = if (book.tocUrl.isNotEmpty()) {
                     Pattern.compile(book.tocUrl, Pattern.MULTILINE)
                 } else {
@@ -44,12 +34,13 @@ class TextFile(private val book: Book) {
                 }
                 analyze(fd, book, rulePattern)
             } finally {
-                Os.close(fd)
+                if (fd.valid()) {
+                    Os.close(fd)
+                }
             }
         }
     }
 
-    @Throws(FileNotFoundException::class)
     private fun analyze(
         bookFd: FileDescriptor,
         book: Book,
@@ -58,11 +49,21 @@ class TextFile(private val book: Book) {
         val toc = arrayListOf<BookChapter>()
         var tocRule: TxtTocRule? = null
         val buffer = ByteArray(BUFFER_SIZE)
-        val rulePattern = pattern ?: let {
+        var blockContent = ""
+        if (book.charset == null) {
             Os.lseek(bookFd, 0, SEEK_SET)
             val length = Os.read(bookFd, buffer, 0, BUFFER_SIZE)
-            val content = String(buffer, 0, length, charset)
-            tocRule = getTocRule(content)
+            book.charset = EncodingDetect.getEncode(buffer)
+            blockContent = String(buffer, 0, length, charset)
+            charset = book.fileCharset()
+        }
+        val rulePattern = pattern ?: let {
+            if (blockContent.isEmpty()) {
+                Os.lseek(bookFd, 0, SEEK_SET)
+                val length = Os.read(bookFd, buffer, 0, BUFFER_SIZE)
+                blockContent = String(buffer, 0, length, charset)
+            }
+            tocRule = getTocRule(blockContent)
             tocRule?.let {
                 Pattern.compile(it.rule, Pattern.MULTILINE)
             }
@@ -76,14 +77,14 @@ class TextFile(private val book: Book) {
         //读取的长度
         var length: Int
         var allLength = 0
-
+        val xx = ByteBuffer.allocate(BUFFER_SIZE)
         //获取文件中的数据到buffer，直到没有数据为止
-        while (Os.read(bookFd, buffer, 0, BUFFER_SIZE).also { length = it } > 0) {
+        while (Os.read(bookFd, xx).also { length = it } > 0) {
             blockPos++
             //如果存在Chapter
             if (rulePattern != null) {
                 //将数据转换成String, 不能超过length
-                var blockContent = String(buffer, 0, length, charset)
+                blockContent = String(xx.array(), 0, length, charset)
                 val lastN = blockContent.lastIndexOf("\n")
                 if (lastN > 0) {
                     blockContent = blockContent.substring(0, lastN)
@@ -234,17 +235,24 @@ class TextFile(private val book: Book) {
         return toc
     }
 
+    /**
+     * 获取匹配次数最多的目录规则
+     */
     private fun getTocRule(content: String): TxtTocRule? {
         var txtTocRule: TxtTocRule? = null
+        var maxCs = 0
         for (tocRule in tocRules) {
             val pattern = Pattern.compile(tocRule.rule, Pattern.MULTILINE)
             val matcher = pattern.matcher(content)
-            if (matcher.find()) {
+            var cs = 0
+            while (matcher.find()) {
+                cs++
+            }
+            if (cs > maxCs) {
+                maxCs = cs
                 txtTocRule = tocRule
-                break
             }
         }
-
         return txtTocRule
     }
 
@@ -284,7 +292,18 @@ class TextFile(private val book: Book) {
         private fun getBookFD(book: Book): FileDescriptor {
             if (book.bookUrl.isContentScheme()) {
                 val uri = Uri.parse(book.bookUrl)
-                return appCtx.contentResolver.openFileDescriptor(uri, "r")!!.fileDescriptor
+                val bookFile = cacheFolder.getFile(book.name)
+                if (!bookFile.exists()) {
+                    bookFile.createNewFile()
+                    appCtx.contentResolver.openInputStream(uri).use { iStream ->
+                        FileOutputStream(bookFile).use { oStream ->
+                            iStream?.copyTo(oStream)
+                            oStream.flush()
+                        }
+                    }
+                }
+                return FileInputStream(bookFile).fd
+                //return appCtx.contentResolver.openFileDescriptor(uri, "r")!!.fileDescriptor
             }
             return FileInputStream(File(book.bookUrl)).fd
         }
