@@ -178,7 +178,7 @@ class HttpReadAloudService : BaseReadAloudService(),
                                 toastOnUi("js错误\n${it.localizedMessage}")
                                 Timber.e(it)
                                 cancel()
-                                stopSelf()
+                                pauseReadAloud(true)
                             }
                             is SocketTimeoutException, is ConnectException -> {
                                 removeSpeakCache(fileName)
