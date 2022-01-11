@@ -6,6 +6,7 @@ import io.legado.app.R
 import io.legado.app.constant.AppLog
 import io.legado.app.constant.AppPattern
 import io.legado.app.constant.EventBus
+import io.legado.app.data.entities.HttpTTS
 import io.legado.app.help.AppConfig
 import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.model.ConcurrentException
@@ -127,41 +128,21 @@ class HttpReadAloudService : BaseReadAloudService(),
                     return@forEachIndexed
                 } else {
                     runCatching {
-                        createSpeakCache(fileName)
-                        val analyzeUrl = AnalyzeUrl(
-                            httpTts.url,
-                            speakText = speakText,
-                            speakSpeed = AppConfig.ttsSpeechRate,
-                            source = httpTts,
-                            headerMapF = httpTts.getHeaderMap(true)
-                        )
-                        var response = mutex.withLock {
-                            analyzeUrl.getResponseAwait()
-                        }
-                        ensureActive()
-                        httpTts.loginCheckJs?.takeIf { checkJs ->
-                            checkJs.isNotBlank()
-                        }?.let { checkJs ->
-                            response = analyzeUrl.evalJS(checkJs, response) as Response
-                        }
-                        httpTts.contentType?.takeIf { ct ->
-                            ct.isNotBlank()
-                        }?.let { ct ->
-                            response.headers["Content-Type"]?.let { contentType ->
-                                if (!contentType.matches(ct.toRegex())) {
-                                    throw NoStackTraceException(response.body!!.string())
+                        var downloadSuccess = false
+                        while (!downloadSuccess) {
+                            try {
+                                downloadSingle(fileName, httpTts, speakText, index)
+                                downloadSuccess = true
+                            } catch (e: Exception) {
+                                when (e) {
+                                    is CancellationException, is ConcurrentException, is ScriptException,
+                                    is WrappedException, is SocketTimeoutException, is ConnectException -> throw e
+                                    else -> {
+                                        //如果播放没有暂停，则重试下载
+                                        LogUtils.d("lizehua", "redownload.speakText=${speakText},index=${index}")
+                                        ensureActive()
+                                    }
                                 }
-                            }
-                        }
-                        ensureActive()
-                        response.body!!.bytes().let { bytes ->
-                            ensureActive()
-                            val file = createSpeakFileAsMd5IfNotExist(fileName)
-                            file.writeBytes(bytes)
-                            removeSpeakCache(fileName)
-                            val fis = FileInputStream(file)
-                            if (index == nowSpeak) {
-                                playAudio(fis.fd)
                             }
                         }
                         downloadErrorNo = 0
@@ -203,6 +184,51 @@ class HttpReadAloudService : BaseReadAloudService(),
                         }
                     }
                 }
+            }
+        }
+    }
+
+    private suspend fun downloadSingle(
+        fileName: String,
+        httpTts: HttpTTS,
+        speakText: String,
+        index: Int
+    ) {
+        createSpeakCache(fileName)
+        val analyzeUrl = AnalyzeUrl(
+            httpTts.url,
+            speakText = speakText,
+            speakSpeed = AppConfig.ttsSpeechRate,
+            source = httpTts,
+            headerMapF = httpTts.getHeaderMap(true)
+        )
+        var response = mutex.withLock {
+            analyzeUrl.getResponseAwait()
+        }
+        ensureActive()
+        httpTts.loginCheckJs?.takeIf { checkJs ->
+            checkJs.isNotBlank()
+        }?.let { checkJs ->
+            response = analyzeUrl.evalJS(checkJs, response) as Response
+        }
+        httpTts.contentType?.takeIf { ct ->
+            ct.isNotBlank()
+        }?.let { ct ->
+            response.headers["Content-Type"]?.let { contentType ->
+                if (!contentType.matches(ct.toRegex())) {
+                    throw NoStackTraceException(response.body!!.string())
+                }
+            }
+        }
+        ensureActive()
+        response.body!!.bytes().let { bytes ->
+            ensureActive()
+            val file = createSpeakFileAsMd5IfNotExist(fileName)
+            file.writeBytes(bytes)
+            removeSpeakCache(fileName)
+            val fis = FileInputStream(file)
+            if (index == nowSpeak) {
+                playAudio(fis.fd)
             }
         }
     }
