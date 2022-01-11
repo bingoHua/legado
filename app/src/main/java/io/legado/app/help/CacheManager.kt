@@ -60,6 +60,14 @@ object CacheManager {
         return null
     }
 
+    fun putFile(key: String, value: String, saveTime: Int = 0) {
+        ACache.get(appCtx).put(key, value, saveTime)
+    }
+
+    fun getFile(key: String): String? {
+        return ACache.get(appCtx).getAsString(key)
+    }
+
     fun delete(key: String) {
         appDb.cacheDao.delete(key)
         ACache.get(appCtx).remove(key)

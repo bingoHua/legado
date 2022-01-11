@@ -48,6 +48,7 @@ class FileAssociationActivity :
                 if (treeUriStr.isNullOrEmpty()) {
                     localBookTreeSelect.launch {
                         title = "选择保存书籍的文件夹"
+                        mode = HandleFileContract.DIR_SYS
                     }
                 } else {
                     importBook(Uri.parse(treeUriStr), uri)
@@ -104,19 +105,19 @@ class FileAssociationActivity :
                     val bookDoc = DocumentFile.fromSingleUri(this@FileAssociationActivity, uri)
                     withContext(IO) {
                         val name = bookDoc?.name!!
-                        val doc = treeDoc!!.findFile(name)
-                        if (doc != null) {
-                            viewModel.importBook(doc.uri)
-                        } else {
-                            val nDoc = treeDoc.createFile(FileUtils.getMimeType(name), name)!!
-                            contentResolver.openOutputStream(nDoc.uri)!!.use { oStream ->
+                        var doc = treeDoc!!.findFile(name)
+                        if (doc == null || bookDoc.lastModified() > doc.lastModified()) {
+                            if (doc == null) {
+                                doc = treeDoc.createFile(FileUtils.getMimeType(name), name)!!
+                            }
+                            contentResolver.openOutputStream(doc.uri)!!.use { oStream ->
                                 contentResolver.openInputStream(bookDoc.uri)!!.use { iStream ->
                                     iStream.copyTo(oStream)
                                     oStream.flush()
                                 }
                             }
-                            viewModel.importBook(nDoc.uri)
                         }
+                        viewModel.importBook(doc.uri)
                     }
                 } else {
                     val treeFile = File(treeUri.path!!)

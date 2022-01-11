@@ -6,6 +6,7 @@ import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.viewModelScope
 import io.legado.app.R
 import io.legado.app.base.BaseViewModel
+import io.legado.app.constant.AppLog
 import io.legado.app.constant.EventBus
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.Book
@@ -127,7 +128,10 @@ class ReadBookViewModel(application: Application) : BaseViewModel(application) {
                     is SecurityException -> {
                         permissionDenialLiveData.postValue(1)
                     }
-                    else -> ReadBook.upMsg("LoadTocError:${it.localizedMessage}")
+                    else -> {
+                        AppLog.put("LoadTocError:${it.localizedMessage}", it)
+                        ReadBook.upMsg("LoadTocError:${it.localizedMessage}")
+                    }
                 }
             }
         } else {
@@ -216,15 +220,17 @@ class ReadBookViewModel(application: Application) : BaseViewModel(application) {
     }
 
     fun openChapter(index: Int, durChapterPos: Int = 0, success: (() -> Unit)? = null) {
-        ReadBook.clearTextChapter()
-        ReadBook.callBack?.upContent()
-        if (index != ReadBook.durChapterIndex) {
-            ReadBook.durChapterIndex = index
-            ReadBook.durChapterPos = durChapterPos
-        }
-        ReadBook.saveRead()
-        ReadBook.loadContent(resetPageOffset = true) {
-            success?.invoke()
+        if (index < ReadBook.chapterSize) {
+            ReadBook.clearTextChapter()
+            ReadBook.callBack?.upContent()
+            if (index != ReadBook.durChapterIndex) {
+                ReadBook.durChapterIndex = index
+                ReadBook.durChapterPos = durChapterPos
+            }
+            ReadBook.saveRead()
+            ReadBook.loadContent(resetPageOffset = true) {
+                success?.invoke()
+            }
         }
     }
 

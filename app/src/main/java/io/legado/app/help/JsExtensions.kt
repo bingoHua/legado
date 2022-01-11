@@ -126,6 +126,44 @@ interface JsExtensions {
     }
 
     /**
+     * 缓存以文本方式保存的文件 如.js .txt等
+     */
+    fun cacheFile(urlStr: String): String? {
+        return cacheFile(urlStr, 0)
+    }
+
+     /**
+     * 缓存以文本方式保存的文件 如.js .txt等
+      * @param urlStr 网络文件的链接
+      * @param saveTime 缓存时间，单位：秒
+      * @return 返回缓存后的文件内容
+     */
+    fun cacheFile(urlStr: String, saveTime: Int = 0): String? {
+         val key = md5Encode16(urlStr)
+         val cache = CacheManager.getFile(key)
+         if (cache.isNullOrBlank()) {
+             log("首次下载 $urlStr")
+             val value = ajax(urlStr) ?: return null
+             CacheManager.putFile(key, value, saveTime)
+             return value
+         }
+         return cache
+     }
+
+    /**
+     *js实现读取cookie
+     */
+    fun getCookie(tag: String, key: String? = null): String {
+        val cookie = CookieStore.getCookie(tag)
+        val cookieMap = CookieStore.cookieToMap(cookie)
+        return if (key != null) {
+            cookieMap[key] ?: ""
+        } else {
+            cookie
+        }
+    }
+
+    /**
      * 实现16进制字符串转文件
      * @param content 需要转成文件的16进制字符串
      * @param url 通过url里的参数来判断文件类型
@@ -172,19 +210,6 @@ interface JsExtensions {
             .headers(headers)
             .method(Connection.Method.POST)
             .execute()
-    }
-
-    /**
-     *js实现读取cookie
-     */
-    fun getCookie(tag: String, key: String? = null): String {
-        val cookie = CookieStore.getCookie(tag)
-        val cookieMap = CookieStore.cookieToMap(cookie)
-        return if (key != null) {
-            cookieMap[key] ?: ""
-        } else {
-            cookie
-        }
     }
 
     /**
@@ -275,7 +300,7 @@ interface JsExtensions {
         return HtmlFormatter.formatKeepImg(str)
     }
 
-    //****************文件操作******************//
+//****************文件操作******************//
 
     /**
      * 获取本地文件
@@ -410,7 +435,7 @@ interface JsExtensions {
         return null
     }
 
-    //******************文件操作************************//
+//******************文件操作************************//
 
     /**
      * 解析字体,返回字体解析类
