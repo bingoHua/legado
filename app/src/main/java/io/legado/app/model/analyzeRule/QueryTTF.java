@@ -235,7 +235,7 @@ public class QueryTTF {
 
     public final Map<Integer, String> codeToGlyph = new HashMap<>();
     public final Map<String, Integer> glyphToCode = new HashMap<>();
-    private int limitMix = 0;
+    private int limitMix = Integer.MAX_VALUE;
     private int limitMax = 0;
 
     /**
@@ -472,14 +472,14 @@ public class QueryTTF {
         for (int key = 0; key < 130000; ++key) {
             if (key == 0xFF) key = 0x3400;
             int gid = getGlyfIndex(key);
-            if (gid == 0) continue;
+            if (gid == 0 || gid >= glyf.size()) continue;
             StringBuilder sb = new StringBuilder();
             // 字型数据转String，方便存HashMap
             for (short b : glyf.get(gid).xCoordinates) sb.append(b);
             for (short b : glyf.get(gid).yCoordinates) sb.append(b);
             String val = sb.toString();
-            if (limitMix == 0) limitMix = key;
-            limitMax = key;
+            if (limitMix > key) limitMix = key;
+            if (limitMax < key) limitMax = key;
             codeToGlyph.put(key, val);
             if (glyphToCode.containsKey(val)) continue;
             glyphToCode.put(val, key);
@@ -576,8 +576,8 @@ public class QueryTTF {
      * @param code 传入Unicode十进制值
      * @return 返回bool查询结果
      */
-    public boolean inLimit(char code) {
-        return (limitMix <= code) && (code < limitMax);
+    public boolean inLimit(int code) {
+        return (limitMix <= code) && (code <= limitMax);
     }
 
     /**
