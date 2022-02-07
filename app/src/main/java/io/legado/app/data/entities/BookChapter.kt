@@ -80,27 +80,28 @@ data class BookChapter(
         chineseConvert: Boolean = true,
     ): String {
         var displayTitle = title.replace(AppPattern.rnRegex, "")
-        val mDisplayTitle = displayTitle
+        if (chineseConvert) {
+            when (AppConfig.chineseConverterType) {
+                1 -> displayTitle = ChineseUtils.t2s(displayTitle)
+                2 -> displayTitle = ChineseUtils.s2t(displayTitle)
+            }
+        }
         if (useReplace && replaceRules != null) {
             replaceRules.forEach { item ->
                 if (item.pattern.isNotEmpty()) {
                     try {
-                        displayTitle = if (item.isRegex) {
+                        val mDisplayTitle = if (item.isRegex) {
                             displayTitle.replace(item.pattern.toRegex(), item.replacement)
                         } else {
                             displayTitle.replace(item.pattern, item.replacement)
+                        }
+                        if (mDisplayTitle.isNotBlank()) {
+                            displayTitle = mDisplayTitle
                         }
                     } catch (e: Exception) {
                         appCtx.toastOnUi("${item.name}替换出错")
                     }
                 }
-            }
-        }
-        if (displayTitle.isBlank()) displayTitle = mDisplayTitle
-        if (chineseConvert) {
-            when (AppConfig.chineseConverterType) {
-                1 -> displayTitle = ChineseUtils.t2s(displayTitle)
-                2 -> displayTitle = ChineseUtils.s2t(displayTitle)
             }
         }
         return when {
