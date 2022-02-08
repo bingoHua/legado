@@ -91,6 +91,7 @@ class BookInfoActivity :
             viewModel.upEditBook()
         }
     }
+    private var tocChanged = false
 
     override val binding by viewBinding(ActivityBookInfoBinding::inflate)
     override val viewModel by viewModels<BookInfoViewModel>()
@@ -104,8 +105,8 @@ class BookInfoActivity :
         binding.flAction.setBackgroundColor(bottomBackground)
         binding.tvShelf.setTextColor(getPrimaryTextColor(ColorUtils.isColorLight(bottomBackground)))
         binding.tvToc.text = getString(R.string.toc_s, getString(R.string.loading))
-        viewModel.bookData.observe(this, { showBook(it) })
-        viewModel.chapterListData.observe(this, { upLoading(false, it) })
+        viewModel.bookData.observe(this) { showBook(it) }
+        viewModel.chapterListData.observe(this) { upLoading(false, it) }
         viewModel.initData(intent)
         initOnClick()
     }
@@ -118,12 +119,18 @@ class BookInfoActivity :
     override fun onMenuOpened(featureId: Int, menu: Menu): Boolean {
         menu.findItem(R.id.menu_can_update)?.isChecked =
             viewModel.bookData.value?.canUpdate ?: true
+        menu.findItem(R.id.menu_limit_content_length)?.isChecked =
+            viewModel.bookData.value?.getLimitContentLength() ?: false
         menu.findItem(R.id.menu_login)?.isVisible =
             !viewModel.bookSource?.loginUrl.isNullOrBlank()
         menu.findItem(R.id.menu_set_source_variable)?.isVisible =
             viewModel.bookSource != null
         menu.findItem(R.id.menu_set_book_variable)?.isVisible =
             viewModel.bookSource != null
+        menu.findItem(R.id.menu_can_update)?.isVisible =
+            viewModel.bookSource != null
+        menu.findItem(R.id.menu_limit_content_length)?.isVisible =
+            viewModel.bookData.value?.isLocalTxt() ?: false
         return super.onMenuOpened(featureId, menu)
     }
 
@@ -183,6 +190,16 @@ class BookInfoActivity :
             }
             R.id.menu_clear_cache -> viewModel.clearCache()
             R.id.menu_log -> showDialogFragment<AppLogDialog>()
+            R.id.menu_limit_content_length -> {
+                upLoading(true)
+                tocChanged = true
+                viewModel.bookData.value?.let {
+                    it.setLimitContentLength(!item.isChecked)
+                    viewModel.loadBookInfo(it, false)
+                }
+                item.isChecked = !item.isChecked
+                if (!item.isChecked) longToastOnUi(R.string.need_more_time_load_content)
+            }
         }
         return super.onCompatOptionsItemSelected(item)
     }
@@ -429,8 +446,10 @@ class BookInfoActivity :
                 Intent(this, ReadBookActivity::class.java)
                     .putExtra("bookUrl", book.bookUrl)
                     .putExtra("inBookshelf", viewModel.inBookshelf)
+                    .putExtra("tocChanged", tocChanged)
             )
         }
+        tocChanged = false
     }
 
     override val oldBook: Book?
