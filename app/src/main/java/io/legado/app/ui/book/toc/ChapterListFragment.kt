@@ -14,7 +14,6 @@ import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookChapter
 import io.legado.app.databinding.FragmentChapterListBinding
 import io.legado.app.help.BookHelp
-import io.legado.app.help.ContentProcessor
 import io.legado.app.lib.theme.bottomBackground
 import io.legado.app.lib.theme.getPrimaryTextColor
 import io.legado.app.ui.widget.recycler.UpLinearLayoutManager
@@ -22,10 +21,10 @@ import io.legado.app.ui.widget.recycler.VerticalDivider
 import io.legado.app.utils.ColorUtils
 import io.legado.app.utils.observeEvent
 import io.legado.app.utils.viewbindingdelegate.viewBinding
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.Dispatchers.Main
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -35,7 +34,7 @@ class ChapterListFragment : VMBaseFragment<TocViewModel>(R.layout.fragment_chapt
     override val viewModel by activityViewModels<TocViewModel>()
     private val binding by viewBinding(FragmentChapterListBinding::bind)
     private val mLayoutManager by lazy { UpLinearLayoutManager(requireContext()) }
-    private val adapter by lazy { ChapterListAdapter(requireContext(), this, this) }
+    private val adapter by lazy { ChapterListAdapter(requireContext(), this) }
     private var durChapterIndex = 0
     private var tocFlowJob: Job? = null
 
@@ -113,16 +112,8 @@ class ChapterListFragment : VMBaseFragment<TocViewModel>(R.layout.fragment_chapt
                 else -> appDb.bookChapterDao.flowSearch(viewModel.bookUrl, searchKey)
             }.collect {
                 if (!(searchKey.isNullOrBlank() && it.isEmpty())) {
-                    val data = withContext(IO) {
-                        val replaces = viewModel.bookData.value?.let { book ->
-                            ContentProcessor.get(book.name, book.origin).getReplaceRules()
-                        }
-                        val useReplace = viewModel.bookData.value?.getUseReplaceRule() == true
-                        it.map { chapter ->
-                            Pair(chapter, async { chapter.getDisplayTitle(replaces, useReplace) })
-                        }
-                    }
-                    adapter.setItems(data, adapter.diffCallBack)
+                    adapter.setItems(it, adapter.diffCallBack)
+                    adapter.upDisplayTile()
                     if (searchKey.isNullOrBlank() && mLayoutManager.findFirstVisibleItemPosition() < 0) {
                         mLayoutManager.scrollToPositionWithOffset(durChapterIndex, 0)
                     }
@@ -130,6 +121,17 @@ class ChapterListFragment : VMBaseFragment<TocViewModel>(R.layout.fragment_chapt
             }
         }
     }
+
+    override fun clearDisplayTitle() {
+        adapter.displayTileMap.clear()
+        adapter.upDisplayTile()
+    }
+
+    override val scope: CoroutineScope
+        get() = this
+
+    override val book: Book?
+        get() = viewModel.bookData.value
 
     override val isLocalBook: Boolean
         get() = viewModel.bookData.value?.isLocalBook() == true

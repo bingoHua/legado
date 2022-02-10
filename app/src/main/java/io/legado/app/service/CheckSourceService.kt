@@ -19,6 +19,8 @@ import io.legado.app.utils.activityPendingIntent
 import io.legado.app.utils.postEvent
 import io.legado.app.utils.servicePendingIntent
 import io.legado.app.utils.toastOnUi
+import kotlinx.coroutines.Dispatchers.IO
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.asCoroutineDispatcher
 import java.util.concurrent.Executors
 import kotlin.math.min
@@ -198,14 +200,21 @@ class CheckSourceService : BaseService() {
                 when(it) {
                     is ContentEmptyException -> source.addGroup("正文失效")
                     is TocEmptyException -> source.addGroup("目录失效")
+                    //校验超时不能正常实现 不能识别
+                    is TimeoutCancellationException -> source.addGroup("校验超时")
+                    //NoStackTraceException 已经添加了分组，其余的视为规则失效
+                    !is NoStackTraceException -> source.addGroup("规则失效")
                 }
                 source.bookSourceComment =
                     "Error: ${it.localizedMessage}" + if (source.bookSourceComment.isNullOrBlank())
                         "" else "\n\n${source.bookSourceComment}"
                 Debug.updateFinalMessage(source.bookSourceUrl, "校验失败:${it.localizedMessage}")
             }.onSuccess(searchCoroutine) {
+                source.removeGroup("失效")
+                source.removeGroup("规则失效")
+                source.removeGroup("校验超时")
                 Debug.updateFinalMessage(source.bookSourceUrl, "校验成功")
-            }.onFinally(searchCoroutine) {
+            }.onFinally(IO) {
                 source.respondTime = Debug.getRespondTime(source.bookSourceUrl)
                 appDb.bookSourceDao.update(source)
                 onNext(source.bookSourceUrl, source.bookSourceName)
