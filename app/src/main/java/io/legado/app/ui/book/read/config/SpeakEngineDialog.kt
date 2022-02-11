@@ -33,7 +33,7 @@ import kotlinx.coroutines.launch
 /**
  * tts引擎管理
  */
-class SpeakEngineDialog : BaseDialogFragment(R.layout.dialog_recycler_view),
+class SpeakEngineDialog(val callBack: CallBack) : BaseDialogFragment(R.layout.dialog_recycler_view),
     Toolbar.OnMenuItemClickListener {
 
     private val binding by viewBinding(DialogRecyclerViewBinding::bind)
@@ -104,6 +104,8 @@ class SpeakEngineDialog : BaseDialogFragment(R.layout.dialog_recycler_view),
         tvFooterLeft.visible()
         tvFooterLeft.setOnClickListener {
             ReadBook.book?.setTtsEngine(ttsEngine)
+            callBack.upSpeakEngineSummary()
+            ReadAloud.upReadAloudClass()
             dismissAllowingStateLoss()
         }
         tvOk.setText(R.string.general)
@@ -111,6 +113,8 @@ class SpeakEngineDialog : BaseDialogFragment(R.layout.dialog_recycler_view),
         tvOk.setOnClickListener {
             ReadBook.book?.setTtsEngine(null)
             AppConfig.ttsEngine = ttsEngine
+            callBack.upSpeakEngineSummary()
+            ReadAloud.upReadAloudClass()
             dismissAllowingStateLoss()
         }
         tvCancel.visible()
@@ -228,6 +232,10 @@ class SpeakEngineDialog : BaseDialogFragment(R.layout.dialog_recycler_view),
             }
         }
 
+    }
+
+    interface CallBack {
+        fun upSpeakEngineSummary()
     }
 
 }
