@@ -18,6 +18,7 @@ import io.legado.app.help.LifecycleHelp
 import io.legado.app.help.ThemeConfig.applyDayNight
 import io.legado.app.help.http.cronet.CronetLoader
 import io.legado.app.utils.defaultSharedPreferences
+import splitties.systemservices.notificationManager
 import timber.log.Timber
 import java.io.FileOutputStream
 import java.io.IOException
@@ -92,40 +93,44 @@ class App : MultiDexApplication() {
      */
     private fun createNotificationChannels() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
-        (getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager)?.let {
-            val downloadChannel = NotificationChannel(
-                channelIdDownload,
-                getString(R.string.action_download),
-                NotificationManager.IMPORTANCE_DEFAULT
-            ).apply {
-                enableLights(false)
-                enableVibration(false)
-                setSound(null, null)
-            }
-
-            val readAloudChannel = NotificationChannel(
-                channelIdReadAloud,
-                getString(R.string.read_aloud),
-                NotificationManager.IMPORTANCE_DEFAULT
-            ).apply {
-                enableLights(false)
-                enableVibration(false)
-                setSound(null, null)
-            }
-
-            val webChannel = NotificationChannel(
-                channelIdWeb,
-                getString(R.string.web_service),
-                NotificationManager.IMPORTANCE_DEFAULT
-            ).apply {
-                enableLights(false)
-                enableVibration(false)
-                setSound(null, null)
-            }
-
-            //向notification manager 提交channel
-            it.createNotificationChannels(listOf(downloadChannel, readAloudChannel, webChannel))
+        val downloadChannel = NotificationChannel(
+            channelIdDownload,
+            getString(R.string.action_download),
+            NotificationManager.IMPORTANCE_DEFAULT
+        ).apply {
+            enableLights(false)
+            enableVibration(false)
+            setSound(null, null)
         }
+
+        val readAloudChannel = NotificationChannel(
+            channelIdReadAloud,
+            getString(R.string.read_aloud),
+            NotificationManager.IMPORTANCE_DEFAULT
+        ).apply {
+            enableLights(false)
+            enableVibration(false)
+            setSound(null, null)
+        }
+
+        val webChannel = NotificationChannel(
+            channelIdWeb,
+            getString(R.string.web_service),
+            NotificationManager.IMPORTANCE_DEFAULT
+        ).apply {
+            enableLights(false)
+            enableVibration(false)
+            setSound(null, null)
+        }
+
+        //向notification manager 提交channel
+        notificationManager.createNotificationChannels(
+            listOf(
+                downloadChannel,
+                readAloudChannel,
+                webChannel
+            )
+        )
     }
 
 }
