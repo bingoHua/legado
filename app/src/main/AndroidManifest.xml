@@ -422,7 +422,6 @@
         <service android:name=".service.HttpReadAloudService" />
         <service android:name=".service.AudioPlayService" />
         <service android:name=".service.DownloadService" />
-        <service android:name=".service.CacheAudioService" />
         <service android:name=".service.CacheAudioService2" />
 
         <receiver

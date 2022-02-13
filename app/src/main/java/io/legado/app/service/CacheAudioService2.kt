@@ -155,7 +155,7 @@ class CacheAudioService2 : BaseService() {
                                 splitContents.forEach { paragraph ->
                                     LogUtils.d(TAG, "startDownload.$paragraph")
                                     val displayTitle = bookChapter.getDisplayTitle(
-                                        contentProcessor.getReplaceRules(),
+                                        contentProcessor.getTitleReplaceRules(),
                                         book.getUseReplaceRule()
                                     )
                                     val textChapter = ChapterProvider.getTextChapter(
