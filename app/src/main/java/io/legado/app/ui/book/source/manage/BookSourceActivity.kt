@@ -43,9 +43,13 @@ import io.legado.app.utils.*
 import io.legado.app.utils.viewbindingdelegate.viewBinding
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.catch
-import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.map
 
+/**
+ * 书源管理界面
+ */
 class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceViewModel>(),
     PopupMenu.OnMenuItemClickListener,
     BookSourceAdapter.CallBack,
@@ -207,6 +211,7 @@ class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceV
         searchView.setOnQueryTextListener(this)
     }
 
+
     private fun upBookSource(searchKey: String? = null) {
         sourceFlowJob?.cancel()
         sourceFlowJob = launch {
@@ -230,45 +235,46 @@ class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceV
                 else -> {
                     appDb.bookSourceDao.flowSearch("%$searchKey%")
                 }
+            }.conflate().map { data ->
+                if (sortAscending) when (sort) {
+                    Sort.Weight -> data.sortedBy { it.weight }
+                    Sort.Name -> data.sortedWith { o1, o2 ->
+                        o1.bookSourceName.cnCompare(o2.bookSourceName)
+                    }
+                    Sort.Url -> data.sortedBy { it.bookSourceUrl }
+                    Sort.Update -> data.sortedByDescending { it.lastUpdateTime }
+                    Sort.Respond -> data.sortedBy { it.respondTime }
+                    Sort.Enable -> data.sortedWith { o1, o2 ->
+                        var sort = -o1.enabled.compareTo(o2.enabled)
+                        if (sort == 0) {
+                            sort = o1.bookSourceName.cnCompare(o2.bookSourceName)
+                        }
+                        sort
+                    }
+                    else -> data
+                }
+                else when (sort) {
+                    Sort.Weight -> data.sortedByDescending { it.weight }
+                    Sort.Name -> data.sortedWith { o1, o2 ->
+                        o2.bookSourceName.cnCompare(o1.bookSourceName)
+                    }
+                    Sort.Url -> data.sortedByDescending { it.bookSourceUrl }
+                    Sort.Update -> data.sortedBy { it.lastUpdateTime }
+                    Sort.Respond -> data.sortedByDescending { it.respondTime }
+                    Sort.Enable -> data.sortedWith { o1, o2 ->
+                        var sort = o1.enabled.compareTo(o2.enabled)
+                        if (sort == 0) {
+                            sort = o1.bookSourceName.cnCompare(o2.bookSourceName)
+                        }
+                        sort
+                    }
+                    else -> data.reversed()
+                }
             }.catch {
                 AppLog.put("书源界面更新书源出错", it)
-            }.collectLatest { data ->
-                val sourceList =
-                    if (sortAscending) when (sort) {
-                        Sort.Weight -> data.sortedBy { it.weight }
-                        Sort.Name -> data.sortedWith { o1, o2 ->
-                            o1.bookSourceName.cnCompare(o2.bookSourceName)
-                        }
-                        Sort.Url -> data.sortedBy { it.bookSourceUrl }
-                        Sort.Update -> data.sortedByDescending { it.lastUpdateTime }
-                        Sort.Respond -> data.sortedBy { it.respondTime }
-                        Sort.Enable -> data.sortedWith { o1, o2 ->
-                            var sort = -o1.enabled.compareTo(o2.enabled)
-                            if (sort == 0) {
-                                sort = o1.bookSourceName.cnCompare(o2.bookSourceName)
-                            }
-                            sort
-                        }
-                        else -> data
-                    }
-                    else when (sort) {
-                        Sort.Weight -> data.sortedByDescending { it.weight }
-                        Sort.Name -> data.sortedWith { o1, o2 ->
-                            o2.bookSourceName.cnCompare(o1.bookSourceName)
-                        }
-                        Sort.Url -> data.sortedByDescending { it.bookSourceUrl }
-                        Sort.Update -> data.sortedBy { it.lastUpdateTime }
-                        Sort.Respond -> data.sortedByDescending { it.respondTime }
-                        Sort.Enable -> data.sortedWith { o1, o2 ->
-                            var sort = o1.enabled.compareTo(o2.enabled)
-                            if (sort == 0) {
-                                sort = o1.bookSourceName.cnCompare(o2.bookSourceName)
-                            }
-                            sort
-                        }
-                        else -> data.reversed()
-                    }
-                adapter.setItems(sourceList, adapter.diffItemCallback)
+            }.collect { data ->
+                adapter.setItems(data, adapter.diffItemCallback)
+                delay(500)
             }
         }
     }

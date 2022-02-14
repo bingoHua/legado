@@ -24,7 +24,10 @@ import io.legado.app.ui.main.MainViewModel
 import io.legado.app.utils.*
 import io.legado.app.utils.viewbindingdelegate.viewBinding
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.conflate
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlin.math.max
 
@@ -107,11 +110,8 @@ class BooksFragment() : BaseFragment(R.layout.fragment_books),
                 AppConst.bookGroupAudioId -> appDb.bookDao.flowAudio()
                 AppConst.bookGroupNoneId -> appDb.bookDao.flowNoGroup()
                 else -> appDb.bookDao.flowByGroup(groupId)
-            }.catch {
-                AppLog.put("书架更新出错", it)
-            }.collect { list ->
-                binding.tvEmptyMsg.isGone = list.isNotEmpty()
-                val books = when (getPrefInt(PreferKey.bookshelfSort)) {
+            }.conflate().map { list ->
+                when (getPrefInt(PreferKey.bookshelfSort)) {
                     1 -> list.sortedByDescending { it.latestChapterTime }
                     2 -> list.sortedWith { o1, o2 ->
                         o1.name.cnCompare(o2.name)
@@ -119,7 +119,12 @@ class BooksFragment() : BaseFragment(R.layout.fragment_books),
                     3 -> list.sortedBy { it.order }
                     else -> list.sortedByDescending { it.durChapterTime }
                 }
-                booksAdapter.setItems(books)
+            }.catch {
+                AppLog.put("书架更新出错", it)
+            }.collect { list ->
+                binding.tvEmptyMsg.isGone = list.isNotEmpty()
+                booksAdapter.setItems(list)
+                delay(100)
             }
         }
     }
