@@ -118,11 +118,14 @@ class TextFile(private val book: Book) {
             }
             //获取文件中的数据到buffer，直到没有数据为止
             while (
-                fileEnd - curOffset > 0 &&
+                fileEnd - curOffset - bufferStart > 0 &&
                 bis.read(
                     buffer,
                     bufferStart,
-                    min((bufferSize - bufferStart).toLong(), fileEnd - curOffset).toInt()
+                    min(
+                        (bufferSize - bufferStart).toLong(),
+                        fileEnd - curOffset - bufferStart
+                    ).toInt()
                 ).also { length = it } > 0
             ) {
                 var end = bufferStart + length
@@ -149,11 +152,21 @@ class TextFile(private val book: Book) {
                     val chapterLength = chapterContent.toByteArray(charset).size
                     val lastStart = toc.lastOrNull()?.start ?: curOffset
                     if (curOffset + chapterLength - lastStart > maxLengthWithToc) {
+                        toc.lastOrNull()?.let {
+                            it.end = it.start
+                        }
+                        //章节字数太多进行拆分
                         toc.addAll(analyze(lastStart, curOffset + chapterLength))
-                    }
-                    //如果 seekPos == 0 && chapterStart != 0 表示当前block处前面有一段内容
-                    //第一种情况一定是序章 第二种情况是上一个章节的内容
-                    if (seekPos == 0 && chapterStart != 0) { //获取当前章节的内容
+                        //创建当前章节
+                        val curChapter = BookChapter()
+                        curChapter.title = matcher.group()
+                        curChapter.start = curOffset + chapterLength
+                        toc.add(curChapter)
+                    } else if (seekPos == 0 && chapterStart != 0) {
+                        /*
+                         * 如果 seekPos == 0 && chapterStart != 0 表示当前block处前面有一段内容
+                         * 第一种情况一定是序章 第二种情况是上一个章节的内容
+                         */
                         if (toc.isEmpty()) { //如果当前没有章节，那么就是序章
                             //加入简介
                             if (StringUtils.trim(chapterContent).isNotEmpty()) {
@@ -186,7 +199,7 @@ class TextFile(private val book: Book) {
                         if (toc.isNotEmpty()) { //获取章节内容
                             //获取上一章节
                             val lastChapter = toc.last()
-                            toc.last().isVolume =
+                            lastChapter.isVolume =
                                 chapterContent.substringAfter(lastChapter.title).isBlank()
                             lastChapter.end =
                                 lastChapter.start!! + chapterContent.toByteArray(charset).size.toLong()
@@ -248,11 +261,14 @@ class TextFile(private val book: Book) {
             }
             //获取文件中的数据到buffer，直到没有数据为止
             while (
-                fileEnd - curOffset > 0 &&
+                fileEnd - curOffset - bufferStart > 0 &&
                 bis.read(
                     buffer,
                     bufferStart,
-                    min((bufferSize - bufferStart).toLong(), fileEnd - curOffset).toInt()
+                    min(
+                        (bufferSize - bufferStart).toLong(),
+                        fileEnd - curOffset - bufferStart
+                    ).toInt()
                 ).also { length = it } > 0
             ) {
                 blockPos++
@@ -264,7 +280,7 @@ class TextFile(private val book: Book) {
                 //分章的位置
                 chapterPos = 0
                 while (strLength > 0) {
-                    ++chapterPos
+                    chapterPos++
                     //是否长度超过一章
                     if (strLength > maxLengthWithNoToc) { //在buffer中一章的终止点
                         var end = length
@@ -297,7 +313,7 @@ class TextFile(private val book: Book) {
             //设置结尾章节
             if (bufferStart > 100) {
                 val chapter = BookChapter()
-                chapter.title = "第${blockPos}章(${chapterPos + 1})"
+                chapter.title = "第${blockPos}章(${chapterPos})"
                 chapter.start = toc.lastOrNull()?.end ?: curOffset
                 chapter.end = chapter.start!! + bufferStart
                 toc.add(chapter)
