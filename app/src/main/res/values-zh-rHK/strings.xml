@@ -911,6 +911,7 @@
     <string name="tts_speech_reduce">語速减</string>
     <string name="tts_speech_add">語速加</string>
     <string name="open_sys_dir_picker_error">打开系统文件夹选择器出错,自动打开应用文件夹选择器</string>
+    <string name="open_sys_doc_picker_error">打开系统文件选择器出错,自动打开应用文件选择器</string>
     <string name="expand_text_menu">展开文本选择菜单</string>
     <string name="book_tree_uri_t">书籍保存位置</string>
     <string name="book_tree_uri_s">从其它应用打开的书籍保存位置</string>
@@ -937,5 +938,6 @@
     <string name="menu_refresh_dur">刷新当前章节</string>
     <string name="menu_refresh_after">刷新之后章节</string>
     <string name="menu_refresh_all">刷新全部章节</string>
+    <string name="edit_content">编辑内容</string>
     <!-- string end -->
 </resources>
