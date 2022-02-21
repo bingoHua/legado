@@ -8,7 +8,6 @@ import androidx.appcompat.widget.SearchView
 import androidx.appcompat.widget.Toolbar
 import androidx.core.os.bundleOf
 import androidx.fragment.app.viewModels
-import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import io.legado.app.R
 import io.legado.app.base.BaseDialogFragment
@@ -17,40 +16,61 @@ import io.legado.app.constant.EventBus
 import io.legado.app.constant.PreferKey
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.Book
+import io.legado.app.data.entities.BookChapter
 import io.legado.app.data.entities.BookSource
 import io.legado.app.data.entities.SearchBook
-import io.legado.app.databinding.DialogChangeSourceBinding
+import io.legado.app.databinding.DialogChapterChangeSourceBinding
 import io.legado.app.help.AppConfig
+import io.legado.app.help.BookHelp
 import io.legado.app.lib.theme.primaryColor
 import io.legado.app.ui.book.source.edit.BookSourceEditActivity
 import io.legado.app.ui.book.source.manage.BookSourceActivity
 import io.legado.app.ui.widget.recycler.VerticalDivider
 import io.legado.app.utils.*
 import io.legado.app.utils.viewbindingdelegate.viewBinding
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 
-class ChangeSourceDialog() : BaseDialogFragment(R.layout.dialog_change_source),
+class ChangeChapterSourceDialog() : BaseDialogFragment(R.layout.dialog_chapter_change_source),
     Toolbar.OnMenuItemClickListener,
-    ChangeSourceAdapter.CallBack {
+    ChangeChapterSourceAdapter.CallBack,
+    ChangeChapterTocAdapter.Callback {
 
-    constructor(name: String, author: String) : this() {
+    constructor(name: String, author: String, chapterIndex: Int, chapterTitle: String) : this() {
         arguments = Bundle().apply {
             putString("name", name)
             putString("author", author)
+            putInt("chapterIndex", chapterIndex)
+            putString("chapterTitle", chapterTitle)
         }
     }
 
-    private val binding by viewBinding(DialogChangeSourceBinding::bind)
+    private val binding by viewBinding(DialogChapterChangeSourceBinding::bind)
     private val groups = linkedSetOf<String>()
     private val callBack: CallBack? get() = activity as? CallBack
-    private val viewModel: ChangeSourceViewModel by viewModels()
-    private val adapter by lazy { ChangeSourceAdapter(requireContext(), viewModel, this) }
+    private val viewModel: ChangeChapterSourceViewModel by viewModels()
     private val editSourceResult =
         registerForActivityResult(StartActivityContract(BookSourceEditActivity::class.java)) {
             viewModel.startSearch()
         }
-
+    private val tocSuccess: (toc: List<BookChapter>) -> Unit = {
+        tocAdapter.durChapterIndex =
+            BookHelp.getDurChapter(viewModel.chapterIndex, viewModel.chapterTitle, it)
+        binding.loadingToc.hide()
+        tocAdapter.setItems(it)
+        binding.recyclerViewToc.scrollToPosition(tocAdapter.durChapterIndex - 5)
+    }
+    private val contentSuccess: (content: String) -> Unit = {
+        callBack?.replaceContent(it)
+    }
+    private val searchBookAdapter by lazy {
+        ChangeChapterSourceAdapter(requireContext(), viewModel, this)
+    }
+    private val tocAdapter by lazy {
+        ChangeChapterTocAdapter(requireContext(), this)
+    }
+    private var searchBook: SearchBook? = null
 
     override fun onStart() {
         super.onStart()
@@ -62,15 +82,14 @@ class ChangeSourceDialog() : BaseDialogFragment(R.layout.dialog_change_source),
         viewModel.initData(arguments)
         showTitle()
         initMenu()
+        initView()
         initRecyclerView()
         initSearchView()
         initLiveData()
-        viewModel.loadDbSearchBook()
     }
 
     private fun showTitle() {
-        binding.toolBar.title = viewModel.name
-        binding.toolBar.subtitle = viewModel.author
+        binding.toolBar.title = viewModel.chapterTitle
     }
 
     private fun initMenu() {
@@ -85,11 +104,16 @@ class ChangeSourceDialog() : BaseDialogFragment(R.layout.dialog_change_source),
             ?.isChecked = AppConfig.changeSourceLoadToc
     }
 
+    private fun initView() {
+        binding.ivHideToc.setOnClickListener {
+            binding.clToc.gone()
+        }
+    }
+
     private fun initRecyclerView() {
-        binding.recyclerView.layoutManager = LinearLayoutManager(context)
         binding.recyclerView.addItemDecoration(VerticalDivider(requireContext()))
-        binding.recyclerView.adapter = adapter
-        adapter.registerAdapterDataObserver(object : RecyclerView.AdapterDataObserver() {
+        binding.recyclerView.adapter = searchBookAdapter
+        searchBookAdapter.registerAdapterDataObserver(object : RecyclerView.AdapterDataObserver() {
             override fun onItemRangeInserted(positionStart: Int, itemCount: Int) {
                 if (positionStart == 0) {
                     binding.recyclerView.scrollToPosition(0)
@@ -102,6 +126,7 @@ class ChangeSourceDialog() : BaseDialogFragment(R.layout.dialog_change_source),
                 }
             }
         })
+        binding.recyclerViewToc.adapter = tocAdapter
     }
 
     private fun initSearchView() {
@@ -143,8 +168,12 @@ class ChangeSourceDialog() : BaseDialogFragment(R.layout.dialog_change_source),
             }
             binding.toolBar.menu.applyTint(requireContext())
         }
-        viewModel.searchBooksLiveData.observe(viewLifecycleOwner) {
-            adapter.setItems(it)
+        launch {
+            viewModel.searchDataFlow
+                .collect {
+                    searchBookAdapter.setItems(it)
+                    delay(1000)
+                }
         }
         launch {
             appDb.bookSourceDao.flowGroupEnabled().collect {
@@ -165,7 +194,7 @@ class ChangeSourceDialog() : BaseDialogFragment(R.layout.dialog_change_source),
             R.id.menu_check_author -> {
                 AppConfig.changeSourceCheckAuthor = !item.isChecked
                 item.isChecked = !item.isChecked
-                viewModel.loadDbSearchBook()
+                viewModel.refresh()
             }
             R.id.menu_load_toc -> {
                 putPrefBoolean(PreferKey.changeSourceLoadToc, !item.isChecked)
@@ -186,16 +215,22 @@ class ChangeSourceDialog() : BaseDialogFragment(R.layout.dialog_change_source),
                         putPrefString("searchGroup", item.title.toString())
                     }
                     viewModel.startOrStopSearch()
-                    viewModel.loadDbSearchBook()
+                    viewModel.refresh()
                 }
             }
         }
         return false
     }
 
-    override fun changeTo(searchBook: SearchBook) {
-        changeSource(searchBook)
-        dismissAllowingStateLoss()
+    override fun openToc(searchBook: SearchBook) {
+        this.searchBook = searchBook
+        tocAdapter.setItems(null)
+        binding.clToc.visible()
+        binding.loadingToc.show()
+        viewModel.getToc(searchBook, tocSuccess) {
+            binding.clToc.gone()
+            toastOnUi(it)
+        }
     }
 
     override val bookUrl: String?
@@ -224,6 +259,14 @@ class ChangeSourceDialog() : BaseDialogFragment(R.layout.dialog_change_source),
         if (bookUrl == searchBook.bookUrl) {
             viewModel.firstSourceOrNull(searchBook)?.let {
                 changeSource(it)
+            }
+        }
+    }
+
+    override fun clickChapter(bookChapter: BookChapter, nextChapterUrl: String?) {
+        searchBook?.let {
+            viewModel.getContent(it.toBook(), bookChapter, nextChapterUrl, contentSuccess) { msg ->
+                toastOnUi(msg)
             }
         }
     }
@@ -268,9 +311,9 @@ class ChangeSourceDialog() : BaseDialogFragment(R.layout.dialog_change_source),
 
     override fun observeLiveBus() {
         observeEvent<String>(EventBus.SOURCE_CHANGED) {
-            adapter.notifyItemRangeChanged(
+            searchBookAdapter.notifyItemRangeChanged(
                 0,
-                adapter.itemCount,
+                searchBookAdapter.itemCount,
                 bundleOf(Pair("upCurSource", bookUrl))
             )
         }
@@ -279,6 +322,7 @@ class ChangeSourceDialog() : BaseDialogFragment(R.layout.dialog_change_source),
     interface CallBack {
         val oldBook: Book?
         fun changeTo(source: BookSource, book: Book)
+        fun replaceContent(content: String)
     }
 
 }

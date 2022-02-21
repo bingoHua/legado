@@ -37,7 +37,8 @@ import io.legado.app.model.ReadBook
 import io.legado.app.receiver.TimeBatteryReceiver
 import io.legado.app.service.BaseReadAloudService
 import io.legado.app.ui.about.AppLogDialog
-import io.legado.app.ui.book.changesource.ChangeSourceDialog
+import io.legado.app.ui.book.changesource.ChangeBookSourceDialog
+import io.legado.app.ui.book.changesource.ChangeChapterSourceDialog
 import io.legado.app.ui.book.read.config.*
 import io.legado.app.ui.book.read.config.BgTextConfigDialog.Companion.BG_COLOR
 import io.legado.app.ui.book.read.config.BgTextConfigDialog.Companion.TEXT_COLOR
@@ -69,7 +70,8 @@ class ReadBookActivity : BaseReadBookActivity(),
     ReadMenu.CallBack,
     SearchMenu.CallBack,
     ReadAloudDialog.CallBack,
-    ChangeSourceDialog.CallBack,
+    ChangeBookSourceDialog.CallBack,
+    ChangeChapterSourceDialog.CallBack,
     ReadBook.CallBack,
     AutoReadDialog.CallBack,
     TocRegexDialog.CallBack,
@@ -239,14 +241,18 @@ class ReadBookActivity : BaseReadBookActivity(),
             R.id.menu_book_change_source -> {
                 binding.readMenu.runMenuOut()
                 ReadBook.book?.let {
-                    showDialogFragment(ChangeSourceDialog(it.name, it.author))
+                    showDialogFragment(ChangeBookSourceDialog(it.name, it.author))
                 }
             }
-            R.id.menu_chapter_change_source -> {
+            R.id.menu_chapter_change_source -> launch {
+                val book = ReadBook.book ?: return@launch
+                val chapter =
+                    appDb.bookChapterDao.getChapter(book.bookUrl, ReadBook.durChapterIndex)
+                        ?: return@launch
                 binding.readMenu.runMenuOut()
-                ReadBook.book?.let {
-                    showDialogFragment(ChangeSourceDialog(it.name, it.author))
-                }
+                showDialogFragment(
+                    ChangeChapterSourceDialog(book.name, book.author, chapter.index, chapter.title)
+                )
             }
             R.id.menu_refresh_dur -> {
                 if (ReadBook.bookSource == null) {
@@ -686,6 +692,12 @@ class ReadBookActivity : BaseReadBookActivity(),
 
     override fun changeTo(source: BookSource, book: Book) {
         viewModel.changeTo(source, book)
+    }
+
+    override fun replaceContent(content: String) {
+        ReadBook.book?.let {
+            viewModel.saveContent(it, content)
+        }
     }
 
     override fun showActionMenu() {
