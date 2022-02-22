@@ -4,6 +4,7 @@ import android.os.Bundle
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
+import android.view.ViewGroup
 import androidx.appcompat.widget.SearchView
 import androidx.appcompat.widget.Toolbar
 import androidx.core.os.bundleOf
@@ -62,7 +63,9 @@ class ChangeChapterSourceDialog() : BaseDialogFragment(R.layout.dialog_chapter_c
         binding.recyclerViewToc.scrollToPosition(tocAdapter.durChapterIndex - 5)
     }
     private val contentSuccess: (content: String) -> Unit = {
+        binding.loadingToc.hide()
         callBack?.replaceContent(it)
+        dismissAllowingStateLoss()
     }
     private val searchBookAdapter by lazy {
         ChangeChapterSourceAdapter(requireContext(), viewModel, this)
@@ -74,7 +77,7 @@ class ChangeChapterSourceDialog() : BaseDialogFragment(R.layout.dialog_chapter_c
 
     override fun onStart() {
         super.onStart()
-        setLayout(0.9f, 0.9f)
+        setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
     }
 
     override fun onFragmentCreated(view: View, savedInstanceState: Bundle?) {
@@ -265,7 +268,10 @@ class ChangeChapterSourceDialog() : BaseDialogFragment(R.layout.dialog_chapter_c
 
     override fun clickChapter(bookChapter: BookChapter, nextChapterUrl: String?) {
         searchBook?.let {
+            binding.loadingToc.show()
             viewModel.getContent(it.toBook(), bookChapter, nextChapterUrl, contentSuccess) { msg ->
+                binding.loadingToc.hide()
+                binding.clToc.gone()
                 toastOnUi(msg)
             }
         }
