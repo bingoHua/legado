@@ -49,7 +49,6 @@ class WebDav(urlStr: String) {
     val path get() = url.toString()
     var displayName: String? = null
     var size: Long = 0
-    var exists = false
     var parent = ""
     var urlName = ""
     var contentType = ""
@@ -142,6 +141,16 @@ class WebDav(urlStr: String) {
     }
 
     /**
+     * 文件是否存在
+     */
+    suspend fun exists(): Boolean {
+        val response = propFindResponse() ?: return false
+        val document = Jsoup.parse(response)
+        val elements = document.getElementsByTag("d:response")
+        return elements.isNotEmpty()
+    }
+
+    /**
      * 根据自己的URL，在远程处创建对应的文件夹
      * @return 是否创建成功
      */
@@ -151,11 +160,13 @@ class WebDav(urlStr: String) {
         if (url != null && auth != null) {
             //防止报错
             return kotlin.runCatching {
-                okHttpClient.newCallResponseBody {
-                    url(url)
-                    method("MKCOL", null)
-                    addHeader("Authorization", Credentials.basic(auth.user, auth.pass))
-                }.close()
+                if (!exists()) {
+                    okHttpClient.newCallResponseBody {
+                        url(url)
+                        method("MKCOL", null)
+                        addHeader("Authorization", Credentials.basic(auth.user, auth.pass))
+                    }.close()
+                }
             }.isSuccess
         }
         return false
