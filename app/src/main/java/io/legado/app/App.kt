@@ -19,19 +19,12 @@ import io.legado.app.help.ThemeConfig.applyDayNight
 import io.legado.app.help.http.cronet.CronetLoader
 import io.legado.app.utils.defaultSharedPreferences
 import splitties.systemservices.notificationManager
-import timber.log.Timber
-import java.io.FileOutputStream
-import java.io.IOException
-import java.io.InputStream
 
 class App : MultiDexApplication() {
 
     override fun onCreate() {
         super.onCreate()
         CrashHandler(this)
-        if (BuildConfig.DEBUG) {
-            Timber.plant(Timber.DebugTree())
-        }
         //预下载Cronet so
         CronetLoader.preDownload()
         createNotificationChannels()

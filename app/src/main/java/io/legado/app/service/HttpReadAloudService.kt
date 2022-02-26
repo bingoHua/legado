@@ -20,7 +20,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import okhttp3.Response
 import org.mozilla.javascript.WrappedException
-import timber.log.Timber
+
 import java.io.File
 import java.io.FileDescriptor
 import java.io.FileInputStream
@@ -161,7 +161,7 @@ class HttpReadAloudService : BaseReadAloudService(),
                             is ScriptException, is WrappedException -> {
                                 AppLog.put("js错误\n${it.localizedMessage}", it)
                                 toastOnUi("js错误\n${it.localizedMessage}")
-                                Timber.e(it)
+                                it.printOnDebug()
                                 cancel()
                                 pauseReadAloud(true)
                             }
@@ -183,7 +183,7 @@ class HttpReadAloudService : BaseReadAloudService(),
                                 downloadErrorNo++
                                 val msg = "tts下载错误\n${it.localizedMessage}"
                                 AppLog.put(msg, it)
-                                Timber.e(it)
+                                it.printOnDebug()
                                 if (downloadErrorNo > 5) {
                                     pauseReadAloud(true)
                                 } else {
@@ -252,7 +252,7 @@ class HttpReadAloudService : BaseReadAloudService(),
                 playingIndex = nowSpeak
                 postEvent(EventBus.TTS_PROGRESS, readAloudNumber + 1)
             } catch (e: Exception) {
-                Timber.e(e)
+                e.printOnDebug()
             }
         }
     }
