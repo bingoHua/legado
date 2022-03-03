@@ -30,6 +30,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.conflate
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlin.math.max
@@ -42,6 +43,7 @@ class BookshelfFragment2 : BaseBookshelfFragment(R.layout.fragment_bookshelf1),
     BaseBooksAdapter.CallBack {
 
     private val binding by viewBinding(FragmentBookshelf1Binding::bind)
+    private val rootGroupId = -100L
     private val bookshelfLayout by lazy {
         getPrefInt(PreferKey.bookshelfLayout)
     }
@@ -54,7 +56,7 @@ class BookshelfFragment2 : BaseBookshelfFragment(R.layout.fragment_bookshelf1),
     }
     private var bookGroups: List<BookGroup> = emptyList()
     private var booksFlowJob: Job? = null
-    override var groupId = AppConst.bookGroupNoneId
+    override var groupId = rootGroupId
     override var books: List<Book> = emptyList()
 
     override fun onFragmentCreated(view: View, savedInstanceState: Bundle?) {
@@ -107,7 +109,7 @@ class BookshelfFragment2 : BaseBookshelfFragment(R.layout.fragment_bookshelf1),
 
     @SuppressLint("NotifyDataSetChanged")
     private fun initBooksData() {
-        if (groupId == AppConst.bookGroupNoneId) {
+        if (groupId == -100L) {
             binding.titleBar.title = getString(R.string.bookshelf)
         } else {
             bookGroups.forEach {
@@ -117,8 +119,9 @@ class BookshelfFragment2 : BaseBookshelfFragment(R.layout.fragment_bookshelf1),
             }
         }
         booksFlowJob?.cancel()
-        booksFlowJob = launch(Dispatchers.Default) {
+        booksFlowJob = launch {
             when (groupId) {
+                rootGroupId -> appDb.bookDao.flowRoot()
                 AppConst.bookGroupAllId -> appDb.bookDao.flowAll()
                 AppConst.bookGroupLocalId -> appDb.bookDao.flowLocal()
                 AppConst.bookGroupAudioId -> appDb.bookDao.flowAudio()
@@ -139,7 +142,7 @@ class BookshelfFragment2 : BaseBookshelfFragment(R.layout.fragment_bookshelf1),
                         it.durChapterTime
                     }
                 }
-            }.catch {
+            }.flowOn(Dispatchers.Default).catch {
                 AppLog.put("书架更新出错", it)
             }.conflate().collect { list ->
                 books = list
@@ -151,8 +154,8 @@ class BookshelfFragment2 : BaseBookshelfFragment(R.layout.fragment_bookshelf1),
     }
 
     fun back(): Boolean {
-        if (groupId != AppConst.bookGroupNoneId) {
-            groupId = AppConst.bookGroupNoneId
+        if (groupId != -100L) {
+            groupId = -100L
             initBooksData()
             return true
         }
@@ -209,7 +212,7 @@ class BookshelfFragment2 : BaseBookshelfFragment(R.layout.fragment_bookshelf1),
     }
 
     override fun getItemCount(): Int {
-        return if (groupId == AppConst.bookGroupNoneId) {
+        return if (groupId == rootGroupId) {
             bookGroups.size + books.size
         } else {
             books.size
@@ -217,23 +220,23 @@ class BookshelfFragment2 : BaseBookshelfFragment(R.layout.fragment_bookshelf1),
     }
 
     override fun getItemType(position: Int): Int {
-        return if (groupId == AppConst.bookGroupNoneId) {
-            if (position < bookGroups.size) 1 else 0
-        } else {
-            0
+        if (groupId != rootGroupId) {
+            return 0
         }
+        if (position < bookGroups.size) {
+            return 1
+        }
+        return 0
     }
 
-    override fun getItem(position: Int): Any {
-        return if (groupId == AppConst.bookGroupNoneId) {
-            if (position < bookGroups.size) {
-                bookGroups[position]
-            } else {
-                books[position - bookGroups.size]
-            }
-        } else {
-            books[position]
+    override fun getItem(position: Int): Any? {
+        if (groupId != rootGroupId) {
+            return books.getOrNull(position)
         }
+        if (position < bookGroups.size) {
+            return bookGroups[position]
+        }
+        return books.getOrNull(position - bookGroups.size)
     }
 
     @SuppressLint("NotifyDataSetChanged")

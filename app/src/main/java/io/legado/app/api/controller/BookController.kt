@@ -21,6 +21,7 @@ import io.legado.app.model.localBook.LocalBook
 import io.legado.app.model.localBook.UmdFile
 import io.legado.app.model.webBook.WebBook
 import io.legado.app.utils.*
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import splitties.init.appCtx
 import java.io.File
@@ -62,6 +63,29 @@ object BookController {
         } catch (e: Exception) {
             returnData.setData(BookCover.defaultDrawable.toBitmap())
         }
+    }
+
+    /**
+     * 获取正文图片
+     */
+    fun getImg(parameters: Map<String, List<String>>): ReturnData {
+        val returnData = ReturnData()
+        val bookUrl = parameters["url"]?.firstOrNull()
+            ?: return returnData.setErrorMsg("bookUrl为空")
+        val book = appDb.bookDao.getBook(bookUrl)
+            ?: return returnData.setErrorMsg("bookUrl不对:${bookUrl}")
+        val src = parameters["path"]?.firstOrNull()
+            ?: return returnData.setErrorMsg("图片链接为空")
+        val vFile = BookHelp.getImage(book, src)
+        if (!vFile.exists()) {
+            val bookSource = appDb.bookSourceDao.getBookSource(book.origin)
+            runBlocking {
+                BookHelp.saveImage(bookSource, book, src)
+            }
+        }
+        return returnData.setData(
+            BitmapUtils.decodeBitmap(vFile.absolutePath, 640, 640)
+        )
     }
 
     /**
@@ -131,7 +155,16 @@ object BookController {
             return returnData.setErrorMsg("参数index不能为空, 请指定目录序号")
         }
         val book = appDb.bookDao.getBook(bookUrl)
-        val chapter = appDb.bookChapterDao.getChapter(bookUrl, index)
+        val chapter = runBlocking {
+            var chapter = appDb.bookChapterDao.getChapter(bookUrl, index)
+            var wait = 0
+            while (chapter == null && wait < 30) {
+                delay(1000)
+                chapter = appDb.bookChapterDao.getChapter(bookUrl, index)
+                wait++
+            }
+            chapter
+        }
         if (book == null || chapter == null) {
             return returnData.setErrorMsg("未找到")
         }
@@ -166,9 +199,8 @@ object BookController {
      * 保存书籍
      */
     fun saveBook(postData: String?): ReturnData {
-        val book = GSON.fromJsonObject<Book>(postData)
         val returnData = ReturnData()
-        if (book != null) {
+        GSON.fromJsonObject<Book>(postData).getOrNull()?.let { book ->
             book.save()
             AppWebDav.uploadBookProgress(book)
             if (ReadBook.book?.bookUrl == book.bookUrl) {
@@ -257,6 +289,9 @@ object BookController {
         return returnData.setData(true)
     }
 
+    /**
+     * 保存web阅读界面配置
+     */
     fun saveWebReadConfig(postData: String?): ReturnData {
         val returnData = ReturnData()
         postData?.let {
@@ -265,6 +300,9 @@ object BookController {
         return returnData.setData("")
     }
 
+    /**
+     * 获取web阅读界面配置
+     */
     fun getWebReadConfig(): ReturnData {
         val returnData = ReturnData()
         val data = CacheManager.get("webReadConfig") ?: "{}"

@@ -6,7 +6,7 @@ import android.view.View
 import android.view.ViewGroup
 import androidx.appcompat.widget.Toolbar
 import androidx.fragment.app.viewModels
-import androidx.lifecycle.whenStarted
+import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.GridLayoutManager
 import io.legado.app.R
 import io.legado.app.base.BaseDialogFragment
@@ -15,10 +15,8 @@ import io.legado.app.lib.theme.primaryColor
 import io.legado.app.utils.applyTint
 import io.legado.app.utils.setLayout
 import io.legado.app.utils.viewbindingdelegate.viewBinding
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.conflate
-import kotlinx.coroutines.launch
 
 /**
  * 换封面
@@ -44,7 +42,7 @@ class ChangeCoverDialog() : BaseDialogFragment(R.layout.dialog_change_cover),
 
     override fun onStart() {
         super.onStart()
-        setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+        setLayout(1f, ViewGroup.LayoutParams.MATCH_PARENT)
     }
 
     override fun onFragmentCreated(view: View, savedInstanceState: Bundle?) {
@@ -68,12 +66,10 @@ class ChangeCoverDialog() : BaseDialogFragment(R.layout.dialog_change_cover),
     }
 
     private fun initData() {
-        launch(Dispatchers.Default) {
-            whenStarted {
-                viewModel.dataFlow.conflate().collect {
-                    adapter.setItems(it)
-                    delay(1000)
-                }
+        lifecycleScope.launchWhenStarted {
+            viewModel.dataFlow.conflate().collect {
+                adapter.setItems(it)
+                delay(1000)
             }
         }
     }

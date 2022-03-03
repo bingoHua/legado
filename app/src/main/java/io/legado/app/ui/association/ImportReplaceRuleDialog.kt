@@ -46,10 +46,7 @@ class ImportReplaceRuleDialog() : BaseDialogFragment(R.layout.dialog_recycler_vi
 
     override fun onStart() {
         super.onStart()
-        setLayout(
-            ViewGroup.LayoutParams.MATCH_PARENT,
-            ViewGroup.LayoutParams.WRAP_CONTENT
-        )
+        setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
     }
 
     override fun onDismiss(dialog: DialogInterface) {
@@ -184,7 +181,7 @@ class ImportReplaceRuleDialog() : BaseDialogFragment(R.layout.dialog_recycler_vi
 
     override fun onCodeSave(code: String, requestId: String?) {
         requestId?.toInt()?.let {
-            GSON.fromJsonObject<ReplaceRule>(code)?.let { rule ->
+            GSON.fromJsonObject<ReplaceRule>(code).getOrNull()?.let { rule ->
                 viewModel.allRules[it] = rule
                 adapter.setItem(it, rule)
             }

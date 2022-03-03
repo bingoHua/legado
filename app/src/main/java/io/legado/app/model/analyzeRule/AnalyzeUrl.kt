@@ -8,6 +8,7 @@ import com.bumptech.glide.load.model.LazyHeaders
 import io.legado.app.constant.AppConst.SCRIPT_ENGINE
 import io.legado.app.constant.AppConst.UA_NAME
 import io.legado.app.constant.AppPattern.JS_PATTERN
+import io.legado.app.constant.AppPattern.dataUriRegex
 import io.legado.app.data.entities.BaseSource
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookChapter
@@ -166,34 +167,35 @@ class AnalyzeUrl(
             baseUrl = it
         }
         if (urlNoOption.length != ruleUrl.length) {
-            GSON.fromJsonObject<UrlOption>(ruleUrl.substring(urlMatcher.end()))?.let { option ->
-                option.method?.let {
-                    if (it.equals("POST", true)) method = RequestMethod.POST
-                }
-                option.headers?.let { headers ->
-                    if (headers is Map<*, *>) {
-                        headers.forEach { entry ->
-                            headerMap[entry.key.toString()] = entry.value.toString()
+            GSON.fromJsonObject<UrlOption>(ruleUrl.substring(urlMatcher.end())).getOrNull()
+                ?.let { option ->
+                    option.method?.let {
+                        if (it.equals("POST", true)) method = RequestMethod.POST
+                    }
+                    option.headers?.let { headers ->
+                        if (headers is Map<*, *>) {
+                            headers.forEach { entry ->
+                                headerMap[entry.key.toString()] = entry.value.toString()
+                            }
+                        } else if (headers is String) {
+                            GSON.fromJsonObject<Map<String, String>>(headers).getOrNull()
+                                ?.let { headerMap.putAll(it) }
                         }
-                    } else if (headers is String) {
-                        GSON.fromJsonObject<Map<String, String>>(headers)
-                            ?.let { headerMap.putAll(it) }
+                    }
+                    option.body?.let {
+                        body = if (it is String) it else GSON.toJson(it)
+                    }
+                    type = option.type
+                    charset = option.charset
+                    retry = option.retry
+                    useWebView = option.webView?.toString()?.isNotBlank() == true
+                    webJs = option.webJs
+                    option.js?.let { jsStr ->
+                        evalJS(jsStr, url)?.toString()?.let {
+                            url = it
+                        }
                     }
                 }
-                option.body?.let {
-                    body = if (it is String) it else GSON.toJson(it)
-                }
-                type = option.type
-                charset = option.charset
-                retry = option.retry
-                useWebView = option.webView?.toString()?.isNotBlank() == true
-                webJs = option.webJs
-                option.js?.let { jsStr ->
-                    evalJS(jsStr, url)?.toString()?.let {
-                        url = it
-                    }
-                }
-            }
         }
         headerMap[UA_NAME] ?: let {
             headerMap[UA_NAME] = AppConfig.userAgent
@@ -463,7 +465,6 @@ class AnalyzeUrl(
      */
     suspend fun getByteArrayAwait(): ByteArray {
         @Suppress("RegExpRedundantEscape")
-        val dataUriRegex = Regex("data:[\\w/\\-\\.]+;base64,(.*)")
         val dataUriFindResult = dataUriRegex.find(urlNoQuery)
         val concurrentRecord = fetchStart()
         setCookie(source?.getKey())
@@ -510,7 +511,7 @@ class AnalyzeUrl(
     suspend fun upload(fileName: String, file: Any, contentType: String): StrResponse {
         return getProxyClient(proxy).newCallStrResponse(retry) {
             url(urlNoQuery)
-            val bodyMap = GSON.fromJsonObject<HashMap<String, Any>>(body)!!
+            val bodyMap = GSON.fromJsonObject<HashMap<String, Any>>(body).getOrNull()!!
             bodyMap.forEach { entry ->
                 if (entry.value.toString() == "fileRequest") {
                     bodyMap[entry.key] = mapOf(
