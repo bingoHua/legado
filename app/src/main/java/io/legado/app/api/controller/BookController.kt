@@ -8,10 +8,11 @@ import io.legado.app.api.ReturnData
 import io.legado.app.constant.PreferKey
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.Book
-import io.legado.app.help.AppConfig
+import io.legado.app.data.entities.BookSource
 import io.legado.app.help.BookHelp
 import io.legado.app.help.CacheManager
 import io.legado.app.help.ContentProcessor
+import io.legado.app.help.config.AppConfig
 import io.legado.app.help.glide.ImageLoader
 import io.legado.app.help.storage.AppWebDav
 import io.legado.app.model.BookCover
@@ -28,6 +29,10 @@ import java.io.File
 import java.io.FileOutputStream
 
 object BookController {
+
+    private lateinit var book: Book
+    private var bookSource: BookSource? = null
+    private var bookUrl: String = ""
 
     /**
      * 书架所有书籍
@@ -72,19 +77,25 @@ object BookController {
         val returnData = ReturnData()
         val bookUrl = parameters["url"]?.firstOrNull()
             ?: return returnData.setErrorMsg("bookUrl为空")
-        val book = appDb.bookDao.getBook(bookUrl)
-            ?: return returnData.setErrorMsg("bookUrl不对:${bookUrl}")
         val src = parameters["path"]?.firstOrNull()
             ?: return returnData.setErrorMsg("图片链接为空")
+        val width = parameters["width"]?.firstOrNull()?.toInt() ?: 640
+        if (this.bookUrl != bookUrl) {
+            this.book = appDb.bookDao.getBook(bookUrl)
+                ?: return returnData.setErrorMsg("bookUrl不对")
+        }
         val vFile = BookHelp.getImage(book, src)
         if (!vFile.exists()) {
-            val bookSource = appDb.bookSourceDao.getBookSource(book.origin)
+            if (this.bookUrl != bookUrl) {
+                this.bookSource = appDb.bookSourceDao.getBookSource(book.origin)
+            }
             runBlocking {
                 BookHelp.saveImage(bookSource, book, src)
             }
         }
+        this.bookUrl = bookUrl
         return returnData.setData(
-            BitmapUtils.decodeBitmap(vFile.absolutePath, 640, 640)
+            BitmapUtils.decodeBitmap(vFile.absolutePath, width, width)
         )
     }
 
@@ -296,7 +307,7 @@ object BookController {
         val returnData = ReturnData()
         postData?.let {
             CacheManager.put("webReadConfig", postData)
-        }
+        } ?: CacheManager.delete("webReadConfig")
         return returnData.setData("")
     }
 
@@ -305,7 +316,8 @@ object BookController {
      */
     fun getWebReadConfig(): ReturnData {
         val returnData = ReturnData()
-        val data = CacheManager.get("webReadConfig") ?: "{}"
+        val data = CacheManager.get("webReadConfig")
+            ?: return returnData.setErrorMsg("没有配置")
         return returnData.setData(data)
     }
 

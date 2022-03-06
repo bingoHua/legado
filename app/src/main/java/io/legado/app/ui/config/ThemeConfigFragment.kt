@@ -19,9 +19,9 @@ import io.legado.app.constant.EventBus
 import io.legado.app.constant.PreferKey
 import io.legado.app.databinding.DialogEditTextBinding
 import io.legado.app.databinding.DialogImageBlurringBinding
-import io.legado.app.help.AppConfig
 import io.legado.app.help.LauncherIconHelp
-import io.legado.app.help.ThemeConfig
+import io.legado.app.help.config.AppConfig
+import io.legado.app.help.config.ThemeConfig
 import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.dialogs.selector
 import io.legado.app.lib.theme.primaryColor
@@ -54,6 +54,9 @@ class ThemeConfigFragment : BasePreferenceFragment(),
         addPreferencesFromResource(R.xml.pref_config_theme)
         if (Build.VERSION.SDK_INT < 26) {
             preferenceScreen.removePreferenceRecursively(PreferKey.launcherIcon)
+        }
+        if (!AppConfig.isGooglePlay) {
+            preferenceScreen.removePreferenceRecursively("welcomeStyle")
         }
         upPreferenceSummary(PreferKey.bgImage, getPrefString(PreferKey.bgImage))
         upPreferenceSummary(PreferKey.bgImageN, getPrefString(PreferKey.bgImageN))
@@ -175,6 +178,8 @@ class ThemeConfigFragment : BasePreferenceFragment(),
             "saveNightTheme" -> alertSaveTheme(key)
             "coverConfig" -> (activity as? ConfigActivity)
                 ?.replaceFragment<CoverConfigFragment>(ConfigTag.COVER_CONFIG)
+            "welcomeStyle" -> (activity as? ConfigActivity)
+                ?.replaceFragment<WelcomeConfigFragment>(ConfigTag.WELCOME_CONFIG)
         }
         return super.onPreferenceTreeClick(preference)
     }

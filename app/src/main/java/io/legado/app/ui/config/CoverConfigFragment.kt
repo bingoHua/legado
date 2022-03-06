@@ -84,12 +84,17 @@ class CoverConfigFragment : BasePreferenceFragment(),
     override fun onPreferenceTreeClick(preference: Preference): Boolean {
         when (preference.key) {
             PreferKey.defaultCover ->
-                if (getPrefString(PreferKey.defaultCover).isNullOrEmpty()) {
+                if (getPrefString(preference.key).isNullOrEmpty()) {
                     selectImage.launch(requestCodeCover)
                 } else {
-                    context?.selector(items = arrayListOf("删除图片", "选择图片")) { _, i ->
+                    context?.selector(
+                        items = arrayListOf(
+                            getString(R.string.delete),
+                            getString(R.string.select_image)
+                        )
+                    ) { _, i ->
                         if (i == 0) {
-                            removePref(PreferKey.defaultCover)
+                            removePref(preference.key)
                             BookCover.upDefaultCover()
                         } else {
                             selectImage.launch(requestCodeCover)
@@ -97,12 +102,17 @@ class CoverConfigFragment : BasePreferenceFragment(),
                     }
                 }
             PreferKey.defaultCoverDark ->
-                if (getPrefString(PreferKey.defaultCoverDark).isNullOrEmpty()) {
+                if (getPrefString(preference.key).isNullOrEmpty()) {
                     selectImage.launch(requestCodeCoverDark)
                 } else {
-                    context?.selector(items = arrayListOf("删除图片", "选择图片")) { _, i ->
+                    context?.selector(
+                        items = arrayListOf(
+                            getString(R.string.delete),
+                            getString(R.string.select_image)
+                        )
+                    ) { _, i ->
                         if (i == 0) {
-                            removePref(PreferKey.defaultCoverDark)
+                            removePref(preference.key)
                             BookCover.upDefaultCover()
                         } else {
                             selectImage.launch(requestCodeCoverDark)

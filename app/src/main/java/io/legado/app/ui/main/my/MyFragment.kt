@@ -12,8 +12,8 @@ import io.legado.app.base.BasePreferenceFragment
 import io.legado.app.constant.EventBus
 import io.legado.app.constant.PreferKey
 import io.legado.app.databinding.FragmentMyConfigBinding
-import io.legado.app.help.AppConfig
-import io.legado.app.help.ThemeConfig
+import io.legado.app.help.config.AppConfig
+import io.legado.app.help.config.ThemeConfig
 import io.legado.app.lib.dialogs.selector
 import io.legado.app.lib.theme.primaryColor
 import io.legado.app.service.WebService
@@ -66,6 +66,10 @@ class MyFragment : BaseFragment(R.layout.fragment_my_config) {
         override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
             putPrefBoolean(PreferKey.webService, WebService.isRun)
             addPreferencesFromResource(R.xml.pref_main)
+            if (AppConfig.isGooglePlay) {
+                findPreference<PreferenceCategory>("aboutCategory")
+                    ?.removePreferenceRecursively("donate")
+            }
             findPreference<SwitchPreference>("webService")?.onLongClick {
                 if (!WebService.isRun) {
                     return@onLongClick false
@@ -93,10 +97,6 @@ class MyFragment : BaseFragment(R.layout.fragment_my_config) {
                     view?.post { ThemeConfig.applyDayNight(requireContext()) }
                     true
                 }
-            }
-            if (AppConfig.isGooglePlay) {
-                findPreference<PreferenceCategory>("aboutCategory")
-                    ?.removePreferenceRecursively("donate")
             }
         }
 
