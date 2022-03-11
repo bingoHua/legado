@@ -24,11 +24,11 @@ import javax.script.SimpleBindings
 @Keep
 @Suppress("unused", "RegExpRedundantEscape", "MemberVisibilityCanBePrivate")
 class AnalyzeRule(
-    val ruleData: RuleDataInterface,
+    var ruleData: RuleDataInterface? = null,
     private val source: BaseSource? = null
 ) : JsExtensions {
 
-    var book = if (ruleData is BaseBook) ruleData else null
+    val book get() = ruleData as? BaseBook
 
     var chapter: BookChapter? = null
     var nextChapterUrl: String? = null
@@ -613,7 +613,7 @@ class AnalyzeRule(
     fun put(key: String, value: String): String {
         chapter?.putVariable(key, value)
             ?: book?.putVariable(key, value)
-            ?: ruleData.putVariable(key, value)
+            ?: ruleData?.putVariable(key, value)
         return value
     }
 
@@ -626,9 +626,9 @@ class AnalyzeRule(
                 return it.title
             }
         }
-        return chapter?.variableMap?.get(key)
-            ?: book?.variableMap?.get(key)
-            ?: ruleData.variableMap[key]
+        return chapter?.getVariable(key)
+            ?: book?.getVariable(key)
+            ?: ruleData?.getVariable(key)
             ?: ""
     }
 

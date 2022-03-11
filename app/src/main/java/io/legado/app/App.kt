@@ -7,21 +7,29 @@ import android.content.res.AssetManager
 import android.content.res.Configuration
 import android.os.Build
 import androidx.multidex.MultiDexApplication
+import com.github.liuyueyi.quick.transfer.ChineseUtils
 import com.jeremyliao.liveeventbus.LiveEventBus
 import io.legado.app.base.AppContextWrapper
 import io.legado.app.constant.AppConst.channelIdDownload
 import io.legado.app.constant.AppConst.channelIdReadAloud
 import io.legado.app.constant.AppConst.channelIdWeb
+import io.legado.app.constant.PreferKey
+import io.legado.app.data.appDb
 import io.legado.app.help.CrashHandler
 import io.legado.app.help.LifecycleHelp
+import io.legado.app.help.RuleBigDataHelp
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.ThemeConfig.applyDayNight
+import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.help.http.cronet.CronetLoader
+import io.legado.app.model.BookCover
 import io.legado.app.utils.defaultSharedPreferences
+import io.legado.app.utils.getPrefBoolean
 import splitties.systemservices.notificationManager
 import java.io.FileOutputStream
 import java.io.IOException
 import java.io.InputStream
+import java.util.concurrent.TimeUnit
 
 class App : MultiDexApplication() {
 
@@ -38,6 +46,23 @@ class App : MultiDexApplication() {
         registerActivityLifecycleCallbacks(LifecycleHelp)
         copyAssetsFile("ssml.xml")
         defaultSharedPreferences.registerOnSharedPreferenceChangeListener(AppConfig)
+        Coroutine.async {
+            //初始化封面
+            BookCover.toString()
+            //清除过期数据
+            appDb.cacheDao.clearDeadline(System.currentTimeMillis())
+            if (getPrefBoolean(PreferKey.autoClearExpired, true)) {
+                appDb.searchBookDao
+                    .clearExpired(System.currentTimeMillis() - TimeUnit.DAYS.toMillis(1))
+            }
+            RuleBigDataHelp.clearInvalid()
+            //初始化简繁转换引擎
+            when (AppConfig.chineseConverterType) {
+                1 -> ChineseUtils.t2s("初始化")
+                2 -> ChineseUtils.s2t("初始化")
+                else -> null
+            }
+        }
     }
 
     override fun attachBaseContext(base: Context) {

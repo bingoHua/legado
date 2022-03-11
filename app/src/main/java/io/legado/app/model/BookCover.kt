@@ -8,22 +8,30 @@ import com.bumptech.glide.RequestBuilder
 import com.bumptech.glide.request.RequestOptions
 import io.legado.app.R
 import io.legado.app.constant.PreferKey
+import io.legado.app.data.entities.BaseSource
+import io.legado.app.data.entities.Book
 import io.legado.app.help.BlurTransformation
+import io.legado.app.help.CacheManager
+import io.legado.app.help.DefaultData
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.glide.ImageLoader
-import io.legado.app.utils.BitmapUtils
-import io.legado.app.utils.getPrefBoolean
-import io.legado.app.utils.getPrefString
+import io.legado.app.model.analyzeRule.AnalyzeRule
+import io.legado.app.model.analyzeRule.AnalyzeUrl
+import io.legado.app.utils.*
 import splitties.init.appCtx
 
 object BookCover {
 
+    private const val coverRuleConfigKey = "legadoCoverRuleConfig"
     var drawBookName = true
         private set
     var drawBookAuthor = true
         private set
     lateinit var defaultDrawable: Drawable
         private set
+    var coverRuleConfig: CoverRuleConfig =
+        GSON.fromJsonObject<CoverRuleConfig>(CacheManager.get(coverRuleConfigKey)).getOrNull()
+            ?: DefaultData.coverRuleConfig
 
     init {
         upDefaultCover()
@@ -56,6 +64,55 @@ object BookCover {
     fun getBlurDefaultCover(context: Context): RequestBuilder<Drawable> {
         return ImageLoader.load(context, defaultDrawable)
             .apply(RequestOptions.bitmapTransform(BlurTransformation(context, 25)))
+    }
+
+    suspend fun searchCover(book: Book): String? {
+        val config = coverRuleConfig
+        if (!config.enable || config.searchUrl.isBlank() || config.coverRule.isBlank()) {
+            return null
+        }
+        val analyzeUrl =
+            AnalyzeUrl(
+                config.searchUrl,
+                book.name,
+                source = config,
+                headerMapF = config.getHeaderMap()
+            )
+        val res = analyzeUrl.getStrResponseAwait()
+        val analyzeRule = AnalyzeRule(book)
+        analyzeRule.setContent(res.body)
+        analyzeRule.setRedirectUrl(res.url)
+        return analyzeRule.getString(config.coverRule, isUrl = true)
+    }
+
+    fun saveCoverRuleConfig(config: CoverRuleConfig) {
+        coverRuleConfig = config
+        val json = GSON.toJson(config)
+        CacheManager.put(coverRuleConfigKey, json)
+    }
+
+    fun delCoverRuleConfig() {
+        CacheManager.delete(coverRuleConfigKey)
+        coverRuleConfig = DefaultData.coverRuleConfig
+    }
+
+    data class CoverRuleConfig(
+        var enable: Boolean = true,
+        var searchUrl: String,
+        var coverRule: String,
+        override var concurrentRate: String? = null,
+        override var loginUrl: String? = null,
+        override var loginUi: String? = null,
+        override var header: String? = null,
+    ) : BaseSource {
+
+        override fun getTag(): String {
+            return searchUrl
+        }
+
+        override fun getKey(): String {
+            return searchUrl
+        }
     }
 
 }
