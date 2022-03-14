@@ -1,23 +1,64 @@
-package io.legado.app.ui.widget
+package io.legado.app.ui.widget.dialog
 
+import android.app.Dialog
+import android.content.Context
+import android.os.Bundle
+import android.view.ViewGroup
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.AlertDialog
-import androidx.compose.material.Text
-import androidx.compose.material.TextButton
-import androidx.compose.material.TextField
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.tooling.preview.Preview
 import io.legado.app.R
+import io.legado.app.databinding.DialogUrlOptionEditBinding
 import io.legado.app.model.analyzeRule.AnalyzeUrl
 import io.legado.app.ui.theme.AppTheme
 import io.legado.app.ui.widget.checkbox.LabelledCheckBox
 import io.legado.app.utils.GSON
+import io.legado.app.utils.setLayout
 import splitties.init.appCtx
+
+class UrlOptionDialog(context: Context, private val success: (String) -> Unit) : Dialog(context) {
+
+    val binding = DialogUrlOptionEditBinding.inflate(layoutInflater)
+
+    override fun onStart() {
+        super.onStart()
+        setLayout(1f, ViewGroup.LayoutParams.WRAP_CONTENT)
+    }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContentView(binding.root)
+        binding.tvOk.setOnClickListener {
+            success.invoke(GSON.toJson(getUrlOption()))
+            dismiss()
+        }
+    }
+
+    private fun getUrlOption(): AnalyzeUrl.UrlOption {
+        val urlOption = AnalyzeUrl.UrlOption()
+        urlOption.useWebView(binding.cbUseWebView.isChecked)
+        urlOption.setMethod(binding.editMethod.text.toString())
+        urlOption.setCharset(binding.editMethod.text.toString())
+        urlOption.setHeaders(binding.editHeaders.text.toString())
+        urlOption.setBody(binding.editBody.text.toString())
+        urlOption.setRetry(binding.editRetry.text.toString())
+        urlOption.setType(binding.editType.text.toString())
+        urlOption.setWebJs(binding.editWebJs.text.toString())
+        urlOption.setJs(binding.editJs.text.toString())
+        return urlOption
+    }
+
+}
 
 
 @Composable
@@ -46,7 +87,9 @@ fun UrlOptionDialog(openState: MutableState<Boolean>, confirm: (String) -> Unit)
                     Text(text = "url参数")
                 },
                 text = {
-                    UrlOptionView(urlOption = urlOption)
+                    Surface {
+                        UrlOptionView(urlOption = urlOption)
+                    }
                 }
             )
         }
@@ -91,7 +134,11 @@ fun UrlOptionView(urlOption: AnalyzeUrl.UrlOption) {
         mutableStateOf("")
     }
     urlOption.setJs(js.value)
-    Column {
+
+    Column(
+        Modifier
+            .verticalScroll(rememberScrollState())
+    ) {
         Row {
             LabelledCheckBox(
                 checked = useWebView.value,
@@ -145,8 +192,7 @@ fun UrlOptionView(urlOption: AnalyzeUrl.UrlOption) {
             },
             label = {
                 Text(text = "type")
-            },
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+            }
         )
         TextField(
             value = webJs.value,
@@ -167,4 +213,10 @@ fun UrlOptionView(urlOption: AnalyzeUrl.UrlOption) {
             }
         )
     }
+}
+
+@Preview
+@Composable
+fun PreviewUrlOption() {
+    UrlOptionView(urlOption = AnalyzeUrl.UrlOption())
 }
