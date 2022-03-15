@@ -16,7 +16,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.tooling.preview.Preview
 import io.legado.app.R
 import io.legado.app.databinding.DialogUrlOptionEditBinding
 import io.legado.app.model.analyzeRule.AnalyzeUrl
@@ -32,7 +31,7 @@ class UrlOptionDialog(context: Context, private val success: (String) -> Unit) :
 
     override fun onStart() {
         super.onStart()
-        setLayout(1f, ViewGroup.LayoutParams.WRAP_CONTENT)
+        setLayout(1f, ViewGroup.LayoutParams.MATCH_PARENT)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -48,7 +47,7 @@ class UrlOptionDialog(context: Context, private val success: (String) -> Unit) :
         val urlOption = AnalyzeUrl.UrlOption()
         urlOption.useWebView(binding.cbUseWebView.isChecked)
         urlOption.setMethod(binding.editMethod.text.toString())
-        urlOption.setCharset(binding.editMethod.text.toString())
+        urlOption.setCharset(binding.editCharset.text.toString())
         urlOption.setHeaders(binding.editHeaders.text.toString())
         urlOption.setBody(binding.editBody.text.toString())
         urlOption.setRetry(binding.editRetry.text.toString())
@@ -213,10 +212,4 @@ fun UrlOptionView(urlOption: AnalyzeUrl.UrlOption) {
             }
         )
     }
-}
-
-@Preview
-@Composable
-fun PreviewUrlOption() {
-    UrlOptionView(urlOption = AnalyzeUrl.UrlOption())
 }
