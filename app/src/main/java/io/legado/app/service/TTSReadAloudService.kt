@@ -8,15 +8,17 @@ import io.legado.app.constant.AppConst
 import io.legado.app.constant.AppLog
 import io.legado.app.constant.AppPattern
 import io.legado.app.constant.EventBus
+import io.legado.app.exception.NoStackTraceException
 import io.legado.app.help.MediaHelp
 import io.legado.app.help.config.AppConfig
 import io.legado.app.lib.dialogs.SelectItem
-import io.legado.app.model.NoStackTraceException
 import io.legado.app.model.ReadAloud
 import io.legado.app.model.ReadBook
 import io.legado.app.utils.*
-import java.util.*
 
+/**
+ * 本地朗读
+ */
 class TTSReadAloudService : BaseReadAloudService(), TextToSpeech.OnInitListener {
 
     private var textToSpeech: TextToSpeech? = null
@@ -57,7 +59,6 @@ class TTSReadAloudService : BaseReadAloudService(), TextToSpeech.OnInitListener 
         if (status == TextToSpeech.SUCCESS) {
             textToSpeech?.let {
                 it.setOnUtteranceProgressListener(ttsUtteranceListener)
-                it.language = Locale.CHINA
                 ttsInitFinish = true
                 play()
             }
@@ -106,13 +107,14 @@ class TTSReadAloudService : BaseReadAloudService(), TextToSpeech.OnInitListener 
      * 更新朗读速度
      */
     override fun upSpeechRate(reset: Boolean) {
-        if (this.getPrefBoolean("ttsFollowSys", true)) {
+        if (AppConfig.ttsFlowSys) {
             if (reset) {
                 clearTTS()
                 initTts()
             }
         } else {
-            textToSpeech?.setSpeechRate((AppConfig.ttsSpeechRate + 5) / 10f)
+            val speechRate = (AppConfig.ttsSpeechRate + 5) / 10f
+            textToSpeech?.setSpeechRate(speechRate)
         }
     }
 

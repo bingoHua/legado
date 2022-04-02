@@ -23,6 +23,7 @@ import io.legado.app.data.entities.BookSource
 import io.legado.app.data.entities.SearchBook
 import io.legado.app.databinding.DialogBookChangeSourceBinding
 import io.legado.app.help.config.AppConfig
+import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.theme.primaryColor
 import io.legado.app.ui.book.source.edit.BookSourceEditActivity
 import io.legado.app.ui.book.source.manage.BookSourceActivity
@@ -54,6 +55,23 @@ class ChangeBookSourceDialog() : BaseDialogFragment(R.layout.dialog_book_change_
         registerForActivityResult(StartActivityContract(BookSourceEditActivity::class.java)) {
             viewModel.startSearch()
         }
+    private val searchFinishCallback: (isEmpty: Boolean) -> Unit = {
+        if (it) {
+            val searchGroup = getPrefString("searchGroup")
+            if (!searchGroup.isNullOrEmpty()) {
+                launch {
+                    alert("搜索结果为空") {
+                        setMessage("${searchGroup}分组搜索结果为空,是否切换到全部分组")
+                        cancelButton()
+                        okButton {
+                            putPrefString("searchGroup", "")
+                            viewModel.startSearch()
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     override fun onStart() {
         super.onStart()
@@ -67,7 +85,9 @@ class ChangeBookSourceDialog() : BaseDialogFragment(R.layout.dialog_book_change_
         initMenu()
         initRecyclerView()
         initSearchView()
+        initBottomBar()
         initLiveData()
+        viewModel.searchFinishCallback = searchFinishCallback
     }
 
     private fun showTitle() {
@@ -88,7 +108,6 @@ class ChangeBookSourceDialog() : BaseDialogFragment(R.layout.dialog_book_change_
     }
 
     private fun initRecyclerView() {
-        binding.recyclerView.layoutManager = LinearLayoutManager(context)
         binding.recyclerView.addItemDecoration(VerticalDivider(requireContext()))
         binding.recyclerView.adapter = adapter
         adapter.registerAdapterDataObserver(object : RecyclerView.AdapterDataObserver() {
@@ -127,6 +146,19 @@ class ChangeBookSourceDialog() : BaseDialogFragment(R.layout.dialog_book_change_
             }
 
         })
+    }
+
+    private fun initBottomBar() {
+        binding.tvDur.text = callBack?.oldBook?.originName
+        binding.tvDur.setOnClickListener {
+            scrollToDurSource()
+        }
+        binding.ivTop.setOnClickListener {
+            binding.recyclerView.scrollToPosition(0)
+        }
+        binding.ivBottom.setOnClickListener {
+            binding.recyclerView.scrollToPosition(adapter.itemCount - 1)
+        }
     }
 
     private fun initLiveData() {
@@ -196,6 +228,16 @@ class ChangeBookSourceDialog() : BaseDialogFragment(R.layout.dialog_book_change_
             }
         }
         return false
+    }
+
+    private fun scrollToDurSource() {
+        adapter.getItems().forEachIndexed { index, searchBook ->
+            if (searchBook.bookUrl == bookUrl) {
+                (binding.recyclerView.layoutManager as LinearLayoutManager)
+                    .scrollToPositionWithOffset(index, 60.dpToPx())
+                return
+            }
+        }
     }
 
     override fun changeTo(searchBook: SearchBook) {

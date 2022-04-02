@@ -24,6 +24,7 @@ import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookChapter
 import io.legado.app.help.MediaHelp
 import io.legado.app.help.exoplayer.ExoPlayerHelper
+import io.legado.app.help.glide.ImageLoader
 import io.legado.app.model.AudioPlay
 import io.legado.app.model.analyzeRule.AnalyzeUrl
 import io.legado.app.model.webBook.WebBook
@@ -34,8 +35,9 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.Dispatchers.Main
 import splitties.systemservices.audioManager
 
-
-
+/**
+ * 音频播放服务
+ */
 class AudioPlayService : BaseService(),
     AudioManager.OnAudioFocusChangeListener,
     Player.Listener {
@@ -43,7 +45,7 @@ class AudioPlayService : BaseService(),
     companion object {
         var isRun = false
             private set
-        var pause = false
+        var pause = true
             private set
         var timeMinute: Int = 0
             private set
@@ -57,11 +59,10 @@ class AudioPlayService : BaseService(),
     private val exoPlayer: ExoPlayer by lazy {
         ExoPlayer.Builder(this).build()
     }
-    private var title: String = ""
-    private var subtitle: String = ""
     private var mediaSessionCompat: MediaSessionCompat? = null
     private var broadcastReceiver: BroadcastReceiver? = null
-    private var position = 0
+    private var audioFocusLossTransient = false
+    private var position = AudioPlay.book?.durChapterPos ?: 0
     private var dsJob: Job? = null
     private var upPlayProgressJob: Job? = null
     private var playSpeed: Float = 1f
@@ -74,18 +75,16 @@ class AudioPlayService : BaseService(),
         initMediaSession()
         initBroadcastReceiver()
         upMediaSessionPlaybackState(PlaybackStateCompat.STATE_PLAYING)
+        doDs()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         intent?.action?.let { action ->
             when (action) {
                 IntentAction.play -> {
-                    AudioPlay.book?.let {
-                        title = it.name
-                        subtitle = AudioPlay.durChapter?.title ?: ""
-                        position = it.durChapterPos
-                        loadContent()
-                    }
+                    pause = false
+                    position = AudioPlay.book?.durChapterPos ?: 0
+                    loadContent()
                 }
                 IntentAction.pause -> pause(true)
                 IntentAction.resume -> resume()
@@ -169,6 +168,10 @@ class AudioPlayService : BaseService(),
     private fun resume() {
         try {
             pause = false
+            if (url.isEmpty()) {
+                loadContent()
+                return
+            }
             if (!exoPlayer.isPlaying) {
                 exoPlayer.play()
             }
@@ -258,11 +261,11 @@ class AudioPlayService : BaseService(),
     }
 
     private fun addTimer() {
-        if (timeMinute == 60) {
+        if (timeMinute == 180) {
             timeMinute = 0
         } else {
             timeMinute += 10
-            if (timeMinute > 60) timeMinute = 60
+            if (timeMinute > 180) timeMinute = 180
         }
         doDs()
     }
@@ -271,7 +274,7 @@ class AudioPlayService : BaseService(),
      * 定时
      */
     private fun doDs() {
-        postEvent(EventBus.TTS_DS, timeMinute)
+        postEvent(EventBus.AUDIO_DS, timeMinute)
         upNotification()
         dsJob?.cancel()
         dsJob = launch {
@@ -285,7 +288,7 @@ class AudioPlayService : BaseService(),
                         AudioPlay.stop(this@AudioPlayService)
                     }
                 }
-                postEvent(EventBus.TTS_DS, timeMinute)
+                postEvent(EventBus.AUDIO_DS, timeMinute)
                 upNotification()
             }
         }
@@ -358,7 +361,6 @@ class AudioPlayService : BaseService(),
      */
     private fun contentLoadFinish(chapter: BookChapter, content: String) {
         if (chapter.index == AudioPlay.book?.durChapterIndex) {
-            subtitle = chapter.title
             url = content
             play()
         }
@@ -424,13 +426,18 @@ class AudioPlayService : BaseService(),
         when (focusChange) {
             AudioManager.AUDIOFOCUS_GAIN -> {
                 // 重新获得焦点,  可做恢复播放，恢复后台音量的操作
+                audioFocusLossTransient = false
                 if (!pause) resume()
             }
             AudioManager.AUDIOFOCUS_LOSS -> {
                 // 永久丢失焦点除非重新主动获取，这种情况是被其他播放器抢去了焦点，  为避免与其他播放器混音，可将音乐暂停
+                if (audioFocusLossTransient) {
+                    pause(true)
+                }
             }
             AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> {
                 // 暂时丢失焦点，这种情况是被其他应用申请了短暂的焦点，可压低后台音量
+                audioFocusLossTransient = true
                 if (!pause) pause(false)
             }
             AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> {
@@ -443,58 +450,71 @@ class AudioPlayService : BaseService(),
      * 更新通知
      */
     private fun upNotification() {
-        var nTitle: String = when {
-            pause -> getString(R.string.audio_pause)
-            timeMinute in 1..60 -> getString(
-                R.string.playing_timer,
-                timeMinute
-            )
-            else -> getString(R.string.audio_play_t)
-        }
-        nTitle += ": $title"
-        var nSubtitle = subtitle
-        if (subtitle.isEmpty()) {
-            nSubtitle = getString(R.string.audio_play_s)
-        }
-        val builder = NotificationCompat.Builder(this, AppConst.channelIdReadAloud)
-            .setSmallIcon(R.drawable.ic_volume_up)
-            .setLargeIcon(BitmapFactory.decodeResource(resources, R.drawable.icon_read_book))
-            .setOngoing(true)
-            .setContentTitle(nTitle)
-            .setContentText(nSubtitle)
-            .setContentIntent(
-                activityPendingIntent<AudioPlayActivity>("activity")
-            )
-        if (pause) {
+        execute {
+            var nTitle: String = when {
+                pause -> getString(R.string.audio_pause)
+                timeMinute in 1..60 -> getString(
+                    R.string.playing_timer,
+                    timeMinute
+                )
+                else -> getString(R.string.audio_play_t)
+            }
+            nTitle += ": ${AudioPlay.book?.name}"
+            var nSubtitle = AudioPlay.durChapter?.title
+            if (nSubtitle.isNullOrEmpty()) {
+                nSubtitle = getString(R.string.audio_play_s)
+            }
+            val builder = NotificationCompat
+                .Builder(this@AudioPlayService, AppConst.channelIdReadAloud)
+                .setSmallIcon(R.drawable.ic_volume_up)
+                .setOngoing(true)
+                .setContentTitle(nTitle)
+                .setContentText(nSubtitle)
+                .setContentIntent(
+                    activityPendingIntent<AudioPlayActivity>("activity")
+                )
+            kotlin.runCatching {
+                ImageLoader
+                    .loadBitmap(this@AudioPlayService, AudioPlay.book?.getDisplayCover())
+                    .submit()
+                    .get()
+            }.getOrElse {
+                BitmapFactory.decodeResource(resources, R.drawable.icon_read_book)
+            }.let {
+                builder.setLargeIcon(it)
+            }
+            if (pause) {
+                builder.addAction(
+                    R.drawable.ic_play_24dp,
+                    getString(R.string.resume),
+                    servicePendingIntent<AudioPlayService>(IntentAction.resume)
+                )
+            } else {
+                builder.addAction(
+                    R.drawable.ic_pause_24dp,
+                    getString(R.string.pause),
+                    servicePendingIntent<AudioPlayService>(IntentAction.pause)
+                )
+            }
             builder.addAction(
-                R.drawable.ic_play_24dp,
-                getString(R.string.resume),
-                servicePendingIntent<AudioPlayService>(IntentAction.resume)
+                R.drawable.ic_stop_black_24dp,
+                getString(R.string.stop),
+                servicePendingIntent<AudioPlayService>(IntentAction.stop)
             )
-        } else {
             builder.addAction(
-                R.drawable.ic_pause_24dp,
-                getString(R.string.pause),
-                servicePendingIntent<AudioPlayService>(IntentAction.pause)
+                R.drawable.ic_time_add_24dp,
+                getString(R.string.set_timer),
+                servicePendingIntent<AudioPlayService>(IntentAction.addTimer)
             )
+            builder.setStyle(
+                androidx.media.app.NotificationCompat.MediaStyle()
+                    .setShowActionsInCompactView(0, 1, 2)
+            )
+            builder.setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            builder
+        }.onSuccess {
+            startForeground(AppConst.notificationIdAudio, it.build())
         }
-        builder.addAction(
-            R.drawable.ic_stop_black_24dp,
-            getString(R.string.stop),
-            servicePendingIntent<AudioPlayService>(IntentAction.stop)
-        )
-        builder.addAction(
-            R.drawable.ic_time_add_24dp,
-            getString(R.string.set_timer),
-            servicePendingIntent<AudioPlayService>(IntentAction.addTimer)
-        )
-        builder.setStyle(
-            androidx.media.app.NotificationCompat.MediaStyle()
-                .setShowActionsInCompactView(0, 1, 2)
-        )
-        builder.setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-        val notification = builder.build()
-        startForeground(AppConst.notificationIdAudio, notification)
     }
 
     /**

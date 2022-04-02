@@ -10,10 +10,10 @@ import io.legado.app.R
 import io.legado.app.constant.AppLog
 import io.legado.app.constant.AppPattern
 import io.legado.app.constant.EventBus
+import io.legado.app.exception.ConcurrentException
+import io.legado.app.exception.NoStackTraceException
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.coroutine.Coroutine
-import io.legado.app.model.ConcurrentException
-import io.legado.app.model.NoStackTraceException
 import io.legado.app.model.ReadAloud
 import io.legado.app.model.ReadBook
 import io.legado.app.model.analyzeRule.AnalyzeUrl
@@ -41,6 +41,7 @@ class HttpReadAloudService : BaseReadAloudService(),
     private val ttsFolderPath: String by lazy {
         cacheDir.absolutePath + File.separator + "httpTTS" + File.separator
     }
+    private var speechRate: Int = AppConfig.speechRatePlay
     private val cacheFiles = hashSetOf<String>()
     private var task: Coroutine<*>? = null
     private var playIndexJob: Job? = null
@@ -113,7 +114,7 @@ class HttpReadAloudService : BaseReadAloudService(),
             contentList.forEachIndexed { index, content ->
                 ensureActive()
                 val fileName =
-                    md5SpeakFileName(httpTts.url, AppConfig.ttsSpeechRate.toString(), content)
+                    md5SpeakFileName(httpTts.url, speechRate.toString(), content)
                 val speakText = content.replace(AppPattern.notReadAloudRegex, "")
                 if (hasSpeakFile(fileName)) { //已经下载好的语音缓存
                     if (index == nowSpeak) {
@@ -131,7 +132,7 @@ class HttpReadAloudService : BaseReadAloudService(),
                         val analyzeUrl = AnalyzeUrl(
                             httpTts.url,
                             speakText = speakText,
-                            speakSpeed = AppConfig.ttsSpeechRate,
+                            speakSpeed = speechRate,
                             source = httpTts,
                             headerMapF = httpTts.getHeaderMap(true)
                         )
@@ -317,6 +318,7 @@ class HttpReadAloudService : BaseReadAloudService(),
     override fun upSpeechRate(reset: Boolean) {
         task?.cancel()
         exoPlayer.stop()
+        speechRate = AppConfig.speechRatePlay
         downloadAudio()
     }
 

@@ -169,11 +169,21 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
             }
         }
 
+    var ttsFlowSys: Boolean
+        get() = appCtx.getPrefBoolean(PreferKey.ttsFollowSys, true)
+        set(value) {
+            appCtx.putPrefBoolean(PreferKey.ttsFollowSys, value)
+        }
+
+    const val defaultSpeechRate = 5
+
     var ttsSpeechRate: Int
-        get() = appCtx.getPrefInt(PreferKey.ttsSpeechRate, 5)
+        get() = appCtx.getPrefInt(PreferKey.ttsSpeechRate, defaultSpeechRate)
         set(value) {
             appCtx.putPrefInt(PreferKey.ttsSpeechRate, value)
         }
+
+    val speechRatePlay: Int get() = if (ttsFlowSys) defaultSpeechRate else ttsSpeechRate
 
     var chineseConverterType: Int
         get() = appCtx.getPrefInt(PreferKey.chineseConverterType)
@@ -272,8 +282,6 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
 
     val importKeepName get() = appCtx.getPrefBoolean(PreferKey.importKeepName)
 
-    val syncBookProgress get() = appCtx.getPrefBoolean(PreferKey.syncBookProgress, true)
-
     var preDownloadNum
         get() = appCtx.getPrefInt(PreferKey.preDownloadNum, 10)
         set(value) {
@@ -287,6 +295,8 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
     val webDavDir get() = appCtx.getPrefString(PreferKey.webDavDir, "legado")
 
     val recordLog get() = appCtx.getPrefBoolean(PreferKey.recordLog)
+
+    val loadOnlyWifi = appCtx.getPrefBoolean(PreferKey.loadCoverOnlyWifi, false)
 
     val doublePageHorizontal: Boolean
         get() = appCtx.getPrefBoolean(PreferKey.doublePageHorizontal, true)

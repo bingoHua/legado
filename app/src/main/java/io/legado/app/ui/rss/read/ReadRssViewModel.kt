@@ -131,19 +131,19 @@ class ReadRssViewModel(application: Application) : BaseViewModel(application),
         }
     }
 
-    fun saveImage(webPic: String?, path: String) {
+    fun saveImage(webPic: String?, uri: Uri) {
         webPic ?: return
         execute {
             val fileName = "${AppConst.fileNameFormat.format(Date(System.currentTimeMillis()))}.jpg"
             webData2bitmap(webPic)?.let { biteArray ->
-                if (path.isContentScheme()) {
-                    val uri = Uri.parse(path)
+                if (uri.isContentScheme()) {
                     DocumentFile.fromTreeUri(context, uri)?.let { doc ->
                         DocumentUtils.createFileIfNotExist(doc, fileName)
                             ?.writeBytes(context, biteArray)
                     }
                 } else {
-                    val file = FileUtils.createFileIfNotExist(File(path), fileName)
+                    val dir = File(uri.path ?: uri.toString())
+                    val file = FileUtils.createFileIfNotExist(dir, fileName)
                     file.writeBytes(biteArray)
                 }
             } ?: throw Throwable("NULL")
@@ -194,7 +194,6 @@ class ReadRssViewModel(application: Application) : BaseViewModel(application),
     @Synchronized
     override fun onInit(status: Int) {
         if (status == TextToSpeech.SUCCESS) {
-            textToSpeech?.language = Locale.CHINA
             textToSpeech?.setOnUtteranceProgressListener(TTSUtteranceListener())
             ttsInitFinish = true
             play()

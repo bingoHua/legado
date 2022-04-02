@@ -5,10 +5,10 @@ import android.content.Intent
 import io.legado.app.base.BaseViewModel
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.BookSource
+import io.legado.app.exception.NoStackTraceException
 import io.legado.app.help.RuleComplete
 import io.legado.app.help.http.newCallStrResponse
 import io.legado.app.help.http.okHttpClient
-import io.legado.app.model.NoStackTraceException
 import io.legado.app.utils.*
 import kotlinx.coroutines.Dispatchers
 
@@ -86,14 +86,12 @@ class BookSourceEditViewModel(application: Application) : BaseViewModel(applicat
             text.isJsonArray() -> {
                 val items: List<Map<String, Any>> = jsonPath.parse(text).read("$")
                 val jsonItem = jsonPath.parse(items[0])
-                BookSource.fromJson(jsonItem.jsonString())
+                BookSource.fromJson(jsonItem.jsonString()).getOrThrow()
             }
             text.isJsonObject() -> {
-                BookSource.fromJson(text)
+                BookSource.fromJson(text).getOrThrow()
             }
-            else -> {
-                null
-            }
+            else -> throw NoStackTraceException("格式不对")
         }
     }
 

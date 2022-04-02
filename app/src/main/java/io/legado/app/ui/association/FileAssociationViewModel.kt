@@ -4,12 +4,12 @@ import android.app.Application
 import android.net.Uri
 import androidx.documentfile.provider.DocumentFile
 import androidx.lifecycle.MutableLiveData
-import io.legado.app.model.NoStackTraceException
+import io.legado.app.constant.AppPattern.bookFileRegex
+import io.legado.app.exception.NoStackTraceException
 import io.legado.app.model.localBook.LocalBook
 import io.legado.app.utils.isJson
 import io.legado.app.utils.printOnDebug
 import io.legado.app.utils.readText
-
 import java.io.File
 
 class FileAssociationViewModel(application: Application) : BaseAssociationViewModel(application) {
@@ -31,9 +31,8 @@ class FileAssociationViewModel(application: Application) : BaseAssociationViewMo
                 } else {
                     DocumentFile.fromSingleUri(context, uri)?.readText(context)
                 } ?: throw NoStackTraceException("文件不存在")
-                if (content.isJson()) {
-                    //暂时根据文件内容判断属于什么
-                    when {
+                when {
+                    content.isJson() -> when {
                         content.contains("bookSourceUrl") ->
                             importBookSourceLive.postValue(content)
                         content.contains("sourceUrl") ->
@@ -48,8 +47,12 @@ class FileAssociationViewModel(application: Application) : BaseAssociationViewMo
                             importHttpTTS(content, finally)
                         else -> errorLiveData.postValue("格式不对")
                     }
-                } else {
-                    importBookLiveData.postValue(uri)
+                    (uri.path ?: uri.toString()).matches(bookFileRegex) -> {
+                        importBookLiveData.postValue(uri)
+                    }
+                    else -> {
+                        throw NoStackTraceException("暂未支持的本地书籍格式(TXT/UMD/EPUB)")
+                    }
                 }
             } else {
                 onLineImportLive.postValue(uri)

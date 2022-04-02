@@ -1,5 +1,6 @@
 package io.legado.app.ui.book.audio
 
+import android.annotation.SuppressLint
 import android.app.Activity
 import android.icu.text.SimpleDateFormat
 import android.os.Build
@@ -8,8 +9,7 @@ import android.view.Menu
 import android.view.MenuItem
 import android.widget.SeekBar
 import androidx.activity.viewModels
-import com.bumptech.glide.load.resource.drawable.DrawableTransitionOptions
-import com.bumptech.glide.request.RequestOptions.bitmapTransform
+import androidx.compose.runtime.mutableStateOf
 import io.legado.app.R
 import io.legado.app.base.VMBaseActivity
 import io.legado.app.constant.EventBus
@@ -18,8 +18,6 @@ import io.legado.app.constant.Theme
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookSource
 import io.legado.app.databinding.ActivityAudioPlayBinding
-import io.legado.app.help.BlurTransformation
-import io.legado.app.help.glide.ImageLoader
 import io.legado.app.lib.dialogs.alert
 import io.legado.app.model.AudioPlay
 import io.legado.app.model.BookCover
@@ -29,6 +27,7 @@ import io.legado.app.ui.book.changesource.ChangeBookSourceDialog
 import io.legado.app.ui.book.source.edit.BookSourceEditActivity
 import io.legado.app.ui.book.toc.TocActivityResult
 import io.legado.app.ui.login.SourceLoginActivity
+import io.legado.app.ui.theme.AppTheme
 import io.legado.app.ui.widget.seekbar.SeekBarChangeListener
 import io.legado.app.utils.*
 import io.legado.app.utils.viewbindingdelegate.viewBinding
@@ -46,6 +45,7 @@ class AudioPlayActivity :
     override val viewModel by viewModels<AudioPlayViewModel>()
     private var menu: Menu? = null
     private var adjustProgress = false
+    private val timerViewState = mutableStateOf(false)
     private val progressTimeFormat by lazy {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             SimpleDateFormat("mm:ss", Locale.getDefault())
@@ -157,7 +157,19 @@ class AudioPlayActivity :
             AudioPlay.adjustSpeed(this@AudioPlayActivity, -0.1f)
         }
         binding.ivTimer.setOnClickListener {
-            AudioPlay.addTimer(this@AudioPlayActivity)
+            if (AudioPlayService.isRun) {
+                timerViewState.value = true
+            } else {
+                toastOnUi(R.string.cannot_timed_non_playback)
+            }
+        }
+        binding.composeView.setContent {
+            AppTheme {
+                TimerDialog(
+                    state = timerViewState,
+                    binding.ivTimer
+                )
+            }
         }
     }
 
@@ -169,14 +181,9 @@ class AudioPlayActivity :
     }
 
     private fun upCover(path: String?) {
-        ImageLoader.load(this, path)
-            .placeholder(BookCover.defaultDrawable)
-            .error(BookCover.defaultDrawable)
+        BookCover.load(this, path)
             .into(binding.ivCover)
-        ImageLoader.load(this, path)
-            .transition(DrawableTransitionOptions.withCrossFade(1500))
-            .thumbnail(BookCover.getBlurDefaultCover(this))
-            .apply(bitmapTransform(BlurTransformation(this, 25)))
+        BookCover.loadBlur(this, path)
             .into(binding.ivBg)
     }
 
@@ -219,6 +226,7 @@ class AudioPlayActivity :
         }
     }
 
+    @SuppressLint("SetTextI18n")
     override fun observeLiveBus() {
         observeEvent<Boolean>(EventBus.MEDIA_BUTTON) {
             if (it) {
@@ -247,6 +255,10 @@ class AudioPlayActivity :
         observeEventSticky<Float>(EventBus.AUDIO_SPEED) {
             binding.tvSpeed.text = String.format("%.1fX", it)
             binding.tvSpeed.visible()
+        }
+        observeEventSticky<Int>(EventBus.AUDIO_DS) {
+            binding.tvTimer.text = "${it}m"
+            binding.tvTimer.visible(it > 0)
         }
     }
 

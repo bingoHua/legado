@@ -4,6 +4,7 @@ import android.app.Application
 import android.net.Uri
 import androidx.documentfile.provider.DocumentFile
 import io.legado.app.base.BaseViewModel
+import io.legado.app.constant.AppPattern.bookFileRegex
 import io.legado.app.constant.PreferKey
 import io.legado.app.model.localBook.LocalBook
 import io.legado.app.utils.*
@@ -19,9 +20,7 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.*
 
-
 class ImportBookViewModel(application: Application) : BaseViewModel(application) {
-    private val bookFileRegex = Regex("(?i).*\\.(txt|epub|umd)")
     var sort = context.getPrefInt(PreferKey.localBookImportSort)
     var dataCallback: DataCallback? = null
     var dataFlowStart: (() -> Unit)? = null
@@ -59,10 +58,10 @@ class ImportBookViewModel(application: Application) : BaseViewModel(application)
     }.map { docList ->
         when (sort) {
             2 -> docList.sortedWith(
-                compareBy({ !it.isDir }, { it.date }, { it.name })
+                compareBy({ !it.isDir }, { -it.lastModified }, { it.name })
             )
             1 -> docList.sortedWith(
-                compareBy({ !it.isDir }, { it.size }, { it.name })
+                compareBy({ !it.isDir }, { -it.size }, { it.name })
             )
             else -> docList.sortedWith(
                 compareBy({ !it.isDir }, { it.name })

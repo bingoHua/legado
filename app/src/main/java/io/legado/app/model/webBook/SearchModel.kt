@@ -62,6 +62,7 @@ class SearchModel(private val scope: CoroutineScope) {
             searchPage = 1
             val searchGroup = appCtx.getPrefString("searchGroup") ?: ""
             bookSourceList.clear()
+            searchBooks.clear()
             callBack?.onSearchSuccess(searchBooks)
             if (searchGroup.isBlank()) {
                 bookSourceList.addAll(appDb.bookSourceDao.allEnabled)
@@ -127,7 +128,7 @@ class SearchModel(private val scope: CoroutineScope) {
         if (searchIndex >= bookSourceList.lastIndex
             + min(bookSourceList.size, threadCount)
         ) {
-            callBack?.onSearchFinish()
+            callBack?.onSearchFinish(searchBooks.isEmpty())
         }
     }
 
@@ -213,7 +214,7 @@ class SearchModel(private val scope: CoroutineScope) {
     interface CallBack {
         fun onSearchStart()
         fun onSearchSuccess(searchBooks: ArrayList<SearchBook>)
-        fun onSearchFinish()
+        fun onSearchFinish(isEmpty: Boolean)
         fun onSearchCancel()
     }
 
