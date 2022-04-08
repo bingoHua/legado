@@ -2,6 +2,7 @@ package io.legado.app.help.http.cronet
 
 import io.legado.app.help.http.okHttpClient
 import io.legado.app.utils.DebugLog
+import io.legado.app.utils.rethrowAsIOException
 import okhttp3.*
 import okhttp3.EventListener
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
@@ -60,11 +61,10 @@ abstract class AbsCallBack(
     }
 
 
-    //UrlResponseInfo可能为null
     override fun onResponseStarted(request: UrlRequest, info: UrlResponseInfo) {
         this.mResponse = responseFromResponse(this.mResponse, info)
         //打印协议，用于调试
-        DebugLog.i(javaClass.name, info.negotiatedProtocol)
+        DebugLog.i(javaClass.simpleName, "start[${info.negotiatedProtocol}]${info.url}")
         if (eventListener != null) {
             eventListener.responseHeadersEnd(mCall, this.mResponse)
             eventListener.responseBodyStart(mCall)
@@ -108,6 +108,7 @@ abstract class AbsCallBack(
             buffer.asResponseBody(contentType)
         val newRequest = originalRequest.newBuilder().url(info.url).build()
         this.mResponse = this.mResponse.newBuilder().body(responseBody).request(newRequest).build()
+        DebugLog.i(javaClass.simpleName, "end[${info.negotiatedProtocol}]${info.url}")
 
         eventListener?.callEnd(mCall)
         if (responseCallback != null) {
@@ -123,7 +124,7 @@ abstract class AbsCallBack(
     //UrlResponseInfo可能为null
     override fun onFailed(request: UrlRequest, info: UrlResponseInfo?, error: CronetException) {
         DebugLog.i(javaClass.name, error.message.toString())
-        mException = IOException(error.message, error)
+        mException = error.rethrowAsIOException()
         this.eventListener?.callFailed(mCall, error)
         responseCallback?.onFailure(mCall, error)
     }

@@ -54,7 +54,6 @@ class BookInfoActivity :
             viewModel.bookData.value?.let { book ->
                 launch {
                     withContext(IO) {
-                        viewModel.durChapterIndex = it.first
                         book.durChapterIndex = it.first
                         book.durChapterPos = it.second
                         appDb.bookDao.update(book)
@@ -270,7 +269,7 @@ class BookInfoActivity :
                 showDialogFragment(
                     ChangeCoverDialog(it.name, it.author)
                 )
-            }
+            } ?: toastOnUi("Book is null")
         }
         ivCover.setOnLongClickListener {
             viewModel.bookData.value?.getDisplayCover()?.let { path ->
@@ -281,7 +280,7 @@ class BookInfoActivity :
         tvRead.setOnClickListener {
             viewModel.bookData.value?.let {
                 readBook(it)
-            }
+            } ?: toastOnUi("Book is null")
         }
         tvShelf.setOnClickListener {
             if (viewModel.inBookshelf) {
@@ -297,12 +296,12 @@ class BookInfoActivity :
                 startActivity<BookSourceEditActivity> {
                     putExtra("sourceUrl", it.origin)
                 }
-            }
+            } ?: toastOnUi("Book is null")
         }
         tvChangeSource.setOnClickListener {
-            viewModel.bookData.value?.let {
-                showDialogFragment(ChangeBookSourceDialog(it.name, it.author))
-            }
+            viewModel.bookData.value?.let { book ->
+                showDialogFragment(ChangeBookSourceDialog(book.name, book.author))
+            } ?: toastOnUi("Book is null")
         }
         tvTocView.setOnClickListener {
             if (!viewModel.inBookshelf) {
@@ -320,7 +319,7 @@ class BookInfoActivity :
                 showDialogFragment(
                     GroupSelectDialog(it.group)
                 )
-            }
+            } ?: toastOnUi("Book is null")
         }
         tvAuthor.setOnClickListener {
             startActivity<SearchActivity> {
@@ -457,9 +456,8 @@ class BookInfoActivity :
     override val oldBook: Book?
         get() = viewModel.bookData.value
 
-    override fun changeTo(source: BookSource, book: Book) {
-        upLoading(true)
-        viewModel.changeTo(source, book)
+    override fun changeTo(source: BookSource, book: Book, toc: List<BookChapter>) {
+        viewModel.changeTo(source, book, toc)
     }
 
     override fun coverChangeTo(coverUrl: String) {

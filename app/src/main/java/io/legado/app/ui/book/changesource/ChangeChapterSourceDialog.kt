@@ -16,7 +16,6 @@ import io.legado.app.R
 import io.legado.app.base.BaseDialogFragment
 import io.legado.app.constant.AppPattern
 import io.legado.app.constant.EventBus
-import io.legado.app.constant.PreferKey
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookChapter
@@ -67,13 +66,6 @@ class ChangeChapterSourceDialog() : BaseDialogFragment(R.layout.dialog_chapter_c
     private val tocAdapter by lazy {
         ChangeChapterTocAdapter(requireContext(), this)
     }
-    private val tocSuccess: (toc: List<BookChapter>) -> Unit = {
-        tocAdapter.durChapterIndex =
-            BookHelp.getDurChapter(viewModel.chapterIndex, viewModel.chapterTitle, it)
-        binding.loadingToc.hide()
-        tocAdapter.setItems(it)
-        binding.recyclerViewToc.scrollToPosition(tocAdapter.durChapterIndex - 5)
-    }
     private val contentSuccess: (content: String) -> Unit = {
         binding.loadingToc.hide()
         callBack?.replaceContent(it)
@@ -82,14 +74,14 @@ class ChangeChapterSourceDialog() : BaseDialogFragment(R.layout.dialog_chapter_c
     private var searchBook: SearchBook? = null
     private val searchFinishCallback: (isEmpty: Boolean) -> Unit = {
         if (it) {
-            val searchGroup = getPrefString("searchGroup")
-            if (!searchGroup.isNullOrEmpty()) {
+            val searchGroup = AppConfig.searchGroup
+            if (searchGroup.isNotEmpty()) {
                 launch {
                     alert("搜索结果为空") {
                         setMessage("${searchGroup}分组搜索结果为空,是否切换到全部分组")
                         cancelButton()
                         okButton {
-                            putPrefString("searchGroup", "")
+                            AppConfig.searchGroup = ""
                             viewModel.startSearch()
                         }
                     }
@@ -238,12 +230,12 @@ class ChangeChapterSourceDialog() : BaseDialogFragment(R.layout.dialog_chapter_c
                 item.isChecked = !item.isChecked
                 viewModel.refresh()
             }
-            R.id.menu_load_toc -> {
-                putPrefBoolean(PreferKey.changeSourceLoadToc, !item.isChecked)
+            R.id.menu_load_info -> {
+                AppConfig.changeSourceLoadInfo = !item.isChecked
                 item.isChecked = !item.isChecked
             }
-            R.id.menu_load_info -> {
-                putPrefBoolean(PreferKey.changeSourceLoadInfo, !item.isChecked)
+            R.id.menu_load_toc -> {
+                AppConfig.changeSourceLoadToc = !item.isChecked
                 item.isChecked = !item.isChecked
             }
             R.id.menu_start_stop -> viewModel.startOrStopSearch()
@@ -252,9 +244,9 @@ class ChangeChapterSourceDialog() : BaseDialogFragment(R.layout.dialog_chapter_c
                 if (!item.isChecked) {
                     item.isChecked = true
                     if (item.title.toString() == getString(R.string.all_source)) {
-                        putPrefString("searchGroup", "")
+                        AppConfig.searchGroup = ""
                     } else {
-                        putPrefString("searchGroup", item.title.toString())
+                        AppConfig.searchGroup = item.title.toString()
                     }
                     viewModel.startOrStopSearch()
                     viewModel.refresh()
@@ -279,9 +271,16 @@ class ChangeChapterSourceDialog() : BaseDialogFragment(R.layout.dialog_chapter_c
         tocAdapter.setItems(null)
         binding.clToc.visible()
         binding.loadingToc.show()
-        viewModel.getToc(searchBook, tocSuccess) {
+        val book = searchBook.toBook()
+        viewModel.getToc(book, {
             binding.clToc.gone()
             toastOnUi(it)
+        }) { toc: List<BookChapter>, _: BookSource ->
+            tocAdapter.durChapterIndex =
+                BookHelp.getDurChapter(viewModel.chapterIndex, viewModel.chapterTitle, toc)
+            binding.loadingToc.hide()
+            tocAdapter.setItems(toc)
+            binding.recyclerViewToc.scrollToPosition(tocAdapter.durChapterIndex - 5)
         }
     }
 
@@ -309,8 +308,8 @@ class ChangeChapterSourceDialog() : BaseDialogFragment(R.layout.dialog_chapter_c
     override fun deleteSource(searchBook: SearchBook) {
         viewModel.del(searchBook)
         if (bookUrl == searchBook.bookUrl) {
-            viewModel.firstSourceOrNull(searchBook)?.let {
-                changeSource(it)
+            viewModel.autoChangeSource(callBack?.oldBook?.type) { book, toc, source ->
+                callBack?.changeTo(source, book, toc)
             }
         }
     }
@@ -326,25 +325,12 @@ class ChangeChapterSourceDialog() : BaseDialogFragment(R.layout.dialog_chapter_c
         }
     }
 
-    private fun changeSource(searchBook: SearchBook) {
-        try {
-            val book = searchBook.toBook()
-            book.upInfoFromOld(callBack?.oldBook)
-            val source = appDb.bookSourceDao.getBookSource(book.origin)
-            callBack?.changeTo(source!!, book)
-            searchBook.time = System.currentTimeMillis()
-            viewModel.updateSource(searchBook)
-        } catch (e: Exception) {
-            toastOnUi("换源失败\n${e.localizedMessage}")
-        }
-    }
-
     /**
      * 更新分组菜单
      */
     private fun upGroupMenu() {
         val menu: Menu = binding.toolBar.menu
-        val selectedGroup = getPrefString("searchGroup")
+        val selectedGroup = AppConfig.searchGroup
         menu.removeGroup(R.id.source_group)
         val allItem = menu.add(R.id.source_group, Menu.NONE, Menu.NONE, R.string.all_source)
         var hasSelectedGroup = false
@@ -388,7 +374,7 @@ class ChangeChapterSourceDialog() : BaseDialogFragment(R.layout.dialog_chapter_c
 
     interface CallBack {
         val oldBook: Book?
-        fun changeTo(source: BookSource, book: Book)
+        fun changeTo(source: BookSource, book: Book, toc: List<BookChapter>)
         fun replaceContent(content: String)
     }
 

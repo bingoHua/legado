@@ -2,6 +2,8 @@ package me.ag2s.epublib.epub;
 
 import android.util.Log;
 
+import androidx.annotation.NonNull;
+
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 
@@ -65,13 +67,13 @@ public class EpubReader {
      * @return this Book without loading all resources into memory.
      * @throws IOException IOException
      */
-    public EpubBook readEpubLazy(ZipFile zipFile, String encoding)
+    public EpubBook readEpubLazy(@NonNull ZipFile zipFile, @NonNull String encoding)
             throws IOException {
         return readEpubLazy(zipFile, encoding,
                 Arrays.asList(MediaTypes.mediaTypes));
     }
 
-    public EpubBook readEpub(ZipInputStream in, String encoding) throws IOException {
+    public EpubBook readEpub(@NonNull ZipInputStream in, @NonNull String encoding) throws IOException {
         return readEpub(ResourcesLoader.loadResources(in, encoding));
     }
 
@@ -88,8 +90,8 @@ public class EpubReader {
      * @return this Book without loading all resources into memory.
      * @throws IOException IOException
      */
-    public EpubBook readEpubLazy(ZipFile zipFile, String encoding,
-                                 List<MediaType> lazyLoadedTypes) throws IOException {
+    public EpubBook readEpubLazy(@NonNull ZipFile zipFile, @NonNull String encoding,
+                                 @NonNull List<MediaType> lazyLoadedTypes) throws IOException {
         Resources resources = ResourcesLoader
                 .loadResources(zipFile, encoding, lazyLoadedTypes);
         return readEpub(resources);
@@ -113,7 +115,6 @@ public class EpubReader {
         result = postProcessBook(result);
         return result;
     }
-
 
     private EpubBook postProcessBook(EpubBook book) {
         if (bookProcessor != null) {
