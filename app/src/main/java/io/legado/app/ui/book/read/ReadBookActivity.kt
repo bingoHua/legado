@@ -31,6 +31,7 @@ import io.legado.app.help.config.ReadTipConfig
 import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.help.storage.AppWebDav
 import io.legado.app.help.storage.Backup
+import io.legado.app.lib.dialogs.SelectItem
 import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.dialogs.selector
 import io.legado.app.lib.theme.accentColor
@@ -60,6 +61,8 @@ import io.legado.app.ui.dict.DictDialog
 import io.legado.app.ui.login.SourceLoginActivity
 import io.legado.app.ui.replace.ReplaceRuleActivity
 import io.legado.app.ui.replace.edit.ReplaceEditActivity
+import io.legado.app.ui.widget.PopupAction
+import io.legado.app.ui.widget.dialog.PhotoDialog
 import io.legado.app.ui.widget.dialog.TextDialog
 import io.legado.app.utils.*
 import kotlinx.coroutines.Dispatchers.IO
@@ -127,15 +130,17 @@ class ReadBookActivity : BaseReadBookActivity(),
     private var menu: Menu? = null
     private var changeSourceMenu: PopupMenu? = null
     private var refreshMenu: PopupMenu? = null
+    private var autoPageJob: Job? = null
+    private var backupJob: Job? = null
+    private var keepScreenJon: Job? = null
     val textActionMenu: TextActionMenu by lazy {
         TextActionMenu(this, this)
     }
-
+    private val popupAction: PopupAction by lazy {
+        PopupAction(this)
+    }
     override val isInitFinish: Boolean get() = viewModel.isInitFinish
     override val isScroll: Boolean get() = binding.readView.isScroll
-    private var keepScreenJon: Job? = null
-    private var autoPageJob: Job? = null
-    private var backupJob: Job? = null
     override var autoPageProgress = 0
     override var isAutoPage = false
     override var isShowingSearchResult = false
@@ -914,21 +919,15 @@ class ReadBookActivity : BaseReadBookActivity(),
             if (payAction.isNullOrEmpty()) {
                 throw NoStackTraceException("no pay action")
             }
-            if (payAction.isAbsUrl()) {
-                payAction
-            } else {
-                source.evalJS(payAction) {
-                    put("book", book)
-                    put("chapter", chapter)
-                }?.toString()
+            JsUtils.evalJs(payAction) {
+                it["book"] = book
+                it["chapter"] = chapter
             }
         }.onSuccess {
-            it?.let {
-                startActivity<WebViewActivity> {
-                    putExtra("title", getString(R.string.chapter_pay))
-                    putExtra("url", it)
-                    IntentData.put(it, ReadBook.bookSource?.getHeaderMap(true))
-                }
+            startActivity<WebViewActivity> {
+                putExtra("title", getString(R.string.chapter_pay))
+                putExtra("url", it)
+                IntentData.put(it, ReadBook.bookSource?.getHeaderMap(true))
             }
         }.onError {
             toastOnUi(it.localizedMessage)
@@ -948,6 +947,33 @@ class ReadBookActivity : BaseReadBookActivity(),
             BaseReadAloudService.pause -> ReadAloud.resume(this)
             else -> ReadAloud.pause(this)
         }
+    }
+
+    /**
+     * 长按图片
+     */
+    @SuppressLint("RtlHardcoded")
+    override fun onImageLongPress(x: Float, y: Float, src: String) {
+        popupAction.setItems(
+            listOf(
+                SelectItem(getString(R.string.show), "show"),
+                SelectItem(getString(R.string.refresh), "refresh")
+            )
+        )
+        popupAction.onActionClick = {
+            when (it) {
+                "show" -> showDialogFragment(PhotoDialog(src))
+                "refresh" -> viewModel.refreshImage(src)
+            }
+            popupAction.dismiss()
+        }
+        val navigationBarHeight =
+            if (!ReadBookConfig.hideNavigationBar && navigationBarGravity == Gravity.BOTTOM)
+                navigationBarHeight else 0
+        popupAction.showAtLocation(
+            binding.readView, Gravity.BOTTOM or Gravity.LEFT, x.toInt(),
+            binding.root.height + navigationBarHeight - y.toInt()
+        )
     }
 
     /**
@@ -1068,6 +1094,7 @@ class ReadBookActivity : BaseReadBookActivity(),
     override fun onDestroy() {
         super.onDestroy()
         textActionMenu.dismiss()
+        popupAction.dismiss()
         binding.readView.onDestroy()
         ReadBook.msg = null
         ReadBook.callBack = null

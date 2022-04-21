@@ -208,22 +208,23 @@ object ChapterProvider {
         imageStyle: String?,
     ): Float {
         var durY = y
-        ImageProvider.getImageSize(book, src, ReadBook.bookSource).let {
+        val size = ImageProvider.getImageSize(book, src, ReadBook.bookSource)
+        if (size.width > 0 && size.height > 0) {
             if (durY > visibleHeight) {
                 textPages.last().height = durY
                 textPages.add(TextPage())
                 durY = 0f
             }
-            var height = it.height
-            var width = it.width
+            var height = size.height
+            var width = size.width
             when (imageStyle?.toUpperCase(Locale.ROOT)) {
                 Book.imgStyleFull -> {
                     width = visibleWidth
-                    height = it.height * visibleWidth / it.width
+                    height = size.height * visibleWidth / size.width
                 }
                 else -> {
-                    if (it.width > visibleWidth) {
-                        height = it.height * visibleWidth / it.width
+                    if (size.width > visibleWidth) {
+                        height = size.height * visibleWidth / size.width
                         width = visibleWidth
                     }
                     if (height > visibleHeight) {
@@ -330,7 +331,6 @@ object ChapterProvider {
             val words =
                 text.substring(layout.getLineStart(lineIndex), layout.getLineEnd(lineIndex))
             val desiredWidth = layout.getLineWidth(lineIndex)
-            var isLastLine = false
             when {
                 lineIndex == 0 && layout.lineCount > 1 && !isTitle -> {
                     //第一行 非标题
@@ -346,8 +346,8 @@ object ChapterProvider {
                 }
                 lineIndex == layout.lineCount - 1 -> {
                     //最后一行
-                    textLine.text = "$words\n"
-                    isLastLine = true
+                    textLine.text = words
+                    textLine.isParagraphEnd = true
                     //标题x轴居中
                     val startX =
                         if (isTitle && ReadBookConfig.titleMode == 1 || isTitleWithNoContent || isVolumeTitle)
@@ -377,7 +377,9 @@ object ChapterProvider {
                 }
             }
             stringBuilder.append(words)
-            if (isLastLine) stringBuilder.append("\n")
+            if (textLine.isParagraphEnd) {
+                stringBuilder.append("\n")
+            }
             textPages.last().textLines.add(textLine)
             textLine.upTopBottom(durY, textPaint)
             durY += textPaint.textHeight * lineSpacingExtra

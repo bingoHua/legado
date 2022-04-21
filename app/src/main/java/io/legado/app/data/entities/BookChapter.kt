@@ -8,6 +8,8 @@ import androidx.room.Index
 import com.github.liuyueyi.quick.transfer.ChineseUtils
 import io.legado.app.R
 import io.legado.app.constant.AppPattern
+import io.legado.app.data.appDb
+import io.legado.app.exception.RegexTimeoutException
 import io.legado.app.help.RuleBigDataHelp
 import io.legado.app.help.config.AppConfig
 import io.legado.app.model.analyzeRule.AnalyzeUrl
@@ -33,7 +35,7 @@ import splitties.init.appCtx
 data class BookChapter(
     var url: String = "",               // 章节地址
     var title: String = "",             // 章节标题
-    var isVolume: Boolean = false,    // 是否是卷名
+    var isVolume: Boolean = false,      // 是否是卷名
     var baseUrl: String = "",           // 用来拼接相对url
     var bookUrl: String = "",           // 书籍地址
     var index: Int = 0,                 // 章节序号
@@ -79,8 +81,7 @@ data class BookChapter(
         return false
     }
 
-    @Suppress("unused")
-    fun getDisplayTitle(
+    suspend fun getDisplayTitle(
         replaceRules: List<ReplaceRule>? = null,
         useReplace: Boolean = true,
         chineseConvert: Boolean = true,
@@ -97,13 +98,16 @@ data class BookChapter(
                 if (item.pattern.isNotEmpty()) {
                     try {
                         val mDisplayTitle = if (item.isRegex) {
-                            displayTitle.replace(item.pattern.toRegex(), item.replacement)
+                            displayTitle.replace(item.pattern.toRegex(), item.replacement, 100)
                         } else {
                             displayTitle.replace(item.pattern, item.replacement)
                         }
                         if (mDisplayTitle.isNotBlank()) {
                             displayTitle = mDisplayTitle
                         }
+                    } catch (e: RegexTimeoutException) {
+                        item.isEnabled = false
+                        appDb.replaceRuleDao.update(item)
                     } catch (e: Exception) {
                         appCtx.toastOnUi("${item.name}替换出错")
                     }
