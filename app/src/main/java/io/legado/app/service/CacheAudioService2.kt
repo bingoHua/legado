@@ -22,10 +22,15 @@ import io.legado.app.model.analyzeRule.AnalyzeUrl
 import io.legado.app.ui.book.read.page.entities.TextChapter
 import io.legado.app.ui.book.read.page.provider.ChapterProvider
 import io.legado.app.utils.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.runBlocking
 import splitties.init.appCtx
 import java.io.File
-import java.util.concurrent.*
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.CopyOnWriteArraySet
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 
 class CacheAudioService2 : BaseService() {
@@ -34,6 +39,8 @@ class CacheAudioService2 : BaseService() {
     private val downloadMap = ConcurrentHashMap<String, CopyOnWriteArraySet<BookChapter>>()
     private var notificationContent = appCtx.getString(R.string.starting_download)
     private val executorService = Executors.newFixedThreadPool(AppConfig.threadCount)
+    private val dispatcher = executorService.asCoroutineDispatcher()
+    private val scope = CoroutineScope(dispatcher)
     private lateinit var microAloudDownloader: MicroAloudDownloader
     private val handler = Handler(Looper.getMainLooper())
     private var runnable: Runnable = Runnable { upDownload() }
@@ -114,12 +121,14 @@ class CacheAudioService2 : BaseService() {
                                 val chapterContent =
                                     BookHelp.getContent(book, bookChapter) ?: return@forEach
                                 val contentProcessor = ContentProcessor.get(book.name, book.origin)
-                                val splitContents =
+                                val splitContents = runBlocking {
                                     contentProcessor.getContent(
                                         book,
                                         bookChapter,
                                         chapterContent
                                     )
+                                }
+
                                 splitContents.forEach { _ ->
                                     totalParagraphCount++
                                 }
@@ -147,24 +156,30 @@ class CacheAudioService2 : BaseService() {
                                     BookHelp.getContent(book, bookChapter) ?: return@forEach
                                 val contentProcessor = ContentProcessor.get(book.name, book.origin)
                                 val splitContents =
-                                    contentProcessor.getContent(
-                                        book,
-                                        bookChapter,
-                                        chapterContent
-                                    )
+                                    runBlocking {
+                                        contentProcessor.getContent(
+                                            book,
+                                            bookChapter,
+                                            chapterContent
+                                        )
+                                    }
                                 splitContents.forEach { paragraph ->
                                     LogUtils.d(TAG, "startDownload.$paragraph")
-                                    val displayTitle = bookChapter.getDisplayTitle(
-                                        contentProcessor.getTitleReplaceRules(),
-                                        book.getUseReplaceRule()
-                                    )
-                                    val textChapter = ChapterProvider.getTextChapter(
-                                        book,
-                                        bookChapter,
-                                        displayTitle,
-                                        splitContents,
-                                        ReadBook.chapterSize
-                                    )
+                                    val displayTitle = runBlocking {
+                                        bookChapter.getDisplayTitle(
+                                            contentProcessor.getTitleReplaceRules(),
+                                            book.getUseReplaceRule()
+                                        )
+                                    }
+                                    val textChapter = runBlocking {
+                                        ChapterProvider.getTextChapter(
+                                            book,
+                                            bookChapter,
+                                            displayTitle,
+                                            splitContents,
+                                            ReadBook.chapterSize
+                                        )
+                                    }
                                     val fileName =
                                         md5SpeakFileName(
                                             textChapter,
