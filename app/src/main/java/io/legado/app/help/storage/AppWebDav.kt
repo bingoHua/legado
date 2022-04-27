@@ -2,6 +2,7 @@ package io.legado.app.help.storage
 
 import android.content.Context
 import io.legado.app.R
+import io.legado.app.constant.AppLog
 import io.legado.app.constant.PreferKey
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.Book
@@ -78,8 +79,12 @@ object AppWebDav {
     }
 
     @Throws(Exception::class)
-    private suspend fun getWebDavFileNames(): ArrayList<String> {
-        val url = rootWebDavUrl
+    private suspend fun getWebDavFileNames(relativePath: String? = null): ArrayList<String> {
+        val url = if (relativePath == null) {
+            rootWebDavUrl
+        } else {
+            NetworkUtils.getAbsoluteURL(rootWebDavUrl, relativePath)
+        }
         val names = arrayListOf<String>()
         authorization?.let {
             var files = WebDav(url, it).listFiles()
@@ -106,7 +111,7 @@ object AppWebDav {
                         Coroutine.async {
                             restoreWebDav(names[index])
                         }.onError {
-                            appCtx.toastOnUi("WebDavError:${it.localizedMessage}")
+                            appCtx.toastOnUi("WebDavError\n${it.localizedMessage}")
                         }
                     }
                 }
@@ -135,22 +140,19 @@ object AppWebDav {
         return false
     }
 
+    @Throws(Exception::class)
     suspend fun backUpWebDav(path: String) {
         if (!NetworkUtils.isAvailable()) return
-        try {
-            authorization?.let {
-                val paths = arrayListOf(*Backup.backupFileNames)
-                for (i in 0 until paths.size) {
-                    paths[i] = path + File.separator + paths[i]
-                }
-                FileUtils.delete(zipFilePath)
-                if (ZipUtils.zipFiles(paths, zipFilePath)) {
-                    val putUrl = "${rootWebDavUrl}${backupFileName}"
-                    WebDav(putUrl, it).upload(zipFilePath)
-                }
+        authorization?.let {
+            val paths = arrayListOf(*Backup.backupFileNames)
+            for (i in 0 until paths.size) {
+                paths[i] = path + File.separator + paths[i]
             }
-        } catch (e: Exception) {
-            appCtx.toastOnUi("WebDav\n${e.localizedMessage}")
+            FileUtils.delete(zipFilePath)
+            if (ZipUtils.zipFiles(paths, zipFilePath)) {
+                val putUrl = "${rootWebDavUrl}${backupFileName}"
+                WebDav(putUrl, it).upload(zipFilePath)
+            }
         }
     }
 
@@ -163,7 +165,9 @@ object AppWebDav {
                 WebDav(putUrl, it).upload(byteArray, "text/plain")
             }
         } catch (e: Exception) {
-            appCtx.toastOnUi("WebDav导出\n${e.localizedMessage}")
+            val msg = "WebDav导出\n${e.localizedMessage}"
+            AppLog.put(msg)
+            appCtx.toastOnUi(msg)
         }
     }
 
@@ -176,6 +180,8 @@ object AppWebDav {
             val json = GSON.toJson(bookProgress)
             val url = getProgressUrl(book)
             WebDav(url, authorization).upload(json.toByteArray(), "application/json")
+        }.onError {
+            AppLog.put("上传进度失败\n${it.localizedMessage}")
         }
     }
 
