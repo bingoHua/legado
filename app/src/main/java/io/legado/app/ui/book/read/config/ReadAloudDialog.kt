@@ -86,7 +86,7 @@ class ReadAloudDialog : BaseDialogFragment(R.layout.dialog_read_aloud) {
         upTimerText(BaseReadAloudService.timeMinute)
         seekTimer.progress = BaseReadAloudService.timeMinute
         cbTtsFollowSys.isChecked = requireContext().getPrefBoolean("ttsFollowSys", true)
-        seekTtsSpeechRate.isEnabled = !cbTtsFollowSys.isChecked
+        upTtsSpeechRateEnabled(!cbTtsFollowSys.isChecked)
         upSeekTimer()
     }
 
@@ -118,7 +118,7 @@ class ReadAloudDialog : BaseDialogFragment(R.layout.dialog_read_aloud) {
         }
         cbTtsFollowSys.setOnCheckedChangeListener { _, isChecked ->
             AppConfig.ttsFlowSys = isChecked
-            seekTtsSpeechRate.isEnabled = !isChecked
+            upTtsSpeechRateEnabled(!isChecked)
             upTtsSpeechRate()
         }
         ivTtsSpeechReduce.setOnClickListener {
@@ -148,6 +148,14 @@ class ReadAloudDialog : BaseDialogFragment(R.layout.dialog_read_aloud) {
                 ReadAloud.setTimer(requireContext(), seekTimer.progress)
             }
         })
+    }
+
+    private fun upTtsSpeechRateEnabled(enabled: Boolean) {
+        binding.run {
+            seekTtsSpeechRate.isEnabled = enabled
+            ivTtsSpeechReduce.isEnabled = enabled
+            ivTtsSpeechAdd.isEnabled = enabled
+        }
     }
 
     private fun upPlayState() {
