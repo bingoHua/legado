@@ -2,6 +2,7 @@ package io.legado.app.ui.book.info
 
 import android.annotation.SuppressLint
 import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import android.view.Menu
 import android.view.MenuItem
@@ -12,6 +13,7 @@ import androidx.activity.viewModels
 import io.legado.app.R
 import io.legado.app.base.VMBaseActivity
 import io.legado.app.constant.BookType
+import io.legado.app.constant.EventBus
 import io.legado.app.constant.Theme
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.Book
@@ -25,12 +27,14 @@ import io.legado.app.lib.theme.bottomBackground
 import io.legado.app.lib.theme.getPrimaryTextColor
 import io.legado.app.model.BookCover
 import io.legado.app.ui.about.AppLogDialog
+import io.legado.app.ui.association.ImportOnLineBookFileDialog
 import io.legado.app.ui.book.audio.AudioPlayActivity
 import io.legado.app.ui.book.changecover.ChangeCoverDialog
 import io.legado.app.ui.book.changesource.ChangeBookSourceDialog
 import io.legado.app.ui.book.group.GroupSelectDialog
 import io.legado.app.ui.book.info.edit.BookInfoEditActivity
 import io.legado.app.ui.book.read.ReadBookActivity
+import io.legado.app.ui.book.remote.manager.RemoteBookWebDav
 import io.legado.app.ui.book.search.SearchActivity
 import io.legado.app.ui.book.source.edit.BookSourceEditActivity
 import io.legado.app.ui.book.toc.TocActivityResult
@@ -127,6 +131,8 @@ class BookInfoActivity :
             viewModel.bookSource != null
         menu.findItem(R.id.menu_split_long_chapter)?.isVisible =
             viewModel.bookData.value?.isLocalTxt() ?: false
+        menu.findItem(R.id.menu_upload)?.isVisible =
+            viewModel.bookData.value?.isLocalBook() ?: false
         return super.onMenuOpened(featureId, menu)
     }
 
@@ -196,6 +202,17 @@ class BookInfoActivity :
                 item.isChecked = !item.isChecked
                 if (!item.isChecked) longToastOnUi(R.string.need_more_time_load_content)
             }
+
+            R.id.menu_upload -> {
+                launch {
+                    val uri = Uri.parse(viewModel.bookData.value?.bookUrl.toString())
+                    if (RemoteBookWebDav.upload(uri))
+                        toastOnUi(getString(R.string.upload_book_success))
+                    else
+                        toastOnUi(getString(R.string.upload_book_fail))
+
+                }
+            }
         }
         return super.onCompatOptionsItemSelected(item)
     }
@@ -230,7 +247,7 @@ class BookInfoActivity :
                 binding.tvToc.text = getString(R.string.toc_s, getString(R.string.loading))
             }
             chapterList.isNullOrEmpty() -> {
-                binding.tvToc.text = getString(R.string.toc_s, getString(R.string.error_load_toc))
+                binding.tvToc.text = if (viewModel.isImportBookOnLine) getString(R.string.click_read_button_load) else getString(R.string.toc_s, getString(R.string.error_load_toc))
             }
             else -> {
                 viewModel.bookData.value?.let {
@@ -278,8 +295,14 @@ class BookInfoActivity :
             true
         }
         tvRead.setOnClickListener {
-            viewModel.bookData.value?.let {
-                readBook(it)
+            viewModel.bookData.value?.let { book ->
+                if (viewModel.isImportBookOnLine) {
+                    showDialogFragment<ImportOnLineBookFileDialog> {
+                        putString("bookUrl", book.bookUrl)
+                    }
+                } else {
+                    readBook(book)
+                }
             } ?: toastOnUi("Book is null")
         }
         tvShelf.setOnClickListener {
@@ -482,4 +505,9 @@ class BookInfoActivity :
         }
     }
 
+    override fun observeLiveBus() {
+        observeEvent<String>(EventBus.BOOK_URL_CHANGED) {
+            viewModel.changeToLocalBook(it)
+        }
+    }
 }

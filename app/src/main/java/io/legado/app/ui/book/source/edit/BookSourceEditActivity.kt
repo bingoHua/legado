@@ -18,6 +18,7 @@ import io.legado.app.databinding.ActivityBookSourceEditBinding
 import io.legado.app.help.config.LocalConfig
 import io.legado.app.lib.dialogs.SelectItem
 import io.legado.app.lib.dialogs.alert
+import io.legado.app.lib.theme.accentColor
 import io.legado.app.lib.theme.backgroundColor
 import io.legado.app.lib.theme.primaryColor
 import io.legado.app.ui.book.source.debug.BookSourceDebugActivity
@@ -47,7 +48,7 @@ class BookSourceEditActivity :
     private val qrCodeResult = registerForActivityResult(QrCodeResult()) {
         it ?: return@registerForActivityResult
         viewModel.importSource(it) { source ->
-            upRecyclerView(source)
+            upSourceView(source)
         }
     }
     private val selectDoc = registerForActivityResult(HandleFileContract()) {
@@ -68,7 +69,7 @@ class BookSourceEditActivity :
         softKeyboardTool.attachToWindow(window)
         initView()
         viewModel.initData(intent) {
-            upRecyclerView()
+            upSourceView()
         }
     }
 
@@ -109,9 +110,10 @@ class BookSourceEditActivity :
                     }
                 }
             }
+            R.id.menu_clear_cookie -> viewModel.clearCookie(getSource().bookSourceUrl)
             R.id.menu_auto_complete -> viewModel.autoComplete = !viewModel.autoComplete
             R.id.menu_copy_source -> sendToClip(GSON.toJson(getSource()))
-            R.id.menu_paste_source -> viewModel.pasteSource { upRecyclerView(it) }
+            R.id.menu_paste_source -> viewModel.pasteSource { upSourceView(it) }
             R.id.menu_qr_code_camera -> qrCodeResult.launch()
             R.id.menu_share_str -> share(GSON.toJson(getSource()))
             R.id.menu_share_qr -> shareWithQr(
@@ -139,6 +141,7 @@ class BookSourceEditActivity :
         binding.recyclerView.layoutManager = LinearLayoutManager(this)
         binding.recyclerView.adapter = adapter
         binding.tabLayout.setBackgroundColor(backgroundColor)
+        binding.tabLayout.setSelectedTabIndicatorColor(accentColor)
         binding.tabLayout.addOnTabSelectedListener(object : TabLayout.OnTabSelectedListener {
             override fun onTabReselected(tab: TabLayout.Tab?) {
 
@@ -186,12 +189,14 @@ class BookSourceEditActivity :
         binding.recyclerView.scrollToPosition(0)
     }
 
-    private fun upRecyclerView(source: BookSource? = viewModel.bookSource) {
+    private fun upSourceView(source: BookSource? = viewModel.bookSource) {
         source?.let {
             binding.cbIsEnable.isChecked = it.enabled
             binding.cbIsEnableFind.isChecked = it.enabledExplore
+            binding.cbIsEnableCookie.isChecked = it.enabledCookieJar ?: false
             binding.spType.setSelection(
                 when (it.bookSourceType) {
+                    BookType.file -> 3
                     BookType.image -> 2
                     BookType.audio -> 1
                     else -> 0
@@ -212,7 +217,9 @@ class BookSourceEditActivity :
             add(EditEntity("header", source?.header, R.string.source_http_header))
             add(
                 EditEntity(
-                    "concurrentRate", source?.concurrentRate, R.string.source_concurrent_rate
+                    "concurrentRate",
+                    source?.concurrentRate,
+                    R.string.source_concurrent_rate
                 )
             )
         }
@@ -261,11 +268,13 @@ class BookSourceEditActivity :
             add(EditEntity("coverUrl", ir?.coverUrl, R.string.rule_cover_url))
             add(EditEntity("tocUrl", ir?.tocUrl, R.string.rule_toc_url))
             add(EditEntity("canReName", ir?.canReName, R.string.rule_can_re_name))
+            add(EditEntity("downloadUrls", ir?.downloadUrls, R.string.download_url_rule))
         }
         //目录页
         val tr = source?.getTocRule()
         tocEntities.clear()
         tocEntities.apply {
+            add(EditEntity("preUpdateJs", tr?.preUpdateJs, R.string.pre_update_js))
             add(EditEntity("chapterList", tr?.chapterList, R.string.rule_chapter_list))
             add(EditEntity("chapterName", tr?.chapterName, R.string.rule_chapter_name))
             add(EditEntity("chapterUrl", tr?.chapterUrl, R.string.rule_chapter_url))
@@ -295,7 +304,9 @@ class BookSourceEditActivity :
         val source = viewModel.bookSource?.copy() ?: BookSource()
         source.enabled = binding.cbIsEnable.isChecked
         source.enabledExplore = binding.cbIsEnableFind.isChecked
+        source.enabledCookieJar = binding.cbIsEnableCookie.isChecked
         source.bookSourceType = when (binding.spType.selectedItemPosition) {
+            3 -> BookType.file
             2 -> BookType.image
             1 -> BookType.audio
             else -> BookType.default
@@ -389,11 +400,14 @@ class BookSourceEditActivity :
                 "tocUrl" -> bookInfoRule.tocUrl =
                     viewModel.ruleComplete(it.value, bookInfoRule.init, 2)
                 "canReName" -> bookInfoRule.canReName = it.value
+                "downloadUrls" -> bookInfoRule.downloadUrls =
+                    viewModel.ruleComplete(it.value, bookInfoRule.init)
             }
         }
         tocEntities.forEach {
             when (it.key) {
-                "chapterList" -> tocRule.chapterList = it.value ?: ""
+                "preUpdateJs" -> tocRule.preUpdateJs = it.value
+                "chapterList" -> tocRule.chapterList = it.value
                 "chapterName" -> tocRule.chapterName =
                     viewModel.ruleComplete(it.value, tocRule.chapterList)
                 "chapterUrl" -> tocRule.chapterUrl =

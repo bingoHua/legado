@@ -10,11 +10,12 @@ import io.legado.app.constant.EventBus
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookSource
+import io.legado.app.help.AppWebDav
 import io.legado.app.help.DefaultData
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.LocalConfig
-import io.legado.app.help.storage.AppWebDav
 import io.legado.app.model.CacheBook
+import io.legado.app.model.analyzeRule.AnalyzeRule
 import io.legado.app.model.webBook.WebBook
 import io.legado.app.service.CacheBookService
 import io.legado.app.utils.postEvent
@@ -116,6 +117,10 @@ class MainViewModel(application: Application) : BaseViewModel(application) {
         onUpTocBooks.add(book.bookUrl)
         postEvent(EventBus.UP_BOOKSHELF, book.bookUrl)
         execute(context = upTocPool) {
+            val preUpdateJs = source.ruleToc?.preUpdateJs
+            if (!preUpdateJs.isNullOrBlank()) {
+                AnalyzeRule(book, source).evalJS(preUpdateJs)
+            }
             if (book.tocUrl.isBlank()) {
                 WebBook.getBookInfoAwait(this, source, book)
             }

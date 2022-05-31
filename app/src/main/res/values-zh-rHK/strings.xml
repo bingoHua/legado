@@ -415,6 +415,7 @@
     <string name="rule_is_volume">Volume標識(isVolume)</string>
     <string name="rule_is_vip">VIP 標識 (isVip)</string>
     <string name="rule_update_time">更新時間 (ChapterInfo)</string>
+    <string name="pre_update_js">更新之前Js(preUpdateJs)</string>
     <string name="rule_book_content">正文規則 (content)</string>
     <string name="rule_next_content">正文下一頁 URL 規則 (nextContentUrl)</string>
     <string name="rule_web_js">WebViewJs (webJs)</string>
@@ -731,7 +732,7 @@
     <string name="alipay_red_envelope_qr_code">支付寶紅包二維碼</string>
     <string name="alipay_payment_qr_code">支付寶收款二維碼</string>
     <string name="qq_collection_qr_code">QQ收款二維碼</string>
-    <string name="contributors_summary">gedoor,Invinciblelee等,詳情請在github中查看</string>
+    <string name="contributors_summary">gedoor,Invinciblelee,Xwite等,詳情請在github中查看</string>
     <string name="clear_cache_summary">清除已下載書籍和字體緩存</string>
     <string name="default_cover">默認封面</string>
     <string name="restore_ignore">恢復忽略列表</string>
@@ -903,7 +904,7 @@
     <string name="use_browser_open">是否使用外部瀏覽器打開?</string>
     <string name="see">查看</string>
     <string name="search_content_size">搜索結果</string>
-    <string name="search_content_empty">搜索結果为空</string>
+    <string name="search_content_empty">搜索内容为空，检查净化/简繁设置</string>
     <string name="open">打開</string>
     <string name="del_login_header">刪除登錄頭</string>
     <string name="show_login_header">查看登錄頭</string>
@@ -973,5 +974,23 @@
     <string name="soure_change_source">是否确认换源</string>
     <string name="input_verification_code">输入验证码</string>
     <string name="verification_code">验证码</string>
+    <string name="timeout_millisecond">超时毫秒数</string>
+    <string name="file_not_supported">文件%1$s 不受支持，是否继续打开？</string>
+    <string name="import_tts">导入TTS</string>
+    <string name="import_theme">导入主题</string>
+    <string name="import_txt_toc_rule">导入txt目录规则</string>
+    <string name="auto_save_cookie">CookieJar</string>
+    <string name="click_read_button_load">点击阅读加载目录</string>
+    <string name="cookie">清除cookie</string>
+    <string name="download_and_import_file">导入在线书籍文件</string>
+    <string name="upload_book_success">Upload Success</string>
+    <string name="upload_book_fail">Upload Fail</string>
+    <string name="download_book_success">Download Success</string>
+    <string name="download_book_fail">Download Fail</string>
+    <string name="upload_to_remote">Upload</string>
+    <string name="add_remote_book">WebDav书籍</string>
+    <string name="bitmap_cache_size_summary">当前最大缓存 %1$s MB</string>
+    <string name="bitmap_cache_size">图片绘制缓存</string>
+    <string name="export_pics_file">TXT导出图片</string>
     <!-- string end -->
 </resources>

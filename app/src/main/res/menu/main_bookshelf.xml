@@ -23,6 +23,12 @@
         app:showAsAction="never" />
 
     <item
+        android:id="@+id/menu_remote"
+        android:icon="@drawable/ic_add"
+        android:title="@string/add_remote_book"
+        app:showAsAction="never" />
+
+    <item
         android:id="@+id/menu_add_url"
         android:icon="@drawable/ic_add_online"
         android:title="@string/add_url"

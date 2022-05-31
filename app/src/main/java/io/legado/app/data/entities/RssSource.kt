@@ -1,6 +1,7 @@
 package io.legado.app.data.entities
 
 import android.os.Parcelable
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
@@ -19,6 +20,8 @@ data class RssSource(
     var sourceGroup: String? = null,
     var sourceComment: String? = null,
     var enabled: Boolean = true,
+    @ColumnInfo(defaultValue = "0")
+    override var enabledCookieJar: Boolean? = false,
     override var concurrentRate: String? = null,    //并发率
     override var header: String? = null,            // 请求头
     override var loginUrl: String? = null,          // 登录地址
@@ -66,6 +69,16 @@ data class RssSource(
                 && equal(sourceIcon, source.sourceIcon)
                 && enabled == source.enabled
                 && equal(sourceGroup, source.sourceGroup)
+                && enabledCookieJar == source.enabledCookieJar
+                && equal(sourceComment, source.sourceComment)
+                && equal(concurrentRate, source.concurrentRate)
+                && equal(header, source.header)
+                && equal(loginUrl, source.loginUrl)
+                && equal(loginUi, source.loginUi)
+                && equal(loginCheckJs, source.loginCheckJs)
+                && equal(sortUrl, source.sortUrl)
+                && singleUrl == source.singleUrl
+                && articleStyle == source.articleStyle
                 && equal(ruleArticles, source.ruleArticles)
                 && equal(ruleNextPage, source.ruleNextPage)
                 && equal(ruleTitle, source.ruleTitle)
@@ -150,6 +163,7 @@ data class RssSource(
                     style = doc.readString("$.style"),
                     enableJs = doc.readBool("$.enableJs") ?: true,
                     loadWithBaseUrl = doc.readBool("$.loadWithBaseUrl") ?: true,
+                    enabledCookieJar = doc.readBool("$.enabledCookieJar") ?: false,
                     customOrder = doc.readInt("$.customOrder") ?: 0
                 )
             }

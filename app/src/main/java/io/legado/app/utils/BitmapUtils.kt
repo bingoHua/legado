@@ -7,7 +7,6 @@ import android.graphics.Bitmap
 import android.graphics.Bitmap.Config
 import android.graphics.BitmapFactory
 import android.graphics.Color
-import android.graphics.Matrix
 import com.google.android.renderscript.Toolkit
 import java.io.FileInputStream
 import java.io.IOException
@@ -53,13 +52,13 @@ object BitmapUtils {
         height: Int? = null
     ): Int {
         //获取比例大小
-        val wRatio = width?.let { ceil((options.outWidth / it).toDouble()).toInt() } ?: -1
-        val hRatio = height?.let { ceil((options.outHeight / it).toDouble()).toInt() } ?: -1
+        val wRatio = width?.let { options.outWidth / it } ?: -1
+        val hRatio = height?.let { options.outHeight / it } ?: -1
         //如果超出指定大小，则缩小相应的比例
         return when {
             wRatio > 1 && hRatio > 1 -> max(wRatio, hRatio)
             wRatio > 1 -> wRatio
-            hRatio > 1  -> hRatio
+            hRatio > 1 -> hRatio
             else -> 1
         }
     }
@@ -210,35 +209,21 @@ object BitmapUtils {
 
 }
 
-fun Bitmap.changeSize(newWidth: Int, newHeight: Int): Bitmap {
-    val width = this.width
-    val height = this.height
-
-    //计算压缩的比率
-    var scaleWidth = newWidth.toFloat() / width
-    var scaleHeight = newHeight.toFloat() / height
-
-    if (scaleWidth > scaleHeight) {
-        scaleWidth = scaleHeight
-    } else {
-        scaleHeight = scaleWidth
-    }
-
-    //获取想要缩放的matrix
-    val matrix = Matrix()
-    matrix.postScale(scaleWidth, scaleHeight)
-
+/**
+ * 获取指定宽高的图片
+ */
+fun Bitmap.resizeAndRecycle(newWidth: Int, newHeight: Int): Bitmap {
     //获取新的bitmap
-    return Bitmap.createBitmap(this, 0, 0, width, height, matrix, true)
-
+    val bitmap = Toolkit.resize(this, newWidth, newHeight)
+    recycle()
+    return bitmap
 }
 
 /**
  * 高斯模糊
  */
 fun Bitmap.stackBlur(radius: Int = 8): Bitmap {
-    val blurredBitmap = this.copy(Config.ARGB_8888, true)
-    return Toolkit.blur(blurredBitmap, radius)
+    return Toolkit.blur(this, radius)
 }
 
 /**

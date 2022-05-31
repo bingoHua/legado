@@ -1,4 +1,4 @@
-package io.legado.app.ui.widget.prefs
+package io.legado.app.lib.prefs
 
 import android.content.Context
 import android.util.AttributeSet
@@ -30,7 +30,7 @@ class SwitchPreference(context: Context, attrs: AttributeSet) :
             title,
             summary,
             widgetLayoutResource,
-            R.id.switchWidget,
+            androidx.preference.R.id.switchWidget,
             isBottomBackground = isBottomBackground
         )
         if (v is SwitchCompat && !v.isInEditMode) {

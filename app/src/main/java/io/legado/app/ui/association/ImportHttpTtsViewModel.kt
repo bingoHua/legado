@@ -2,16 +2,11 @@ package io.legado.app.ui.association
 
 import android.app.Application
 import androidx.lifecycle.MutableLiveData
-import com.jayway.jsonpath.JsonPath
 import io.legado.app.R
 import io.legado.app.base.BaseViewModel
 import io.legado.app.data.appDb
-import io.legado.app.data.entities.BookSource
 import io.legado.app.data.entities.HttpTTS
 import io.legado.app.exception.NoStackTraceException
-import io.legado.app.help.ContentProcessor
-import io.legado.app.help.SourceHelp
-import io.legado.app.help.config.AppConfig
 import io.legado.app.help.http.newCallResponseBody
 import io.legado.app.help.http.okHttpClient
 import io.legado.app.help.http.text
@@ -52,10 +47,13 @@ class ImportHttpTtsViewModel(app: Application) : BaseViewModel(app) {
 
     fun importSelect(finally: () -> Unit) {
         execute {
-            val keepName = AppConfig.importKeepName
-            val selectSource = arrayListOf<BookSource>()
-            SourceHelp.insertBookSource(*selectSource.toTypedArray())
-            ContentProcessor.upReplaceRules()
+            val selectSource = arrayListOf<HttpTTS>()
+            selectStatus.forEachIndexed { index, b ->
+                if (b) {
+                    selectSource.add(allSources[index])
+                }
+            }
+            appDb.httpTTSDao.insert(*selectSource.toTypedArray())
         }.onFinally {
             finally.invoke()
         }
@@ -63,29 +61,7 @@ class ImportHttpTtsViewModel(app: Application) : BaseViewModel(app) {
 
     fun importSource(text: String) {
         execute {
-            val mText = text.trim()
-            when {
-                mText.isJsonObject() -> {
-                    val json = JsonPath.parse(mText)
-                    val urls = json.read<List<String>>("$.sourceUrls")
-                    if (!urls.isNullOrEmpty()) {
-                        urls.forEach {
-                            importSourceUrl(it)
-                        }
-                    } else {
-                        HttpTTS.fromJson(mText).getOrThrow().let {
-                            allSources.add(it)
-                        }
-                    }
-                }
-                mText.isJsonArray() -> HttpTTS.fromJsonArray(mText).getOrThrow().let { items ->
-                    allSources.addAll(items)
-                }
-                mText.isAbsUrl() -> {
-                    importSourceUrl(mText)
-                }
-                else -> throw NoStackTraceException(context.getString(R.string.wrong_format))
-            }
+            importSourceAwait(text.trim())
         }.onError {
             it.printOnDebug()
             errorLiveData.postValue(it.localizedMessage ?: "")
@@ -94,11 +70,28 @@ class ImportHttpTtsViewModel(app: Application) : BaseViewModel(app) {
         }
     }
 
+    private suspend fun importSourceAwait(text: String) {
+        when {
+            text.isJsonObject() -> {
+                HttpTTS.fromJson(text).getOrThrow().let {
+                    allSources.add(it)
+                }
+            }
+            text.isJsonArray() -> HttpTTS.fromJsonArray(text).getOrThrow().let { items ->
+                allSources.addAll(items)
+            }
+            text.isAbsUrl() -> {
+                importSourceUrl(text)
+            }
+            else -> throw NoStackTraceException(context.getString(R.string.wrong_format))
+        }
+    }
+
     private suspend fun importSourceUrl(url: String) {
         okHttpClient.newCallResponseBody {
             url(url)
         }.text().let {
-            allSources.addAll(HttpTTS.fromJsonArray(it).getOrThrow())
+            importSourceAwait(it)
         }
     }
 

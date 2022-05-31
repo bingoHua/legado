@@ -8,6 +8,7 @@ import android.view.KeyEvent
 import android.view.MenuItem
 import android.view.ViewGroup
 import androidx.activity.viewModels
+import androidx.core.view.postDelayed
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.FragmentManager
 import androidx.fragment.app.FragmentStatePagerAdapter
@@ -20,11 +21,11 @@ import io.legado.app.constant.AppConst.appInfo
 import io.legado.app.constant.EventBus
 import io.legado.app.constant.PreferKey
 import io.legado.app.databinding.ActivityMainBinding
+import io.legado.app.help.AppWebDav
 import io.legado.app.help.BookHelp
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.LocalConfig
 import io.legado.app.help.coroutine.Coroutine
-import io.legado.app.help.storage.AppWebDav
 import io.legado.app.help.storage.Backup
 import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.theme.elevation
@@ -85,27 +86,17 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
     override fun onPostCreate(savedInstanceState: Bundle?) {
         super.onPostCreate(savedInstanceState)
         upVersion()
+        privacyPolicy()
         //自动更新书籍
         if (AppConfig.autoRefreshBook) {
-            binding.viewPagerMain.postDelayed({
+            binding.viewPagerMain.postDelayed(1000) {
                 viewModel.upAllBookToc()
-            }, 1000)
-        }
-        binding.viewPagerMain.postDelayed({
-            viewModel.postLoad()
-        }, 3000)
-        launch {
-            val lastBackupFile = withContext(IO) { AppWebDav.lastBackUp().getOrNull() }
-                ?: return@launch
-            if (lastBackupFile.lastModify - LocalConfig.lastBackup > DateUtils.MINUTE_IN_MILLIS) {
-                alert("恢复", "webDav书源比本地新,是否恢复") {
-                    cancelButton()
-                    okButton {
-                        viewModel.restoreWebDav(lastBackupFile.displayName)
-                    }
-                }
             }
         }
+        binding.viewPagerMain.postDelayed(3000) {
+            viewModel.postLoad()
+        }
+        syncAlert()
     }
 
     override fun onNavigationItemSelected(item: MenuItem): Boolean = binding.run {
@@ -145,13 +136,47 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
         if (LocalConfig.versionCode != appInfo.versionCode) {
             LocalConfig.versionCode = appInfo.versionCode
             if (LocalConfig.isFirstOpenApp) {
-                val text = String(assets.open("help/appHelp.md").readBytes())
-                showDialogFragment(TextDialog(text, TextDialog.Mode.MD))
+                val help = String(assets.open("help/appHelp.md").readBytes())
+                showDialogFragment(TextDialog(help, TextDialog.Mode.MD))
             } else if (!BuildConfig.DEBUG) {
                 val log = String(assets.open("updateLog.md").readBytes())
                 showDialogFragment(TextDialog(log, TextDialog.Mode.MD))
             }
             viewModel.upVersion()
+        }
+    }
+
+    /**
+     * 同步提示
+     */
+    private fun syncAlert() = launch {
+        val lastBackupFile = withContext(IO) { AppWebDav.lastBackUp().getOrNull() }
+            ?: return@launch
+        if (lastBackupFile.lastModify - LocalConfig.lastBackup > DateUtils.MINUTE_IN_MILLIS) {
+            LocalConfig.lastBackup = lastBackupFile.lastModify
+            alert("恢复", "webDav书源比本地新,是否恢复") {
+                cancelButton()
+                okButton {
+                    viewModel.restoreWebDav(lastBackupFile.displayName)
+                }
+            }
+        }
+    }
+
+    /**
+     * 用户隐私与协议
+     */
+    private fun privacyPolicy() {
+        if (LocalConfig.privacyPolicyOk) return
+        val privacyPolicy = String(assets.open("privacyPolicy.md").readBytes())
+        alert("用户隐私与协议", privacyPolicy) {
+            noButton()
+            yesButton {
+                LocalConfig.privacyPolicyOk = true
+            }
+            onCancelled {
+                finish()
+            }
         }
     }
 

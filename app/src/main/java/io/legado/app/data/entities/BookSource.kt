@@ -13,6 +13,7 @@ import kotlinx.parcelize.Parcelize
 import splitties.init.appCtx
 import java.io.InputStream
 
+@Suppress("unused")
 @Parcelize
 @TypeConverters(BookSource.Converters::class)
 @Entity(
@@ -27,7 +28,7 @@ data class BookSource(
     var bookSourceName: String = "",
     // 分组
     var bookSourceGroup: String? = null,
-    // 类型，0 文本，1 音频, 2 图片
+    // 类型，0 文本，1 音频, 2 图片, 3 文件（指的是类似知轩藏书只提供下载的网站）
     @BookType.Type
     var bookSourceType: Int = 0,
     // 详情页url正则
@@ -38,6 +39,9 @@ data class BookSource(
     var enabled: Boolean = true,
     // 启用发现
     var enabledExplore: Boolean = true,
+    // 启用okhttp CookieJAr 自动保存每次请求的cookie
+    @ColumnInfo(defaultValue = "0")
+    override var enabledCookieJar: Boolean? = false,
     // 并发率
     override var concurrentRate: String? = null,
     // 请求头
@@ -126,18 +130,44 @@ data class BookSource(
         return bookSourceUrl.hashCode()
     }
 
-    override fun equals(other: Any?) =
-        if (other is BookSource) other.bookSourceUrl == bookSourceUrl else false
+    override fun equals(other: Any?): Boolean {
+        return if (other is BookSource) other.bookSourceUrl == bookSourceUrl else false
+    }
 
-    fun getSearchRule() = ruleSearch ?: SearchRule()
+    fun getSearchRule(): SearchRule {
+        ruleSearch?.let { return it }
+        val rule = SearchRule()
+        ruleSearch = rule
+        return rule
+    }
 
-    fun getExploreRule() = ruleExplore ?: ExploreRule()
+    fun getExploreRule(): ExploreRule {
+        ruleExplore?.let { return it }
+        val rule = ExploreRule()
+        ruleExplore = rule
+        return rule
+    }
 
-    fun getBookInfoRule() = ruleBookInfo ?: BookInfoRule()
+    fun getBookInfoRule(): BookInfoRule {
+        ruleBookInfo?.let { return it }
+        val rule = BookInfoRule()
+        ruleBookInfo = rule
+        return rule
+    }
 
-    fun getTocRule() = ruleToc ?: TocRule()
+    fun getTocRule(): TocRule {
+        ruleToc?.let { return it }
+        val rule = TocRule()
+        ruleToc = rule
+        return rule
+    }
 
-    fun getContentRule() = ruleContent ?: ContentRule()
+    fun getContentRule(): ContentRule {
+        ruleContent?.let { return it }
+        val rule = ContentRule()
+        ruleContent = rule
+        return rule
+    }
 
     fun getDisPlayNameGroup(): String {
         return if (bookSourceGroup.isNullOrBlank()) {
@@ -158,7 +188,7 @@ data class BookSource(
 
     fun removeGroup(groups: String): BookSource {
         bookSourceGroup?.splitNotBlank(AppPattern.splitGroupRegex)?.toHashSet()?.let {
-            it.removeAll(groups.splitNotBlank(AppPattern.splitGroupRegex))
+            it.removeAll(groups.splitNotBlank(AppPattern.splitGroupRegex).toSet())
             bookSourceGroup = TextUtils.join(",", it)
         }
         return this
@@ -188,10 +218,15 @@ data class BookSource(
                 && bookSourceType == source.bookSourceType
                 && equal(bookUrlPattern, source.bookUrlPattern)
                 && equal(bookSourceComment, source.bookSourceComment)
+                && customOrder == source.customOrder
                 && enabled == source.enabled
                 && enabledExplore == source.enabledExplore
+                && enabledCookieJar == source.enabledCookieJar
+                && equal(concurrentRate, source.concurrentRate)
                 && equal(header, source.header)
-                && loginUrl == source.loginUrl
+                && equal(loginUrl, source.loginUrl)
+                && equal(loginUi, source.loginUi)
+                && equal(loginCheckJs, source.loginCheckJs)
                 && equal(exploreUrl, source.exploreUrl)
                 && equal(searchUrl, source.searchUrl)
                 && getSearchRule() == source.getSearchRule()

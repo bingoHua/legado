@@ -134,6 +134,12 @@ class EpubFile(var book: Book) {
                 if (chapter.url.substringBeforeLast("#") == res.href) {
                     elements.add(getBody(res, startFragmentId, endFragmentId))
                     isChapter = true
+                   /**
+                    * fix https://github.com/gedoor/legado/issues/1927 加载全部内容的bug
+                    * content src text/000001.html（当前章节）
+-                   * content src text/000001.html#toc_id_x (下一章节）
+                     */
+                    if (!nextUrl.isNullOrBlank() && res.href == nextUrl!!.substringBeforeLast("#")) break
                 } else if (isChapter) {
                     if (nextUrl.isNullOrBlank() || res.href == nextUrl.substringBeforeLast("#")) {
                         break
@@ -157,7 +163,10 @@ class EpubFile(var book: Book) {
             body.getElementById(startFragmentId)?.previousElementSiblings()?.remove()
         }
         if (!endFragmentId.isNullOrBlank() && endFragmentId != startFragmentId) {
-            body.getElementById(endFragmentId)?.nextElementSiblings()?.remove()
+            body.getElementById(endFragmentId)?.run {
+                nextElementSiblings()?.remove()
+                remove()
+            }
         }
         /*选择去除正文中的H标签，部分书籍标题与阅读标题重复待优化*/
         val tag = Book.hTag
@@ -313,6 +322,7 @@ class EpubFile(var book: Book) {
                 durIndex++
             }
             if (ref.children != null && ref.children.isNotEmpty()) {
+                chapterList.lastOrNull()?.isVolume = true
                 parseMenu(chapterList, ref.children, level + 1)
             }
         }

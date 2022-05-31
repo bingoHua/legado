@@ -420,6 +420,7 @@
     <string name="rule_is_volume">卷标识(isVolume)</string>
     <string name="rule_is_vip">VIP标识(isVip)</string>
     <string name="rule_update_time">更新时间(ChapterInfo)</string>
+    <string name="pre_update_js">更新之前Js(preUpdateJs)</string>
     <string name="rule_book_content">正文规则(content)</string>
     <string name="rule_next_content">正文下一页URL规则(nextContentUrl)</string>
     <string name="rule_web_js">WebViewJs(webJs)</string>
@@ -612,7 +613,6 @@
     <string name="select_local_image">Local image</string>
     <string name="book_type">Type:</string>
     <string name="to_backstage">Background</string>
-    <string name="cache_audio">缓存朗读</string>
     <string name="importing">Importing</string>
     <string name="exporting">Exporting</string>
     <string name="custom_page_key">Set page-turning buttons</string>
@@ -740,7 +740,7 @@
     <string name="alipay_red_envelope_qr_code">AliPay red envelope QR code</string>
     <string name="alipay_payment_qr_code">AliPay QR code</string>
     <string name="qq_collection_qr_code">QQ Collection QR code</string>
-    <string name="contributors_summary">gedoor,Invinciblelee etc. Checking in github for details</string>
+    <string name="contributors_summary">gedoor,Invinciblelee,Xwite etc. Checking in github for details</string>
     <string name="clear_cache_summary">Clear the cache of the downloaded books and fonts</string>
     <string name="default_cover">Default cover</string>
     <string name="restore_ignore">Bypass list</string>
@@ -913,7 +913,7 @@
     <string name="font_scale">font scale</string>
     <string name="font_scale_summary">font scale:%.1f</string>
     <string name="search_content_size">search result</string>
-    <string name="search_content_empty">search result is empty</string>
+    <string name="search_content_empty">Empty search result, check conversation settings</string>
     <string name="tts_speech_reduce">语速减</string>
     <string name="tts_speech_add">语速加</string>
     <string name="open_sys_dir_picker_error">打开系统文件夹选择器出错,自动打开应用文件夹选择器</string>
@@ -977,7 +977,23 @@
     <string name="soure_change_source">是否确认换源</string>
     <string name="input_verification_code">输入验证码</string>
     <string name="verification_code">验证码</string>
-
-
+    <string name="timeout_millisecond">超时毫秒数</string>
+    <string name="file_not_supported">Continue to open although %1$s is not supported ?</string>
+    <string name="import_tts">导入TTS</string>
+    <string name="import_theme">导入主题</string>
+    <string name="import_txt_toc_rule">导入txt目录规则</string>
+    <string name="auto_save_cookie">CookieJar</string>
+    <string name="click_read_button_load">点击阅读加载目录</string>
+    <string name="cookie">清除cookie</string>
+    <string name="download_and_import_file">导入在线书籍文件</string>
+    <string name="upload_book_success">Upload Success</string>
+    <string name="upload_book_fail">Upload Fail</string>
+    <string name="download_book_success">Download Success</string>
+    <string name="download_book_fail">Download Fail</string>
+    <string name="upload_to_remote">Upload</string>
+    <string name="add_remote_book">WebDavBook</string>
+    <string name="bitmap_cache_size_summary">Current cache max size %1$s MB</string>
+    <string name="bitmap_cache_size">bitmap cache size</string>
+    <string name="export_pics_file">Export Picture Files</string>
     <!-- string end -->
 </resources>

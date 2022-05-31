@@ -1,4 +1,4 @@
-package io.legado.app.ui.widget.prefs
+package io.legado.app.lib.prefs
 
 import android.content.Context
 import android.content.ContextWrapper
@@ -118,9 +118,9 @@ class ColorPreference(context: Context, attrs: AttributeSet) : Preference(contex
     }
 
     override fun onBindViewHolder(holder: PreferenceViewHolder) {
-        val v = io.legado.app.ui.widget.prefs.Preference.bindView<ColorPanelView>(
+        val v = io.legado.app.lib.prefs.Preference.bindView<ColorPanelView>(
             context, holder, icon, title, summary, widgetLayoutResource,
-            io.legado.app.R.id.cpv_preference_preview_color_panel, 30, 30
+            com.jaredrummler.android.colorpicker.R.id.cpv_preference_preview_color_panel, 30, 30
         )
         if (v is ColorPanelView) {
             v.color = mColor

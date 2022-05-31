@@ -1,4 +1,4 @@
-package io.legado.app.help.storage
+package io.legado.app.help
 
 import android.content.Context
 import io.legado.app.R
@@ -10,6 +10,8 @@ import io.legado.app.data.entities.BookProgress
 import io.legado.app.exception.NoStackTraceException
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.coroutine.Coroutine
+import io.legado.app.help.storage.Backup
+import io.legado.app.help.storage.Restore
 import io.legado.app.lib.dialogs.selector
 import io.legado.app.lib.webdav.Authorization
 import io.legado.app.lib.webdav.WebDav
@@ -29,13 +31,14 @@ import java.util.*
  * webDav初始化会访问网络,不要放到主线程
  */
 object AppWebDav {
-    private const val defaultWebDavUrl = "https://dav.jianguoyun.com/dav/"
+    const val defaultWebDavUrl = "https://dav.jianguoyun.com/dav/"
     private val zipFilePath = "${appCtx.externalFiles.absolutePath}${File.separator}backup.zip"
     private val bookProgressUrl get() = "${rootWebDavUrl}bookProgress/"
     private val exportsWebDavUrl get() = "$rootWebDavUrl${EncoderUtils.escape("exports")}/"
     val syncBookProgress get() = appCtx.getPrefBoolean(PreferKey.syncBookProgress, true)
 
     var authorization: Authorization? = null
+        private set
 
     val isOk get() = authorization != null
 
@@ -132,7 +135,7 @@ object AppWebDav {
 
     suspend fun hasBackUp(): Boolean {
         authorization?.let {
-            val url = "${rootWebDavUrl}${backupFileName}"
+            val url = "$rootWebDavUrl$backupFileName"
             return WebDav(url, it).exists()
         }
         return false
@@ -166,7 +169,7 @@ object AppWebDav {
             }
             FileUtils.delete(zipFilePath)
             if (ZipUtils.zipFiles(paths, zipFilePath)) {
-                val putUrl = "${rootWebDavUrl}${backupFileName}"
+                val putUrl = "$rootWebDavUrl$backupFileName"
                 WebDav(putUrl, it).upload(zipFilePath)
             }
         }
@@ -194,15 +197,28 @@ object AppWebDav {
         Coroutine.async {
             val bookProgress = BookProgress(book)
             val json = GSON.toJson(bookProgress)
-            val url = getProgressUrl(book)
+            val url = getProgressUrl(book.name, book.author)
             WebDav(url, authorization).upload(json.toByteArray(), "application/json")
         }.onError {
             AppLog.put("上传进度失败\n${it.localizedMessage}")
         }
     }
 
-    private fun getProgressUrl(book: Book): String {
-        return bookProgressUrl + book.name + "_" + book.author + ".json"
+    fun uploadBookProgress(bookProgress: BookProgress) {
+        val authorization = authorization ?: return
+        if (!syncBookProgress) return
+        if (!NetworkUtils.isAvailable()) return
+        Coroutine.async {
+            val json = GSON.toJson(bookProgress)
+            val url = getProgressUrl(bookProgress.name, bookProgress.author)
+            WebDav(url, authorization).upload(json.toByteArray(), "application/json")
+        }.onError {
+            AppLog.put("上传进度失败\n${it.localizedMessage}")
+        }
+    }
+
+    private fun getProgressUrl(name: String, author: String): String {
+        return bookProgressUrl + name + "_" + author + ".json"
     }
 
     /**
@@ -210,7 +226,7 @@ object AppWebDav {
      */
     suspend fun getBookProgress(book: Book): BookProgress? {
         authorization?.let {
-            val url = getProgressUrl(book)
+            val url = getProgressUrl(book.name, book.author)
             kotlin.runCatching {
                 WebDav(url, it).download().let { byteArray ->
                     val json = String(byteArray)

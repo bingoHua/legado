@@ -14,11 +14,11 @@ import io.legado.app.data.entities.BookChapter
 import io.legado.app.data.entities.BookProgress
 import io.legado.app.data.entities.BookSource
 import io.legado.app.exception.NoStackTraceException
+import io.legado.app.help.AppWebDav
 import io.legado.app.help.BookHelp
 import io.legado.app.help.ContentProcessor
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.coroutine.Coroutine
-import io.legado.app.help.storage.AppWebDav
 import io.legado.app.model.ReadAloud
 import io.legado.app.model.ReadBook
 import io.legado.app.model.localBook.LocalBook
@@ -61,41 +61,33 @@ class ReadBookViewModel(application: Application) : BaseViewModel(application) {
     }
 
     private fun initBook(book: Book) {
-        if (ReadBook.book?.bookUrl != book.bookUrl) {
-            ReadBook.resetData(book)
-            isInitFinish = true
-            if (ReadBook.chapterSize == 0) {
-                if (book.tocUrl.isEmpty()) {
-                    loadBookInfo(book)
-                } else {
-                    loadChapterList(book)
-                }
+        val isSameBook = ReadBook.book?.bookUrl == book.bookUrl
+        if (isSameBook) ReadBook.upData(book) else ReadBook.resetData(book)
+        isInitFinish = true
+        if (ReadBook.chapterSize == 0) {
+            if (book.tocUrl.isEmpty()) {
+                loadBookInfo(book)
             } else {
-                if (ReadBook.durChapterIndex > ReadBook.chapterSize - 1) {
-                    ReadBook.durChapterIndex = ReadBook.chapterSize - 1
-                }
+                loadChapterList(book)
+            }
+        } else if (book.isLocalBook()
+            && LocalBook.getLastModified(book).getOrDefault(0L) > book.latestChapterTime
+        ) {
+            loadChapterList(book)
+        } else if (isSameBook) {
+            if (ReadBook.curTextChapter != null) {
+                ReadBook.callBack?.upContent(resetPageOffset = false)
+            } else {
                 ReadBook.loadContent(resetPageOffset = true)
             }
-            syncBookProgress(book)
         } else {
-            ReadBook.upData(book)
-            isInitFinish = true
-            if (ReadBook.chapterSize == 0) {
-                if (book.tocUrl.isEmpty()) {
-                    loadBookInfo(book)
-                } else {
-                    loadChapterList(book)
-                }
-            } else {
-                if (ReadBook.curTextChapter != null) {
-                    ReadBook.callBack?.upContent(resetPageOffset = false)
-                } else {
-                    ReadBook.loadContent(resetPageOffset = true)
-                }
+            if (ReadBook.durChapterIndex > ReadBook.chapterSize - 1) {
+                ReadBook.durChapterIndex = ReadBook.chapterSize - 1
             }
-            if (!BaseReadAloudService.isRun) {
-                syncBookProgress(book)
-            }
+            ReadBook.loadContent(resetPageOffset = isSameBook)
+        }
+        if (!isSameBook || !BaseReadAloudService.isRun) {
+            syncBookProgress(book)
         }
         if (!book.isLocalBook() && ReadBook.bookSource == null) {
             autoChangeSource(book.name, book.author)
@@ -128,6 +120,7 @@ class ReadBookViewModel(application: Application) : BaseViewModel(application) {
         if (book.isLocalBook()) {
             execute {
                 LocalBook.getChapterList(book).let {
+                    book.latestChapterTime = System.currentTimeMillis()
                     appDb.bookChapterDao.delByBook(book.bookUrl)
                     appDb.bookChapterDao.insert(*it.toTypedArray())
                     appDb.bookDao.update(book)
