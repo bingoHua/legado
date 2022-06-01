@@ -253,6 +253,7 @@ dependencies {
     implementation('com.github.liuyueyi.quick-chinese-transfer:quick-transfer-core:0.2.4')
 
     //加解密类库,有些书源使用
+    //noinspection GradleDependency
     implementation('cn.hutool:hutool-crypto:5.8.1')
 
     //firebase, 崩溃统计和性能统计, 会导致共存版本崩溃
