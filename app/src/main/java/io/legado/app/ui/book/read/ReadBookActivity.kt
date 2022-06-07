@@ -65,11 +65,8 @@ import io.legado.app.ui.widget.PopupAction
 import io.legado.app.ui.widget.dialog.PhotoDialog
 import io.legado.app.ui.widget.dialog.TextDialog
 import io.legado.app.utils.*
+import kotlinx.coroutines.*
 import kotlinx.coroutines.Dispatchers.IO
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
-import kotlinx.coroutines.launch
 
 class ReadBookActivity : BaseReadBookActivity(),
     View.OnTouchListener,
@@ -252,7 +249,11 @@ class ReadBookActivity : BaseReadBookActivity(),
                     }
                 }
             }
-            menu.findItem(R.id.menu_get_progress)?.isVisible = AppWebDav.isOk
+            launch {
+                menu.findItem(R.id.menu_get_progress)?.isVisible = withContext(IO) {
+                    AppWebDav.isOk
+                }
+            }
         }
     }
 
@@ -1062,10 +1063,12 @@ class ReadBookActivity : BaseReadBookActivity(),
     private fun startBackupJob() {
         backupJob?.cancel()
         backupJob = launch {
-            delay(120000)
-            ReadBook.book?.let {
-                AppWebDav.uploadBookProgress(it)
-                Backup.autoBack(this@ReadBookActivity)
+            delay(300000)
+            withContext(IO) {
+                ReadBook.book?.let {
+                    AppWebDav.uploadBookProgress(it)
+                    Backup.autoBack(this@ReadBookActivity)
+                }
             }
         }
     }
