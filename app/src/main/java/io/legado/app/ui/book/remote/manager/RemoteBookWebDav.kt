@@ -19,6 +19,7 @@ import io.legado.app.utils.readBytes
 import kotlinx.coroutines.runBlocking
 import splitties.init.appCtx
 import java.io.File
+import java.net.URLDecoder
 
 object RemoteBookWebDav : RemoteBookManager() {
     private val remoteBookUrl get() = "${rootWebDavUrl}${remoteBookFolder}"
@@ -48,6 +49,9 @@ object RemoteBookWebDav : RemoteBookManager() {
         }
     }
 
+    /**
+     * 获取远程书籍列表
+     */
     @Throws(Exception::class)
     override suspend fun getRemoteBookList(): MutableList<RemoteBook> {
         val remoteBooks = mutableListOf<RemoteBook>()
@@ -61,9 +65,10 @@ object RemoteBookWebDav : RemoteBookManager() {
             remoteWebDavFileList = remoteWebDavFileList!!.reversed()
             //转化远程文件信息到本地对象
             remoteWebDavFileList!!.forEach { webDavFile ->
-                val webDavFileName = webDavFile.displayName
-                val webDavUrlName = "${remoteBookUrl}${File.separator}${webDavFile.displayName}"
-
+                var webDavFileName = webDavFile.displayName
+                var webDavUrlName = "${remoteBookUrl}${File.separator}${webDavFile.displayName}"
+                webDavFileName = URLDecoder.decode(webDavFileName,"utf-8")
+                webDavUrlName = URLDecoder.decode(webDavUrlName,"utf-8")
                 // 转码
                 //val trueFileName = String(webDavFileName.toByteArray(Charset.forName("GBK")), Charset.forName("UTF-8"))
                 //val trueUrlName = String(webDavUrlName.toByteArray(Charset.forName("GBK")), Charset.forName("UTF-8"))
@@ -86,20 +91,16 @@ object RemoteBookWebDav : RemoteBookManager() {
         return remoteBooks
     }
 
+    /**
+     * 下载指定的远程书籍到本地
+     */
     override suspend fun getRemoteBook(remoteBook: RemoteBook): Uri? {
-        return kotlin.runCatching {
-            AppWebDav.authorization?.let {
-                val webdav = WebDav(
-                    remoteBook.urlName,
-                    it
-                )
-                webdav.download().let { bytes ->
-                    LocalBook.saveBookFile(bytes, remoteBook.filename)
-                }
+        return AppWebDav.authorization?.let {
+            val webdav = WebDav(remoteBook.urlName, it)
+            webdav.download().let { bytes ->
+                LocalBook.saveBookFile(bytes, remoteBook.filename)
             }
-        }.onFailure {
-            it.printStackTrace()
-        }.getOrNull()
+        }
     }
 
     /**
@@ -110,19 +111,15 @@ object RemoteBookWebDav : RemoteBookManager() {
 
         val localBookName = localBookUri.path?.substringAfterLast(File.separator)
         val putUrl = "${remoteBookUrl}${File.separator}${localBookName}"
-        kotlin.runCatching {
-            AppWebDav.authorization?.let {
-                if (localBookUri.isContentScheme()) {
-                    WebDav(putUrl, it).upload(
-                        byteArray = localBookUri.readBytes(appCtx),
-                        contentType = "application/octet-stream"
-                    )
-                } else {
-                    WebDav(putUrl, it).upload(localBookUri.path!!)
-                }
+        AppWebDav.authorization?.let {
+            if (localBookUri.isContentScheme()) {
+                WebDav(putUrl, it).upload(
+                    byteArray = localBookUri.readBytes(appCtx),
+                    contentType = "application/octet-stream"
+                )
+            } else {
+                WebDav(putUrl, it).upload(localBookUri.path!!)
             }
-        }.onFailure {
-            return false
         }
         return true
     }
@@ -131,149 +128,4 @@ object RemoteBookWebDav : RemoteBookManager() {
         TODO("Not yet implemented")
     }
 
-//    suspend fun showRestoreDialog(context: Context) {
-//        val names = withContext(Dispatchers.IO) { getBackupNames() }
-//        if (names.isNotEmpty()) {
-//            withContext(Dispatchers.Main) {
-//                context.selector(
-//                    title = context.getString(R.string.select_restore_file),
-//                    items = names
-//                ) { _, index ->
-//                    if (index in 0 until names.size) {
-//                        Coroutine.async {
-//                            restoreWebDav(names[index])
-//                        }.onError {
-//                            appCtx.toastOnUi("WebDav恢复出错\n${it.localizedMessage}")
-//                        }
-//                    }
-//                }
-//            }
-//        } else {
-//            throw NoStackTraceException("Web dav no back up file")
-//        }
-//    }
-//
-//    @Throws(WebDavException::class)
-//    suspend fun restoreWebDav(name: String) {
-//        authorization?.let {
-//            val webDav = WebDav(rootWebDavUrl + name, it)
-//            webDav.downloadTo(zipFilePath, true)
-//            @Suppress("BlockingMethodInNonBlockingContext")
-//            ZipUtils.unzipFile(zipFilePath, Backup.backupPath)
-//            Restore.restoreDatabase()
-//            Restore.restoreConfig()
-//        }
-//    }
-//
-//    suspend fun hasBackUp(): Boolean {
-//        authorization?.let {
-//            val url = "${rootWebDavUrl}${backupFileName}"
-//            return WebDav(url, it).exists()
-//        }
-//        return false
-//    }
-//
-//    suspend fun lastBackUp(): Result<WebDavFile?> {
-//        return kotlin.runCatching {
-//            authorization?.let {
-//                var lastBackupFile: WebDavFile? = null
-//                WebDav(rootWebDavUrl, it).listFiles().reversed().forEach { webDavFile ->
-//                    if (webDavFile.displayName.startsWith("backup")) {
-//                        if (lastBackupFile == null
-//                            || webDavFile.lastModify > lastBackupFile!!.lastModify
-//                        ) {
-//                            lastBackupFile = webDavFile
-//                        }
-//                    }
-//                }
-//                lastBackupFile
-//            }
-//        }
-//    }
-//
-//    @Throws(Exception::class)
-//    suspend fun backUpWebDav(path: String) {
-//        if (!NetworkUtils.isAvailable()) return
-//        authorization?.let {
-//            val paths = arrayListOf(*Backup.backupFileNames)
-//            for (i in 0 until paths.size) {
-//                paths[i] = path + File.separator + paths[i]
-//            }
-//            FileUtils.delete(zipFilePath)
-//            if (ZipUtils.zipFiles(paths, zipFilePath)) {
-//                val putUrl = "${rootWebDavUrl}${backupFileName}"
-//                WebDav(putUrl, it).upload(zipFilePath)
-//            }
-//        }
-//    }
-//
-//    suspend fun exportWebDav(byteArray: ByteArray, fileName: String) {
-//        if (!NetworkUtils.isAvailable()) return
-//        try {
-//            authorization?.let {
-//                // 如果导出的本地文件存在,开始上传
-//                val putUrl = exportsWebDavUrl + fileName
-//                WebDav(putUrl, it).upload(byteArray, "text/plain")
-//            }
-//        } catch (e: Exception) {
-//            val msg = "WebDav导出\n${e.localizedMessage}"
-//            AppLog.put(msg)
-//            appCtx.toastOnUi(msg)
-//        }
-//    }
-//
-//    fun uploadBookProgress(book: Book) {
-//        val authorization = authorization ?: return
-//        if (!syncBookProgress) return
-//        if (!NetworkUtils.isAvailable()) return
-//        Coroutine.async {
-//            val bookProgress = BookProgress(book)
-//            val json = GSON.toJson(bookProgress)
-//            val url = getProgressUrl(book)
-//            WebDav(url, authorization).upload(json.toByteArray(), "application/json")
-//        }.onError {
-//            AppLog.put("上传进度失败\n${it.localizedMessage}")
-//        }
-//    }
-//
-//    private fun getProgressUrl(book: Book): String {
-//        return bookProgressUrl + book.name + "_" + book.author + ".json"
-//    }
-//
-//    /**
-//     * 获取书籍进度
-//     */
-//    suspend fun getBookProgress(book: Book): BookProgress? {
-//        authorization?.let {
-//            val url = getProgressUrl(book)
-//            kotlin.runCatching {
-//                WebDav(url, it).download().let { byteArray ->
-//                    val json = String(byteArray)
-//                    if (json.isJson()) {
-//                        return GSON.fromJsonObject<BookProgress>(json).getOrNull()
-//                    }
-//                }
-//            }
-//        }
-//        return null
-//    }
-//
-//    suspend fun downloadAllBookProgress() {
-//        authorization ?: return
-//        if (!NetworkUtils.isAvailable()) return
-//        appDb.bookDao.all.forEach { book ->
-//            getBookProgress(book)?.let { bookProgress ->
-//                if (bookProgress.durChapterIndex > book.durChapterIndex
-//                    || (bookProgress.durChapterIndex == book.durChapterIndex
-//                            && bookProgress.durChapterPos > book.durChapterPos)
-//                ) {
-//                    book.durChapterIndex = bookProgress.durChapterIndex
-//                    book.durChapterPos = bookProgress.durChapterPos
-//                    book.durChapterTitle = bookProgress.durChapterTitle
-//                    book.durChapterTime = bookProgress.durChapterTime
-//                    appDb.bookDao.update(book)
-//                }
-//            }
-//        }
-//    }
 }
