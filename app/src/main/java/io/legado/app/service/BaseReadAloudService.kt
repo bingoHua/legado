@@ -259,6 +259,26 @@ abstract class BaseReadAloudService : BaseService(),
             override fun onMediaButtonEvent(mediaButtonEvent: Intent): Boolean {
                 return MediaButtonReceiver.handleIntent(this@BaseReadAloudService, mediaButtonEvent)
             }
+
+            override fun onPlay() {
+                super.onPlay()
+                resumeReadAloud()
+            }
+
+            override fun onPause() {
+                super.onPause()
+                pauseReadAloud(true)
+            }
+
+            override fun onSkipToNext() {
+                super.onSkipToNext()
+                nextP()
+            }
+
+            override fun onSkipToPrevious() {
+                super.onSkipToPrevious()
+                prevP()
+            }
         })
         mediaSessionCompat.setMediaButtonReceiver(
             broadcastPendingIntent<MediaButtonReceiver>(Intent.ACTION_MEDIA_BUTTON)
@@ -339,7 +359,7 @@ abstract class BaseReadAloudService : BaseService(),
                     putString(MediaMetadataCompat.METADATA_KEY_ALBUM, nSubtitle)
                     putBitmap(MediaMetadataCompat.METADATA_KEY_ALBUM_ART, it)
                 }.build()
-                mediaSessionCompat?.setMetadata(mediaBuilder)
+                mediaSessionCompat.setMetadata(mediaBuilder)
             }
             if (pause) {
                 builder.addAction(
