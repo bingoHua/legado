@@ -8,6 +8,7 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.graphics.BitmapFactory
 import android.media.AudioManager
+import android.support.v4.media.MediaMetadataCompat
 import android.support.v4.media.session.MediaSessionCompat
 import android.support.v4.media.session.PlaybackStateCompat
 import androidx.annotation.CallSuper
@@ -333,6 +334,12 @@ abstract class BaseReadAloudService : BaseService(),
                 BitmapFactory.decodeResource(resources, R.drawable.icon_read_book)
             }.let {
                 builder.setLargeIcon(it)
+                val mediaBuilder = MediaMetadataCompat.Builder().apply {
+                    putString(MediaMetadataCompat.METADATA_KEY_TITLE, nTitle)
+                    putString(MediaMetadataCompat.METADATA_KEY_ALBUM, nSubtitle)
+                    putBitmap(MediaMetadataCompat.METADATA_KEY_ALBUM_ART, it)
+                }.build()
+                mediaSessionCompat?.setMetadata(mediaBuilder)
             }
             if (pause) {
                 builder.addAction(
