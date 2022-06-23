@@ -10,9 +10,11 @@ import io.legado.app.R
 import io.legado.app.base.VMBaseActivity
 import io.legado.app.databinding.ActivityImportBookBinding
 import io.legado.app.lib.theme.backgroundColor
+import io.legado.app.ui.about.AppLogDialog
 import io.legado.app.ui.book.remote.manager.RemoteBookWebDav
 import io.legado.app.ui.widget.SelectActionBar
 import io.legado.app.ui.widget.dialog.WaitDialog
+import io.legado.app.utils.showDialogFragment
 import io.legado.app.utils.viewbindingdelegate.viewBinding
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.launch
@@ -60,8 +62,7 @@ class RemoteBookActivity : VMBaseActivity<ActivityImportBookBinding, RemoteBookV
 
     private fun initEvent() {
         binding.tvGoBack.setOnClickListener {
-            viewModel.dirList.removeLastOrNull()
-            upPath()
+           goBackDir()
         }
     }
 
@@ -72,9 +73,8 @@ class RemoteBookActivity : VMBaseActivity<ActivityImportBookBinding, RemoteBookV
 
     override fun onCompatOptionsItemSelected(item: MenuItem): Boolean {
         when (item.itemId) {
-            R.id.menu_refresh -> {
-                upPath()
-            }
+            R.id.menu_refresh -> upPath()
+            R.id.menu_log -> showDialogFragment<AppLogDialog>()
         }
         return super.onCompatOptionsItemSelected(item)
     }
@@ -90,12 +90,29 @@ class RemoteBookActivity : VMBaseActivity<ActivityImportBookBinding, RemoteBookV
     override fun onClickSelectBarMainAction() {
         waitDialog.show()
         viewModel.addToBookshelf(adapter.selected) {
+            adapter.selected.clear()
             adapter.notifyDataSetChanged()
             waitDialog.dismiss()
         }
     }
 
+    override fun onBackPressed() {
+        if (!goBackDir()) {
+            super.onBackPressed()
+        }
+    }
+
+    private fun goBackDir(): Boolean {
+        if (viewModel.dirList.isEmpty()) {
+            return false
+        }
+        viewModel.dirList.removeLastOrNull()
+        upPath()
+        return true
+    }
+
     private fun upPath() {
+        binding.tvGoBack.isEnabled = viewModel.dirList.isNotEmpty()
         var path = "books" + File.separator
         viewModel.dirList.forEach {
             path = path + it.filename + File.separator

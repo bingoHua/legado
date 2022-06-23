@@ -108,6 +108,7 @@ class ImportBookActivity : VMBaseActivity<ActivityImportBookBinding, ImportBookV
     @SuppressLint("NotifyDataSetChanged")
     override fun onClickSelectBarMainAction() {
         viewModel.addToBookshelf(adapter.selectedUris) {
+            adapter.selectedUris.clear()
             adapter.notifyDataSetChanged()
         }
     }
@@ -205,6 +206,7 @@ class ImportBookActivity : VMBaseActivity<ActivityImportBookBinding, ImportBookV
 
     @Synchronized
     private fun upPath() {
+        binding.tvGoBack.isEnabled = viewModel.subDocs.isNotEmpty()
         viewModel.rootDoc?.let {
             scanDocJob?.cancel()
             upDocs(it)
