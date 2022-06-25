@@ -68,7 +68,6 @@ class CacheAudioService2 : BaseService() {
     override fun onCreate() {
         super.onCreate()
         upNotification()
-        ttsFolder = externalCacheDir!!.absolutePath + File.separator + "httpTTS"
         microAloudDownloader =
             MicroAloudDownloader(this/*, MicroAloudDownloader.MicroProxy("127.0.0.1", 1080, "", "")*/)
         handler.postDelayed(runnable, 1000)
@@ -239,9 +238,9 @@ class CacheAudioService2 : BaseService() {
         return appDb.bookDao.getBook(bookUrl)
     }
 
-    private lateinit var ttsFolder: String
 
-    private fun speakFilePath() = ttsFolder + File.separator
+    private fun speakFilePath() = cacheDir.absolutePath + File.separator + "httpTTS" + File.separator
+
 
     private fun hasSpeakFile(name: String) =
         FileUtils.exist("${speakFilePath()}$name.mp3")

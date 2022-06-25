@@ -11,6 +11,7 @@ import io.legado.app.R
 import io.legado.app.constant.AppLog
 import io.legado.app.constant.AppPattern
 import io.legado.app.constant.EventBus
+import io.legado.app.data.entities.HttpTTS
 import io.legado.app.exception.ConcurrentException
 import io.legado.app.exception.NoStackTraceException
 import io.legado.app.help.config.AppConfig
@@ -32,6 +33,10 @@ import java.net.SocketTimeoutException
 class HttpReadAloudService : BaseReadAloudService(),
     Player.Listener {
 
+    companion object {
+        private const val TAG = "HttpReadAloudService"
+    }
+
     private val exoPlayer: ExoPlayer by lazy {
         ExoPlayer.Builder(this).build()
     }
@@ -44,15 +49,30 @@ class HttpReadAloudService : BaseReadAloudService(),
     private var downloadTaskIsActive = false
     private var downloadErrorNo: Int = 0
     private var playErrorNo = 0
+    private var playerTask : Coroutine<*>? = null
 
     override fun onCreate() {
         super.onCreate()
         exoPlayer.addListener(this)
+        launch {
+            playerTask = execute {
+                while (true) {
+                    ensureActive()
+                    playerQueue[nowSpeak]?.let {
+                        LogUtils.d(TAG, "get audio index=${nowSpeak}")
+                        ensureActive()
+                        playAudio(it)
+                        playerQueue.remove(nowSpeak)
+                    }
+                }
+            }
+        }
     }
 
     override fun onDestroy() {
         super.onDestroy()
         downloadTask?.cancel()
+        playerTask?.cancel()
         exoPlayer.release()
     }
 
@@ -70,7 +90,8 @@ class HttpReadAloudService : BaseReadAloudService(),
                     val fileName = md5SpeakFileName(contentList[nowSpeak])
                     val file = getSpeakFileAsMd5(fileName)
                     if (file.exists()) {
-                        playAudio(file)
+                        playerQueue[nowSpeak] = file
+                        //playAudio(file)
                     } else if (!downloadTaskIsActive) {
                         downloadAudio()
                     }
@@ -103,7 +124,7 @@ class HttpReadAloudService : BaseReadAloudService(),
                 delay(100)
             }
             downloadTask = execute {
-                removeCacheFile()
+                //removeCacheFile() /storage/emulated/0/Android/data/io.legado.app.debug/cache/httpTTS/690de4564f23b52a_bd59ea38f93f49d3.mp3
                 val httpTts = ReadAloud.httpTTS ?: throw NoStackTraceException("tts is null")
                 contentList.forEachIndexed { index, content ->
                     ensureActive()
@@ -112,83 +133,14 @@ class HttpReadAloudService : BaseReadAloudService(),
                     if (hasSpeakFile(fileName)) { //已经下载好的语音缓存
                         if (index == nowSpeak) {
                             val file = getSpeakFileAsMd5(fileName)
-                            playAudio(file)
+                            playerQueue[index] = file
+                            //playAudio(file)
                         }
                     } else if (speakText.isEmpty()) {
                         createSilentSound(fileName)
                         return@forEachIndexed
                     } else {
-                        runCatching {
-                            val analyzeUrl = AnalyzeUrl(
-                                httpTts.url,
-                                speakText = speakText,
-                                speakSpeed = speechRate,
-                                source = httpTts,
-                                headerMapF = httpTts.getHeaderMap(true)
-                            )
-                            var response = analyzeUrl.getResponseAwait()
-                            ensureActive()
-                            httpTts.loginCheckJs?.takeIf { checkJs ->
-                                checkJs.isNotBlank()
-                            }?.let { checkJs ->
-                                response = analyzeUrl.evalJS(checkJs, response) as Response
-                            }
-                            httpTts.contentType?.takeIf { ct ->
-                                ct.isNotBlank()
-                            }?.let { ct ->
-                                response.headers["Content-Type"]?.let { contentType ->
-                                    if (!contentType.matches(ct.toRegex())) {
-                                        throw NoStackTraceException(response.body!!.string())
-                                    }
-                                }
-                            }
-                            ensureActive()
-                            response.body!!.bytes().let { bytes ->
-                                val file = createSpeakFileAsMd5IfNotExist(fileName)
-                                file.writeBytes(bytes)
-                                if (index == nowSpeak) {
-                                    playAudio(file)
-                                }
-                            }
-                            downloadErrorNo = 0
-                        }.onFailure {
-                            when (it) {
-                                is CancellationException -> Unit
-                                is ConcurrentException -> {
-                                    delay(it.waitTime.toLong())
-                                    downloadAudio()
-                                }
-                                is ScriptException, is WrappedException -> {
-                                    AppLog.put("js错误\n${it.localizedMessage}", it)
-                                    toastOnUi("js错误\n${it.localizedMessage}")
-                                    it.printOnDebug()
-                                    cancel()
-                                    pauseReadAloud(true)
-                                }
-                                is SocketTimeoutException, is ConnectException -> {
-                                    downloadErrorNo++
-                                    if (downloadErrorNo > 5) {
-                                        val msg = "tts超时或连接错误超过5次\n${it.localizedMessage}"
-                                        AppLog.put(msg, it)
-                                        toastOnUi(msg)
-                                        pauseReadAloud(true)
-                                    } else {
-                                        downloadAudio()
-                                    }
-                                }
-                                else -> {
-                                    downloadErrorNo++
-                                    val msg = "tts下载错误\n${it.localizedMessage}"
-                                    AppLog.put(msg, it)
-                                    it.printOnDebug()
-                                    if (downloadErrorNo > 5) {
-                                        pauseReadAloud(true)
-                                    } else {
-                                        createSilentSound(fileName)
-                                    }
-                                }
-                            }
-                        }
+                        downloadSingleFile(httpTts, speakText, fileName, index)
                     }
                 }
             }.onStart {
@@ -197,6 +149,77 @@ class HttpReadAloudService : BaseReadAloudService(),
                 AppLog.put("朗读下载出错\n${it.localizedMessage}")
             }.onFinally {
                 downloadTaskIsActive = false
+            }
+        }
+    }
+
+    private suspend fun downloadSingleFile(httpTts : HttpTTS,speakText: String,fileName: String,index: Int) {
+        runCatching {
+            val analyzeUrl = AnalyzeUrl(
+                httpTts.url,
+                speakText = speakText,
+                speakSpeed = speechRate,
+                source = httpTts,
+                headerMapF = httpTts.getHeaderMap(true)
+            )
+            var response = analyzeUrl.getResponseAwait()
+            ensureActive()
+            httpTts.loginCheckJs?.takeIf { checkJs ->
+                checkJs.isNotBlank()
+            }?.let { checkJs ->
+                response = analyzeUrl.evalJS(checkJs, response) as Response
+            }
+            httpTts.contentType?.takeIf { ct ->
+                ct.isNotBlank()
+            }?.let { ct ->
+                response.headers["Content-Type"]?.let { contentType ->
+                    if (!contentType.matches(ct.toRegex())) {
+                        throw NoStackTraceException(response.body!!.string())
+                    }
+                }
+            }
+            ensureActive()
+            response.body!!.bytes().let { bytes ->
+                val file = createSpeakFileAsMd5IfNotExist(fileName)
+                file.writeBytes(bytes)
+                if (index == nowSpeak) {
+                    playerQueue[index] = file
+                    //playAudio(file)
+                }
+            }
+            downloadErrorNo = 0
+        }.onFailure {
+            when (it) {
+                is CancellationException -> Unit
+                is ConcurrentException -> {
+                    delay(it.waitTime.toLong())
+                    downloadSingleFile(httpTts,speakText,fileName,index)
+                }
+                is ScriptException, is WrappedException -> {
+                    AppLog.put("js错误\n${it.localizedMessage}", it)
+                    toastOnUi("js错误\n${it.localizedMessage}")
+                    it.printOnDebug()
+                    cancel()
+                    pauseReadAloud(true)
+                }
+                is SocketTimeoutException, is ConnectException -> {
+                    downloadErrorNo++
+                    if (downloadErrorNo > 5) {
+                        val msg = "tts超时或连接错误超过5次\n${it.localizedMessage}"
+                        AppLog.put(msg, it)
+                        toastOnUi(msg)
+                        pauseReadAloud(true)
+                    } else {
+                        downloadSingleFile(httpTts,speakText,fileName,index)
+                    }
+                }
+                else -> {
+                    downloadErrorNo++
+                    val msg = "tts下载错误\n${it.localizedMessage}"
+                    AppLog.put(msg, it)
+                    it.printOnDebug()
+                    downloadSingleFile(httpTts,speakText,fileName,index)
+                }
             }
         }
     }

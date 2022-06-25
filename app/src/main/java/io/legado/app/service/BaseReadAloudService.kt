@@ -30,6 +30,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import splitties.systemservices.audioManager
+import java.io.File
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * 朗读服务
@@ -58,7 +60,9 @@ abstract class BaseReadAloudService : BaseService(),
     }
     private var audioFocusLossTransient = false
     internal val contentList = arrayListOf<String>()
+    @Volatile
     internal var nowSpeak: Int = 0
+    internal var playerQueue = ConcurrentHashMap<Int, File>()
     internal var readAloudNumber: Int = 0
     internal var textChapter: TextChapter? = null
     internal var pageIndex = 0
@@ -119,6 +123,7 @@ abstract class BaseReadAloudService : BaseService(),
     open fun newReadAloud(play: Boolean) {
         textChapter?.let { textChapter ->
             nowSpeak = 0
+            playerQueue.clear()
             readAloudNumber = textChapter.getReadLength(pageIndex)
             contentList.clear()
             if (getPrefBoolean(PreferKey.readAloudByPage)) {
