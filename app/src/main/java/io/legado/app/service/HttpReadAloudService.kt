@@ -54,19 +54,6 @@ class HttpReadAloudService : BaseReadAloudService(),
     override fun onCreate() {
         super.onCreate()
         exoPlayer.addListener(this)
-        launch {
-            playerTask = execute {
-                while (true) {
-                    ensureActive()
-                    playerQueue[nowSpeak]?.let {
-                        LogUtils.d(TAG, "get audio index=${nowSpeak}")
-                        ensureActive()
-                        playAudio(it)
-                        playerQueue.remove(nowSpeak)
-                    }
-                }
-            }
-        }
     }
 
     override fun onDestroy() {
@@ -91,7 +78,7 @@ class HttpReadAloudService : BaseReadAloudService(),
                     val file = getSpeakFileAsMd5(fileName)
                     if (file.exists()) {
                         playerQueue[nowSpeak] = file
-                        //playAudio(file)
+                        playAudio(file)
                     } else if (!downloadTaskIsActive) {
                         downloadAudio()
                     }
@@ -134,7 +121,7 @@ class HttpReadAloudService : BaseReadAloudService(),
                         if (index == nowSpeak) {
                             val file = getSpeakFileAsMd5(fileName)
                             playerQueue[index] = file
-                            //playAudio(file)
+                            playAudio(file)
                         }
                     } else if (speakText.isEmpty()) {
                         createSilentSound(fileName)
@@ -163,6 +150,7 @@ class HttpReadAloudService : BaseReadAloudService(),
                 headerMapF = httpTts.getHeaderMap(true)
             )
             var response = analyzeUrl.getResponseAwait()
+            LogUtils.d(TAG, "download index:$index, download content:$speakText")
             ensureActive()
             httpTts.loginCheckJs?.takeIf { checkJs ->
                 checkJs.isNotBlank()
@@ -184,7 +172,7 @@ class HttpReadAloudService : BaseReadAloudService(),
                 file.writeBytes(bytes)
                 if (index == nowSpeak) {
                     playerQueue[index] = file
-                    //playAudio(file)
+                    playAudio(file)
                 }
             }
             downloadErrorNo = 0
@@ -229,10 +217,14 @@ class HttpReadAloudService : BaseReadAloudService(),
         if (requestFocus()) {
             launch {
                 kotlin.runCatching {
-                    val mediaItem = MediaItem.fromUri(Uri.fromFile(file))
-                    exoPlayer.setMediaItem(mediaItem)
-                    exoPlayer.playWhenReady = true
-                    exoPlayer.prepare()
+                    playerQueue[nowSpeak]?.let {
+                        LogUtils.d(TAG, "get audio index=${nowSpeak}")
+                        val mediaItem = MediaItem.fromUri(Uri.fromFile(file))
+                        exoPlayer.setMediaItem(mediaItem)
+                        exoPlayer.playWhenReady = true
+                        exoPlayer.prepare()
+                        playerQueue.remove(nowSpeak)
+                    }
                 }.onFailure {
                     it.printOnDebug()
                 }
