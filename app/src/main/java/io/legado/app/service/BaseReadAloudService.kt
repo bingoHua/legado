@@ -149,6 +149,7 @@ abstract class BaseReadAloudService : BaseService(),
     }
 
     open fun play() {
+        isRun = true
         pause = false
         upNotification()
         postEvent(EventBus.ALOUD_STATE, Status.PLAY)
