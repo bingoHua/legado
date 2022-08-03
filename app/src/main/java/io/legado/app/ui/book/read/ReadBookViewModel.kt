@@ -436,8 +436,8 @@ class ReadBookViewModel(application: Application) : BaseViewModel(application) {
             FileInputStream(image).use { input ->
                 if (uri.isContentScheme()) {
                     DocumentFile.fromTreeUri(context, uri)?.let { doc ->
-                        DocumentUtils.createFileIfNotExist(doc, image.name)
-                        context.contentResolver.openOutputStream(doc.uri)!!.use { output ->
+                        val imageDoc = DocumentUtils.createFileIfNotExist(doc, image.name)!!
+                        context.contentResolver.openOutputStream(imageDoc.uri)!!.use { output ->
                             input.copyTo(output)
                         }
                     }
@@ -450,6 +450,7 @@ class ReadBookViewModel(application: Application) : BaseViewModel(application) {
                 }
             }
         }.onError {
+            AppLog.put("保存图片出错\n${it.localizedMessage}", it)
             context.toastOnUi("保存图片出错\n${it.localizedMessage}")
         }
     }
