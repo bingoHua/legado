@@ -58,9 +58,7 @@ class ThemeConfigFragment : PreferenceFragment(),
         if (Build.VERSION.SDK_INT < 26) {
             preferenceScreen.removePreferenceRecursively(PreferKey.launcherIcon)
         }
-        if (!AppConfig.isGooglePlay) {
-            preferenceScreen.removePreferenceRecursively("welcomeStyle")
-        }
+        preferenceScreen.removePreferenceRecursively("welcomeStyle")
         upPreferenceSummary(PreferKey.bgImage, getPrefString(PreferKey.bgImage))
         upPreferenceSummary(PreferKey.bgImageN, getPrefString(PreferKey.bgImageN))
         upPreferenceSummary(PreferKey.barElevation, AppConfig.elevation.toString())
