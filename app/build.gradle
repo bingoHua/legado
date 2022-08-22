@@ -189,8 +189,6 @@ dependencies {
 
     //media
     implementation("androidx.media:media:1.6.0")
-
-
     implementation("com.google.android.exoplayer:exoplayer-core:$exoplayer_version")
     implementation("com.google.android.exoplayer:extension-okhttp:$exoplayer_version")
 
@@ -262,7 +260,7 @@ dependencies {
 
     implementation group: 'org.freemarker', name: 'freemarker-gae', version: '2.3.31'
     implementation 'com.microsoft.cognitiveservices.speech:client-sdk:1.15.0'
-    // LeakCanary
+    //LeakCanary, 内存泄露检测
     //debugImplementation('com.squareup.leakcanary:leakcanary-android:2.7')
 
     //com.github.AmrDeveloper:CodeView代码编辑已集成到应用内
