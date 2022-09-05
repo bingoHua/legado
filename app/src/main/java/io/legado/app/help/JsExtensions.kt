@@ -55,10 +55,9 @@ interface JsExtensions {
                 val analyzeUrl = AnalyzeUrl(urlStr, source = getSource())
                 analyzeUrl.getStrResponseAwait().body
             }.onFailure {
-                log("ajax(${urlStr}) error\n${it.stackTraceToString()}")
-                it.printOnDebug()
+                AppLog.put("ajax(${urlStr}) error\n${it.localizedMessage}", it)
             }.getOrElse {
-                it.msg
+                it.stackTraceStr
             }
         }
     }
@@ -91,10 +90,9 @@ interface JsExtensions {
             kotlin.runCatching {
                 analyzeUrl.getStrResponseAwait()
             }.onFailure {
-                log("connect(${urlStr}) error\n${it.stackTraceToString()}")
-                it.printOnDebug()
+                AppLog.put("connect(${urlStr}) error\n${it.localizedMessage}", it)
             }.getOrElse {
-                StrResponse(analyzeUrl.url, it.localizedMessage)
+                StrResponse(analyzeUrl.url, it.stackTraceStr)
             }
         }
     }
@@ -106,10 +104,9 @@ interface JsExtensions {
             kotlin.runCatching {
                 analyzeUrl.getStrResponseAwait()
             }.onFailure {
-                log("ajax($urlStr,$header) error\n${it.stackTraceToString()}")
-                it.printOnDebug()
+                AppLog.put("ajax($urlStr,$header) error\n${it.localizedMessage}", it)
             }.getOrElse {
-                StrResponse(analyzeUrl.url, it.localizedMessage)
+                StrResponse(analyzeUrl.url, it.stackTraceStr)
             }
         }
     }
@@ -1008,6 +1005,7 @@ interface JsExtensions {
      * @param key 密钥
      * @return 16进制字符串
      */
+    @Suppress("FunctionName")
     fun HMacHex(
         data: String,
         algorithm: String,
@@ -1024,6 +1022,7 @@ interface JsExtensions {
      * @param key 密钥
      * @return Base64字符串
      */
+    @Suppress("FunctionName")
     fun HMacBase64(
         data: String,
         algorithm: String,
