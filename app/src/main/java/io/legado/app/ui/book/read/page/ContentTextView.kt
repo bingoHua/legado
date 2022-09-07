@@ -14,7 +14,7 @@ import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.ReadBookConfig
 import io.legado.app.lib.theme.accentColor
 import io.legado.app.model.ReadBook
-import io.legado.app.ui.book.read.page.entities.TextChar
+import io.legado.app.ui.book.read.page.entities.TextColumn
 import io.legado.app.ui.book.read.page.entities.TextLine
 import io.legado.app.ui.book.read.page.entities.TextPage
 import io.legado.app.ui.book.read.page.entities.TextPos
@@ -28,7 +28,7 @@ import io.legado.app.utils.toastOnUi
 import kotlin.math.min
 
 /**
- * 阅读内容界面
+ * 阅读内容视图
  */
 class ContentTextView(context: Context, attrs: AttributeSet?) : View(context, attrs) {
     var selectAble = context.getPrefBoolean(PreferKey.textSelectAble, true)
@@ -65,12 +65,18 @@ class ContentTextView(context: Context, attrs: AttributeSet?) : View(context, at
         callBack = activity as CallBack
     }
 
+    /**
+     * 设置内容
+     */
     fun setContent(textPage: TextPage) {
         this.textPage = textPage
         imagePaint.isAntiAlias = AppConfig.useAntiAlias
         invalidate()
     }
 
+    /**
+     * 更新绘制区域
+     */
     fun upVisibleRect() {
         visibleRect.set(
             ChapterProvider.paddingLeft.toFloat(),
@@ -121,6 +127,9 @@ class ContentTextView(context: Context, attrs: AttributeSet?) : View(context, at
         }
     }
 
+    /**
+     * 绘制页面
+     */
     private fun draw(
         canvas: Canvas,
         textPage: TextPage,
@@ -151,7 +160,7 @@ class ContentTextView(context: Context, attrs: AttributeSet?) : View(context, at
         }
         val textColor = if (textLine.isReadAloud) context.accentColor else ReadBookConfig.textColor
         textLine.textChars.forEach {
-            if (it.isImage) {
+            if (it.style == 1) {
                 drawImage(canvas, textPage, textLine, it, lineTop, lineBottom)
             } else {
                 textPaint.color = textColor
@@ -174,7 +183,7 @@ class ContentTextView(context: Context, attrs: AttributeSet?) : View(context, at
         canvas: Canvas,
         textPage: TextPage,
         textLine: TextLine,
-        textChar: TextChar,
+        textChar: TextColumn,
         lineTop: Float,
         lineBottom: Float
     ) {
@@ -259,6 +268,9 @@ class ContentTextView(context: Context, attrs: AttributeSet?) : View(context, at
         invalidate()
     }
 
+    /**
+     * 重置滚动位置
+     */
     fun resetPageOffset() {
         pageOffset = 0
     }
@@ -269,16 +281,16 @@ class ContentTextView(context: Context, attrs: AttributeSet?) : View(context, at
     fun longPress(
         x: Float,
         y: Float,
-        select: (relativePage: Int, lineIndex: Int, charIndex: Int) -> Unit,
+        select: (textPos: TextPos) -> Unit,
     ) {
-        touch(x, y) { _, relativePos, _, lineIndex, _, charIndex, textChar ->
-            if (textChar.isImage) {
+        touch(x, y) { _, textPos, _, _, textChar ->
+            if (textChar.style == 1) {
                 callBack.onImageLongPress(x, y, textChar.charData)
             } else {
                 if (!selectAble) return@touch
                 textChar.selected = true
                 invalidate()
-                select(relativePos, lineIndex, charIndex)
+                select(textPos)
             }
         }
     }
@@ -288,6 +300,9 @@ class ContentTextView(context: Context, attrs: AttributeSet?) : View(context, at
      * @return true:已处理, false:未处理
      */
     fun click(x: Float, y: Float): Boolean {
+        touch(x, y) { _, textPos, textPage, textLine, textChar ->
+
+        }
         return false
     }
 
@@ -297,12 +312,12 @@ class ContentTextView(context: Context, attrs: AttributeSet?) : View(context, at
     fun selectText(
         x: Float,
         y: Float,
-        select: (relativePage: Int, lineIndex: Int, charIndex: Int) -> Unit,
+        select: (textPos: TextPos) -> Unit,
     ) {
-        touch(x, y) { _, relativePos, _, lineIndex, _, charIndex, textChar ->
+        touch(x, y) { _, textPos, _, _, textChar ->
             textChar.selected = true
             invalidate()
-            select(relativePos, lineIndex, charIndex)
+            select(textPos)
         }
     }
 
@@ -310,11 +325,10 @@ class ContentTextView(context: Context, attrs: AttributeSet?) : View(context, at
      * 开始选择符移动
      */
     fun selectStartMove(x: Float, y: Float) {
-        touch(x, y) { relativeOffset, relativePos, _, lineIndex, textLine, charIndex, textChar ->
-            val pos = TextPos(relativePos, lineIndex, charIndex)
-            if (selectStart.compare(pos) != 0) {
-                if (pos.compare(selectEnd) <= 0) {
-                    selectStart.upData(pos = pos)
+        touch(x, y) { relativeOffset, textPos, _, textLine, textChar ->
+            if (selectStart.compare(textPos) != 0) {
+                if (textPos.compare(selectEnd) <= 0) {
+                    selectStart.upData(pos = textPos)
                     upSelectedStart(
                         textChar.start,
                         textLine.lineBottom + relativeOffset,
@@ -330,11 +344,10 @@ class ContentTextView(context: Context, attrs: AttributeSet?) : View(context, at
      * 结束选择符移动
      */
     fun selectEndMove(x: Float, y: Float) {
-        touch(x, y) { relativeOffset, relativePos, _, lineIndex, textLine, charIndex, textChar ->
-            val pos = TextPos(relativePos, lineIndex, charIndex)
-            if (pos.compare(selectEnd) != 0) {
-                if (pos.compare(selectStart) >= 0) {
-                    selectEnd.upData(pos)
+        touch(x, y) { relativeOffset, textPos, _, textLine, textChar ->
+            if (textPos.compare(selectEnd) != 0) {
+                if (textPos.compare(selectStart) >= 0) {
+                    selectEnd.upData(textPos)
                     upSelectedEnd(textChar.end, textLine.lineBottom + relativeOffset)
                     upSelectChars()
                 }
@@ -342,17 +355,19 @@ class ContentTextView(context: Context, attrs: AttributeSet?) : View(context, at
         }
     }
 
+    /**
+     * 触碰位置信息
+     * @param touched 回调
+     */
     private fun touch(
         x: Float,
         y: Float,
         touched: (
             relativeOffset: Float,
-            relativePos: Int,
+            textPos: TextPos,
             textPage: TextPage,
-            lineIndex: Int,
             textLine: TextLine,
-            charIndex: Int,
-            textChar: TextChar
+            textColumn: TextColumn
         ) -> Unit
     ) {
         if (!visibleRect.contains(x, y)) return
@@ -371,9 +386,8 @@ class ContentTextView(context: Context, attrs: AttributeSet?) : View(context, at
                         if (textChar.isTouch(x)) {
                             touched.invoke(
                                 relativeOffset,
-                                relativePos, textPage,
-                                lineIndex, textLine,
-                                charIndex, textChar
+                                TextPos(relativePos, lineIndex, charIndex),
+                                textPage, textLine, textChar
                             )
                             return
                         }
