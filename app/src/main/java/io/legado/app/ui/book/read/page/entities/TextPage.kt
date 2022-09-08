@@ -113,8 +113,13 @@ data class TextPage(
                     val char = textLine.text[i].toString()
                     val cw = StaticLayout.getDesiredWidth(char, ChapterProvider.contentPaint)
                     val x1 = x + cw
-                    textLine.textChars.add(
-                        TextColumn(char, start = x, end = x1)
+                    textLine.textColumns.add(
+                        TextColumn(
+                            char,
+                            start = x,
+                            end = x1,
+                            style = if (textLine.text.length - 1 == index && char == "\uD83D\uDCAC") 2 else 0
+                        )
                     )
                     x = x1
                 }
