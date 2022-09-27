@@ -1,6 +1,7 @@
 package io.legado.app.ui.association
 
 import android.app.Application
+import android.net.Uri
 import androidx.lifecycle.MutableLiveData
 import com.jayway.jsonpath.JsonPath
 import io.legado.app.R
@@ -10,10 +11,10 @@ import io.legado.app.data.appDb
 import io.legado.app.data.entities.BookSource
 import io.legado.app.exception.NoStackTraceException
 import io.legado.app.help.ContentProcessor
-import io.legado.app.help.SourceHelp
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.http.newCallResponseBody
 import io.legado.app.help.http.okHttpClient
+import io.legado.app.help.source.SourceHelp
 import io.legado.app.utils.*
 
 
@@ -108,6 +109,12 @@ class ImportBookSourceViewModel(app: Application) : BaseViewModel(app) {
                 }
                 mText.isAbsUrl() -> {
                     importSourceUrl(mText)
+                }
+                mText.isUri() -> {
+                    val uri = Uri.parse(mText)
+                    uri.inputStream(context)?.let {
+                        allSources.addAll(BookSource.fromJsonArray(it).getOrThrow())
+                    }
                 }
                 else -> throw NoStackTraceException(context.getString(R.string.wrong_format))
             }

@@ -26,14 +26,14 @@ import kotlinx.coroutines.withContext
 import splitties.views.onClick
 
 
-class SourceLoginDialog : BaseDialogFragment(R.layout.dialog_login) {
+class SourceLoginDialog : BaseDialogFragment(R.layout.dialog_login, true) {
 
     private val binding by viewBinding(DialogLoginBinding::bind)
     private val viewModel by activityViewModels<SourceLoginViewModel>()
 
     override fun onStart() {
         super.onStart()
-        setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+        setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
     }
 
     override fun onFragmentCreated(view: View, savedInstanceState: Bundle?) {

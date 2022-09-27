@@ -20,7 +20,7 @@ val appDb by lazy {
 }
 
 @Database(
-    version = 53,
+    version = 54,
     exportSchema = true,
     entities = [Book::class, BookGroup::class, BookSource::class, BookChapter::class,
         ReplaceRule::class, SearchBook::class, SearchKeyword::class, Cookie::class,
@@ -37,7 +37,8 @@ val appDb by lazy {
         AutoMigration(from = 49, to = 50),
         AutoMigration(from = 50, to = 51),
         AutoMigration(from = 51, to = 52),
-        AutoMigration(from = 52, to = 53)
+        AutoMigration(from = 52, to = 53),
+        AutoMigration(from = 53, to = 54),
     ]
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -97,8 +98,13 @@ abstract class AppDatabase : RoomDatabase() {
                 )
                 db.execSQL(
                     """insert into book_groups(groupId, groupName, 'order', show) 
-                    select ${AppConst.bookGroupNoneId}, '未分组', -7, 1
-                    where not exists (select * from book_groups where groupId = ${AppConst.bookGroupNoneId})"""
+                    select ${AppConst.bookGroupNetNoneId}, '网络未分组', -7, 1
+                    where not exists (select * from book_groups where groupId = ${AppConst.bookGroupNetNoneId})"""
+                )
+                db.execSQL(
+                    """insert into book_groups(groupId, groupName, 'order', show) 
+                    select ${AppConst.bookGroupLocalNoneId}, '本地未分组', -8, 0
+                    where not exists (select * from book_groups where groupId = ${AppConst.bookGroupLocalNoneId})"""
                 )
                 db.execSQL("update book_sources set loginUi = null where loginUi = 'null'")
                 db.execSQL("update rssSources set loginUi = null where loginUi = 'null'")

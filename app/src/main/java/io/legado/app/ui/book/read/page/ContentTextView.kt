@@ -4,8 +4,7 @@ import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.RectF
-import android.text.StaticLayout
-import android.text.TextPaint
+import android.os.Build
 import android.util.AttributeSet
 import android.view.View
 import io.legado.app.R
@@ -16,7 +15,10 @@ import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.ReadBookConfig
 import io.legado.app.lib.theme.accentColor
 import io.legado.app.model.ReadBook
-import io.legado.app.ui.book.read.page.entities.*
+import io.legado.app.ui.book.read.page.entities.TextLine
+import io.legado.app.ui.book.read.page.entities.TextPage
+import io.legado.app.ui.book.read.page.entities.TextPos
+import io.legado.app.ui.book.read.page.entities.column.*
 import io.legado.app.ui.book.read.page.provider.ChapterProvider
 import io.legado.app.ui.book.read.page.provider.ImageProvider
 import io.legado.app.ui.book.read.page.provider.TextPageFactory
@@ -47,7 +49,11 @@ class ContentTextView(context: Context, attrs: AttributeSet?) : View(context, at
     private var drawVisibleImageOnly = false
     private var cacheIncreased = false
     private val increaseSize = 8 * 1024 * 1024
-    private val maxCacheSize = 256 * 1024 * 1024
+    private val maxCacheSize = if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.N_MR1) {
+        min(128 * 1024 * 1024, Runtime.getRuntime().maxMemory())
+    } else {
+        256 * 1024 * 1024
+    }
 
     //滚动参数
     private val pageFactory: TextPageFactory get() = callBack.pageFactory
@@ -105,7 +111,7 @@ class ContentTextView(context: Context, attrs: AttributeSet?) : View(context, at
      */
     private fun drawPage(canvas: Canvas) {
         var relativeOffset = relativeOffset(0)
-        textPage.textLines.forEach { textLine ->
+        textPage.lines.forEach { textLine ->
             draw(canvas, textPage, textLine, relativeOffset)
         }
         if (!callBack.isScroll) return
@@ -113,14 +119,14 @@ class ContentTextView(context: Context, attrs: AttributeSet?) : View(context, at
         if (!pageFactory.hasNext()) return
         val textPage1 = relativePage(1)
         relativeOffset = relativeOffset(1)
-        textPage1.textLines.forEach { textLine ->
+        textPage1.lines.forEach { textLine ->
             draw(canvas, textPage1, textLine, relativeOffset)
         }
         if (!pageFactory.hasNextPlus()) return
         relativeOffset = relativeOffset(2)
         if (relativeOffset < ChapterProvider.visibleHeight) {
             val textPage2 = relativePage(2)
-            textPage2.textLines.forEach { textLine ->
+            textPage2.lines.forEach { textLine ->
                 draw(canvas, textPage2, textLine, relativeOffset)
             }
         }
@@ -158,93 +164,20 @@ class ContentTextView(context: Context, attrs: AttributeSet?) : View(context, at
             ChapterProvider.contentPaint
         }
         val textColor = if (textLine.isReadAloud) context.accentColor else ReadBookConfig.textColor
-        val linePaint = Paint()
-        linePaint.strokeWidth = textPaint.textSize / 21
-        linePaint.color = textColor
-        val reviewCountPaint = TextPaint()
-        reviewCountPaint.textSize = textPaint.textSize * 0.6F
-        reviewCountPaint.color = textColor
-        textLine.textColumns.forEach {
-            when (it.style) {
-                0 -> {
+        textLine.columns.forEach {
+            when (it) {
+                is TextColumn -> {
                     textPaint.color = textColor
                     if (it.isSearchResult) {
                         textPaint.color = context.accentColor
                     }
                     canvas.drawText(it.charData, it.start, lineBase, textPaint)
+                    if (it.selected) {
+                        canvas.drawRect(it.start, lineTop, it.end, lineBottom, selectedPaint)
+                    }
                 }
-                1 -> drawImage(canvas, textPage, textLine, it, lineTop, lineBottom)
-                2 -> {
-                    if (textLine.reviewCount <= 0) return@forEach
-                    canvas.drawLine(
-                        it.start,
-                        lineBase - textPaint.textSize * 2 / 5,
-                        it.start + textPaint.textSize / 6,
-                        lineBase - textPaint.textSize / 4,
-                        linePaint
-                    )
-                    canvas.drawLine(
-                        it.start,
-                        lineBase - textPaint.textSize * 0.38F,
-                        it.start + textPaint.textSize / 6,
-                        lineBase - textPaint.textSize * 0.55F,
-                        linePaint
-                    )
-                    canvas.drawLine(
-                        it.start + textPaint.textSize / 6,
-                        lineBase - textPaint.textSize / 4,
-                        it.start + textPaint.textSize / 6,
-                        lineBase,
-                        linePaint
-                    )
-                    canvas.drawLine(
-                        it.start + textPaint.textSize / 6,
-                        lineBase - textPaint.textSize * 0.55F,
-                        it.start + textPaint.textSize / 6,
-                        lineBase - textPaint.textSize * 0.8F,
-                        linePaint
-                    )
-                    canvas.drawLine(
-                        it.start + textPaint.textSize / 6,
-                        lineBase,
-                        it.start + textPaint.textSize * 1.6F,
-                        lineBase,
-                        linePaint
-                    )
-                    canvas.drawLine(
-                        it.start + textPaint.textSize / 6,
-                        lineBase - textPaint.textSize * 0.8F,
-                        it.start + textPaint.textSize * 1.6F,
-                        lineBase - textPaint.textSize * 0.8F,
-                        linePaint
-                    )
-                    canvas.drawLine(
-                        it.start + textPaint.textSize * 1.6F,
-                        lineBase - textPaint.textSize * 0.8F,
-                        it.start + textPaint.textSize * 1.6F,
-                        lineBase,
-                        linePaint
-                    )
-                    if (textLine.reviewCount < 100) canvas.drawText(
-                        textLine.reviewCount.toString(),
-                        it.start + textPaint.textSize * 0.87F -
-                                StaticLayout.getDesiredWidth(
-                                    textLine.reviewCount.toString(),
-                                    reviewCountPaint
-                                ) / 2,
-                        lineBase - textPaint.textSize / 6,
-                        reviewCountPaint
-                    )
-                    else canvas.drawText(
-                        "99+",
-                        it.start + textPaint.textSize * 0.35F,
-                        lineBase - textPaint.textSize / 6,
-                        reviewCountPaint
-                    )
-                }
-            }
-            if (it.selected) {
-                canvas.drawRect(it.start, lineTop, it.end, lineBottom, selectedPaint)
+                is ImageColumn -> drawImage(canvas, textPage, textLine, it, lineTop, lineBottom)
+                is ReviewColumn -> it.drawToCanvas(canvas, lineBase, textPaint.textSize)
             }
         }
     }
@@ -257,7 +190,7 @@ class ContentTextView(context: Context, attrs: AttributeSet?) : View(context, at
         canvas: Canvas,
         textPage: TextPage,
         textLine: TextLine,
-        textColumn: TextColumn,
+        column: ImageColumn,
         lineTop: Float,
         lineBottom: Float
     ) {
@@ -272,10 +205,9 @@ class ContentTextView(context: Context, attrs: AttributeSet?) : View(context, at
             return
         }
         if (drawVisibleImageOnly &&
-            isVisible &&
             !cacheIncreased &&
             ImageProvider.isTriggerRecycled() &&
-            !ImageProvider.isImageAlive(book, textColumn.charData)
+            !ImageProvider.isImageAlive(book, column.src)
         ) {
             val newSize = ImageProvider.bitmapLruCache.maxSize() + increaseSize
             if (newSize < maxCacheSize) {
@@ -287,8 +219,8 @@ class ContentTextView(context: Context, attrs: AttributeSet?) : View(context, at
         }
         val bitmap = ImageProvider.getImage(
             book,
-            textColumn.charData,
-            (textColumn.end - textColumn.start).toInt(),
+            column.src,
+            (column.end - column.start).toInt(),
             (lineBottom - lineTop).toInt()
         ) {
             if (!drawVisibleImageOnly && isVisible) {
@@ -298,12 +230,12 @@ class ContentTextView(context: Context, attrs: AttributeSet?) : View(context, at
         } ?: return
 
         val rectF = if (textLine.isImage) {
-            RectF(textColumn.start, lineTop, textColumn.end, lineBottom)
+            RectF(column.start, lineTop, column.end, lineBottom)
         } else {
             /*以宽度为基准保持图片的原始比例叠加，当div为负数时，允许高度比字符更高*/
-            val h = (textColumn.end - textColumn.start) / bitmap.width * bitmap.height
+            val h = (column.end - column.start) / bitmap.width * bitmap.height
             val div = (lineBottom - lineTop - h) / 2
-            RectF(textColumn.start, lineTop + div, textColumn.end, lineBottom - div)
+            RectF(column.start, lineTop + div, column.end, lineBottom - div)
         }
         kotlin.runCatching {
             canvas.drawBitmap(bitmap, null, rectF, imagePaint)
@@ -357,15 +289,15 @@ class ContentTextView(context: Context, attrs: AttributeSet?) : View(context, at
         y: Float,
         select: (textPos: TextPos) -> Unit,
     ) {
-        touch(x, y) { _, textPos, _, _, textColumn ->
-            if (textColumn.style == 2) return@touch
-            if (textColumn.style == 1) {
-                callBack.onImageLongPress(x, y, textColumn.charData)
-            } else {
-                if (!selectAble) return@touch
-                textColumn.selected = true
-                invalidate()
-                select(textPos)
+        touch(x, y) { _, textPos, _, _, column ->
+            when (column) {
+                is ImageColumn -> callBack.onImageLongPress(x, y, column.src)
+                is TextColumn -> {
+                    if (!selectAble) return@touch
+                    column.selected = true
+                    invalidate()
+                    select(textPos)
+                }
             }
         }
     }
@@ -376,10 +308,17 @@ class ContentTextView(context: Context, attrs: AttributeSet?) : View(context, at
      */
     fun click(x: Float, y: Float): Boolean {
         var handled = false
-        touch(x, y) { _, textPos, textPage, textLine, textColumn ->
-            if (textColumn.style == 2) {
-                context.toastOnUi("Button Pressed!")
-                handled = true
+        touch(x, y) { _, textPos, textPage, textLine, column ->
+            when (column) {
+                is ButtonColumn -> {
+                    context.toastOnUi("Button Pressed!")
+                    handled = true
+                }
+
+                is ReviewColumn -> {
+                    context.toastOnUi("Button Pressed!")
+                    handled = true
+                }
             }
         }
         return handled
@@ -393,11 +332,12 @@ class ContentTextView(context: Context, attrs: AttributeSet?) : View(context, at
         y: Float,
         select: (textPos: TextPos) -> Unit,
     ) {
-        touch(x, y) { _, textPos, _, _, textColumn ->
-            if (textColumn.style == 2) return@touch
-            textColumn.selected = true
-            invalidate()
-            select(textPos)
+        touch(x, y) { _, textPos, _, _, column ->
+            if (column is TextColumn) {
+                column.selected = true
+                invalidate()
+                select(textPos)
+            }
         }
     }
 
@@ -447,7 +387,7 @@ class ContentTextView(context: Context, attrs: AttributeSet?) : View(context, at
             textPos: TextPos,
             textPage: TextPage,
             textLine: TextLine,
-            textColumn: TextColumn
+            column: BaseColumn
         ) -> Unit
     ) {
         if (!visibleRect.contains(x, y)) return
@@ -460,9 +400,9 @@ class ContentTextView(context: Context, attrs: AttributeSet?) : View(context, at
                 if (relativeOffset >= ChapterProvider.visibleHeight) return
             }
             val textPage = relativePage(relativePos)
-            for ((lineIndex, textLine) in textPage.textLines.withIndex()) {
+            for ((lineIndex, textLine) in textPage.lines.withIndex()) {
                 if (textLine.isTouch(x, y, relativeOffset)) {
-                    for ((charIndex, textColumn) in textLine.textColumns.withIndex()) {
+                    for ((charIndex, textColumn) in textLine.columns.withIndex()) {
                         if (textColumn.isTouch(x)) {
                             touched.invoke(
                                 relativeOffset,
@@ -484,9 +424,9 @@ class ContentTextView(context: Context, attrs: AttributeSet?) : View(context, at
     fun selectStartMoveIndex(relativePagePos: Int, lineIndex: Int, charIndex: Int) {
         selectStart.relativePagePos = relativePagePos
         selectStart.lineIndex = lineIndex
-        selectStart.charIndex = charIndex
+        selectStart.columnIndex = charIndex
         val textLine = relativePage(relativePagePos).getLine(lineIndex)
-        val textColumn = textLine.getTextColumn(charIndex)
+        val textColumn = textLine.getColumn(charIndex)
         upSelectedStart(
             textColumn.start,
             textLine.lineBottom + relativeOffset(relativePagePos),
@@ -501,9 +441,9 @@ class ContentTextView(context: Context, attrs: AttributeSet?) : View(context, at
     fun selectEndMoveIndex(relativePage: Int, lineIndex: Int, charIndex: Int) {
         selectEnd.relativePagePos = relativePage
         selectEnd.lineIndex = lineIndex
-        selectEnd.charIndex = charIndex
+        selectEnd.columnIndex = charIndex
         val textLine = relativePage(relativePage).getLine(lineIndex)
-        val textColumn = textLine.getTextColumn(charIndex)
+        val textColumn = textLine.getColumn(charIndex)
         upSelectedEnd(textColumn.end, textLine.lineBottom + relativeOffset(relativePage))
         upSelectChars()
     }
@@ -513,35 +453,43 @@ class ContentTextView(context: Context, attrs: AttributeSet?) : View(context, at
         val textPos = TextPos(0, 0, 0)
         for (relativePos in 0..last) {
             textPos.relativePagePos = relativePos
-            for ((lineIndex, textLine) in relativePage(relativePos).textLines.withIndex()) {
+            for ((lineIndex, textLine) in relativePage(relativePos).lines.withIndex()) {
                 textPos.lineIndex = lineIndex
-                for ((charIndex, textColumn) in textLine.textColumns.withIndex()) {
-                    textPos.charIndex = charIndex
-                    if (textColumn.style == 2) continue
-                    textColumn.selected =
-                        textPos.compare(selectStart) >= 0 && textPos.compare(selectEnd) <= 0
-                    textColumn.isSearchResult = textColumn.selected && callBack.isSelectingSearchResult
+                for ((charIndex, column) in textLine.columns.withIndex()) {
+                    textPos.columnIndex = charIndex
+                    if (column is TextColumn) {
+                        column.selected =
+                            textPos.compare(selectStart) >= 0 && textPos.compare(selectEnd) <= 0
+                        column.isSearchResult =
+                            column.selected && callBack.isSelectingSearchResult
+                    }
                 }
             }
         }
         invalidate()
     }
 
-    private fun upSelectedStart(x: Float, y: Float, top: Float) = callBack.apply {
-        upSelectedStart(x, y + headerHeight, top + headerHeight)
+    private fun upSelectedStart(x: Float, y: Float, top: Float) {
+        callBack.run {
+            upSelectedStart(x, y + headerHeight, top + headerHeight)
+        }
     }
 
-    private fun upSelectedEnd(x: Float, y: Float) = callBack.apply {
-        upSelectedEnd(x, y + headerHeight)
+    private fun upSelectedEnd(x: Float, y: Float) {
+        callBack.run {
+            upSelectedEnd(x, y + headerHeight)
+        }
     }
 
     fun cancelSelect(fromSearchExit: Boolean = false) {
         val last = if (callBack.isScroll) 2 else 0
         for (relativePos in 0..last) {
-            relativePage(relativePos).textLines.forEach { textLine ->
-                textLine.textColumns.forEach {
-                    it.selected = false
-                    if (fromSearchExit) it.isSearchResult = false
+            relativePage(relativePos).lines.forEach { textLine ->
+                textLine.columns.forEach {
+                    if (it is TextColumn) {
+                        it.selected = false
+                        if (fromSearchExit) it.isSearchResult = false
+                    }
                 }
             }
         }
@@ -555,14 +503,16 @@ class ContentTextView(context: Context, attrs: AttributeSet?) : View(context, at
         for (relativePos in selectStart.relativePagePos..selectEnd.relativePagePos) {
             val textPage = relativePage(relativePos)
             textPos.relativePagePos = relativePos
-            textPage.textLines.forEachIndexed { lineIndex, textLine ->
+            textPage.lines.forEachIndexed { lineIndex, textLine ->
                 textPos.lineIndex = lineIndex
-                textLine.textColumns.forEachIndexed { charIndex, textColumn ->
-                    textPos.charIndex = charIndex
+                textLine.columns.forEachIndexed { charIndex, column ->
+                    textPos.columnIndex = charIndex
                     val compareStart = textPos.compare(selectStart)
                     val compareEnd = textPos.compare(selectEnd)
                     if (compareStart >= 0 && compareEnd <= 0) {
-                        builder.append(textColumn.charData)
+                        if (column is TextColumn) {
+                            builder.append(column.charData)
+                        }
                         if (
                             textLine.isParagraphEnd
                             && charIndex == textLine.charSize - 1
@@ -584,7 +534,7 @@ class ContentTextView(context: Context, attrs: AttributeSet?) : View(context, at
                 return book.createBookMark().apply {
                     chapterIndex = page.chapterIndex
                     chapterPos = chapter.getReadLength(page.index) +
-                            page.getPosByLineColumn(selectStart.lineIndex, selectStart.charIndex)
+                            page.getPosByLineColumn(selectStart.lineIndex, selectStart.columnIndex)
                     chapterName = chapter.title
                     bookText = getSelectedText()
                 }

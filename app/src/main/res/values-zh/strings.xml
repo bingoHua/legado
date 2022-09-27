@@ -448,7 +448,7 @@
     <!-- source end-->
 
     <!--error string start-->
-    <string name="error_no_source">没有书源</string>
+    <string name="error_no_source">没有源</string>
     <string name="error_get_book_info">书籍信息获取失败</string>
     <string name="error_get_content">内容获取失败</string>
     <string name="error_get_chapter_list">目录获取失败</string>
@@ -876,7 +876,7 @@
     <string name="anti_alias">抗锯齿</string>
     <string name="pref_anti_alias_summary">绘制图片时抗锯齿</string>
     <string name="upload_url">上传 URL</string>
-    <string name="download_url_rule">下载 URL 规则</string>
+    <string name="download_url_rule">下载URL规则(downloadUrls)</string>
     <string name="sort_by_respondTime">响应时间排序</string>
     <string name="export_success">导出成功</string>
     <string name="path">路径</string>
@@ -1018,11 +1018,24 @@
     <string name="rule_review_content">段评内容（contentRule）</string>
     <string name="rule_post_time">段评发布时间（postTimeRule）</string>
     <string name="rule_review_quote">段评回复URL（reviewQuoteUrl）</string>
-    <string name="review_vote_down">点踩URL（voteUpUrl）</string>
-    <string name="review_vote_up">点赞URL（voteDownUrl）</string>
+    <string name="review_vote_down">点踩URL（voteDownUrl）</string>
+    <string name="review_vote_up">点赞URL（voteUpUrl）</string>
     <string name="post_review_url">发送回复URL（postReviewUrl）</string>
     <string name="post_quote_url">发送回复段评URL（postQuoteUrl）</string>
     <string name="delete_review_url">删除段评URL（deleteUrl）</string>
     <string name="tag_explore_enabled">标志:发现已启用</string>
     <string name="tag_explore_disabled">标志:发现已禁用</string>
+    <string name="show_read_title_addition">展示顶部工具栏附加区域</string>
+    <string name="read_bar_style_follow_page">工具栏样式跟随页面</string>
+    <string name="rule_image_decode">图片解密（imageDecode）</string>
+    <string name="like_source">赞</string>
+    <string name="not_like_source">踩</string>
+    <string name="async_load_image">异步加载图片</string>
+    <string name="ignore_audio_focus_title">忽略音频焦点</string>
+    <string name="ignore_audio_focus_summary">允许与其他应用同时播放音频</string>
+    <string name="refresh_sort">刷新分类</string>
+    <string name="cover_decode_js">封面解密（coverDecodeJs）</string>
+    <string name="net_no_group">网络未分组</string>
+    <string name="local_no_group">本地未分组</string>
+    <string name="parallel_export_book">多线程导出TXT</string>
 </resources>

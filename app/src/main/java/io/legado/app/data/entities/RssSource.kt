@@ -1,11 +1,13 @@
 package io.legado.app.data.entities
 
 import android.os.Parcelable
+import android.text.TextUtils
 import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
 import com.jayway.jsonpath.DocumentContext
+import io.legado.app.constant.AppPattern
 import io.legado.app.utils.*
 import kotlinx.parcelize.Parcelize
 
@@ -38,6 +40,8 @@ data class RssSource(
     override var loginUi: String? = null,
     //登录检测js
     var loginCheckJs: String? = null,
+    //封面解密js
+    var coverDecodeJs: String? = null,
     var sortUrl: String? = null,
     var singleUrl: Boolean = false,
     /*列表规则*/
@@ -56,6 +60,9 @@ data class RssSource(
     var enableJs: Boolean = true,
     var loadWithBaseUrl: Boolean = true,
     /*其它规则*/
+    // 最后更新时间，用于排序
+    @ColumnInfo(defaultValue = "0")
+    var lastUpdateTime: Long = 0,
     var customOrder: Int = 0
 ) : Parcelable, BaseSource {
 
@@ -88,6 +95,7 @@ data class RssSource(
                 && equal(loginUrl, source.loginUrl)
                 && equal(loginUi, source.loginUi)
                 && equal(loginCheckJs, source.loginCheckJs)
+                && equal(coverDecodeJs, source.coverDecodeJs)
                 && equal(sortUrl, source.sortUrl)
                 && singleUrl == source.singleUrl
                 && articleStyle == source.articleStyle
@@ -114,33 +122,21 @@ data class RssSource(
         }
     }
 
-    fun sortUrls(): List<Pair<String, String>> = arrayListOf<Pair<String, String>>().apply {
-        kotlin.runCatching {
-            var a = sortUrl
-            if (sortUrl?.startsWith("<js>", false) == true
-                || sortUrl?.startsWith("@js:", false) == true
-            ) {
-                val aCache = ACache.get("rssSortUrl")
-                a = aCache.getAsString(sourceUrl) ?: ""
-                if (a.isBlank()) {
-                    val jsStr = if (sortUrl!!.startsWith("@")) {
-                        sortUrl!!.substring(4)
-                    } else {
-                        sortUrl!!.substring(4, sortUrl!!.lastIndexOf("<"))
-                    }
-                    a = evalJS(jsStr).toString()
-                    aCache.put(sourceUrl, a)
-                }
-            }
-            a?.split("(&&|\n)+".toRegex())?.forEach { c ->
-                val d = c.split("::")
-                if (d.size > 1)
-                    add(Pair(d[0], d[1]))
-            }
-            if (isEmpty()) {
-                add(Pair("", sourceUrl))
-            }
+    fun addGroup(groups: String): RssSource {
+        sourceGroup?.splitNotBlank(AppPattern.splitGroupRegex)?.toHashSet()?.let {
+            it.addAll(groups.splitNotBlank(AppPattern.splitGroupRegex))
+            sourceGroup = TextUtils.join(",", it)
         }
+        if (sourceGroup.isNullOrBlank()) sourceGroup = groups
+        return this
+    }
+
+    fun removeGroup(groups: String): RssSource {
+        sourceGroup?.splitNotBlank(AppPattern.splitGroupRegex)?.toHashSet()?.let {
+            it.removeAll(groups.splitNotBlank(AppPattern.splitGroupRegex).toSet())
+            sourceGroup = TextUtils.join(",", it)
+        }
+        return this
     }
 
     fun getDisplayVariableComment(otherComment: String): String {
@@ -184,7 +180,9 @@ data class RssSource(
                     enableJs = doc.readBool("$.enableJs") ?: true,
                     loadWithBaseUrl = doc.readBool("$.loadWithBaseUrl") ?: true,
                     enabledCookieJar = doc.readBool("$.enabledCookieJar") ?: false,
-                    customOrder = doc.readInt("$.customOrder") ?: 0
+                    customOrder = doc.readInt("$.customOrder") ?: 0,
+                    lastUpdateTime = doc.readLong("$.lastUpdateTime") ?: 0L,
+                    coverDecodeJs = doc.readString("$.coverDecodeJs")
                 )
             }
         }

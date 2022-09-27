@@ -5,6 +5,7 @@ import io.legado.app.constant.AppPattern
 import io.legado.app.constant.BookType
 import io.legado.app.data.entities.*
 import io.legado.app.help.coroutine.CompositeCoroutine
+import io.legado.app.help.source.sortUrls
 import io.legado.app.model.rss.Rss
 import io.legado.app.model.webBook.WebBook
 import io.legado.app.utils.HtmlFormatter
@@ -101,7 +102,7 @@ object Debug {
         }
     }
 
-    fun startDebug(scope: CoroutineScope, rssSource: RssSource) {
+    suspend fun startDebug(scope: CoroutineScope, rssSource: RssSource) {
         cancelDebug()
         debugSource = rssSource.sourceUrl
         log(debugSource, "︾开始解析")

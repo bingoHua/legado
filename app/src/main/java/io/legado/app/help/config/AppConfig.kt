@@ -155,7 +155,7 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
         get() = appCtx.getPrefBoolean(PreferKey.autoRefresh)
 
     var enableReview: Boolean
-        get() = appCtx.getPrefBoolean(PreferKey.enableReview, false)
+        get() = appCtx.getPrefBoolean(PreferKey.enableReview, false) && BuildConfig.DEBUG
         set(value) {
             appCtx.putPrefBoolean(PreferKey.enableReview, value)
         }
@@ -255,6 +255,12 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
             appCtx.putPrefBoolean(PreferKey.exportPictureFile, value)
         }
 
+    var parallelExportBook: Boolean
+        get() = appCtx.getPrefBoolean(PreferKey.parallelExportBook, false)
+        set(value) {
+            appCtx.putPrefBoolean(PreferKey.parallelExportBook, value)
+        }
+
     var changeSourceCheckAuthor: Boolean
         get() = appCtx.getPrefBoolean(PreferKey.changeSourceCheckAuthor)
         set(value) {
@@ -300,6 +306,12 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
             appCtx.putPrefBoolean(PreferKey.changeSourceLoadToc, value)
         }
 
+    var contentSelectSpeakMod: Int
+        get() = appCtx.getPrefInt(PreferKey.contentSelectSpeakMod)
+        set(value) {
+            appCtx.putPrefInt(PreferKey.contentSelectSpeakMod, value)
+        }
+
     val importKeepName get() = appCtx.getPrefBoolean(PreferKey.importKeepName)
 
     var preDownloadNum
@@ -319,6 +331,10 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
     val loadCoverOnlyWifi get() = appCtx.getPrefBoolean(PreferKey.loadCoverOnlyWifi, false)
 
     val showAddToShelfAlert get() = appCtx.getPrefBoolean(PreferKey.showAddToShelfAlert, true)
+
+    val asyncLoadImage get() = appCtx.getPrefBoolean(PreferKey.asyncLoadImage, false)
+
+    val ignoreAudioFocus get() = appCtx.getPrefBoolean(PreferKey.ignoreAudioFocus, false)
 
     val doublePageHorizontal: String?
         get() = appCtx.getPrefString(PreferKey.doublePageHorizontal)
@@ -347,6 +363,17 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
         get() = appCtx.getPrefInt(PreferKey.bitmapCacheSize, 50)
         set(value) {
             appCtx.putPrefInt(PreferKey.bitmapCacheSize, value)
+        }
+
+    var showReadTitleBarAddition : Boolean
+        get() = appCtx.getPrefBoolean(PreferKey.showReadTitleAddition, true)
+        set(value) {
+            appCtx.putPrefBoolean(PreferKey.showReadTitleAddition, value)
+        }
+    var readBarStyleFollowPage : Boolean
+        get() = appCtx.getPrefBoolean(PreferKey.readBarStyleFollowPage, false)
+        set(value) {
+            appCtx.putPrefBoolean(PreferKey.readBarStyleFollowPage, value)
         }
 }
 

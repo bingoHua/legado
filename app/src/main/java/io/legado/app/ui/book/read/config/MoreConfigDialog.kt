@@ -133,6 +133,10 @@ class MoreConfigDialog : DialogFragment() {
                     ChapterProvider.upLayout()
                     ReadBook.loadContent(false)
                 }
+                PreferKey.showReadTitleAddition,
+                PreferKey.readBarStyleFollowPage -> {
+                    postEvent(EventBus.updateReadActionBar, true)
+                }
             }
         }
 

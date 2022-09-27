@@ -18,6 +18,7 @@ import io.legado.app.R
 import io.legado.app.base.BaseService
 import io.legado.app.constant.*
 import io.legado.app.help.MediaHelp
+import io.legado.app.help.config.AppConfig
 import io.legado.app.help.glide.ImageLoader
 import io.legado.app.model.ReadAloud
 import io.legado.app.model.ReadBook
@@ -58,12 +59,11 @@ abstract class BaseReadAloudService : BaseService(),
     }
 
     private val mFocusRequest: AudioFocusRequestCompat by lazy {
-        MediaHelp.getFocusRequest(this)
+        MediaHelp.buildAudioFocusRequestCompat(this)
     }
     private val mediaSessionCompat: MediaSessionCompat by lazy {
         MediaSessionCompat(this, "readAloud")
     }
-    private var audioFocusLossTransient = false
     internal val contentList = arrayListOf<String>()
     @Volatile
     internal var nowSpeak: Int = 0
@@ -71,12 +71,13 @@ abstract class BaseReadAloudService : BaseService(),
     internal var readAloudNumber: Int = 0
     internal var textChapter: TextChapter? = null
     internal var pageIndex = 0
+    private var needResumeOnAudioFocusGain = false
     private var dsJob: Job? = null
 
     private val broadcastReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             if (AudioManager.ACTION_AUDIO_BECOMING_NOISY == intent.action) {
-                pauseReadAloud(true)
+                pauseReadAloud()
             }
         }
     }
@@ -96,6 +97,7 @@ abstract class BaseReadAloudService : BaseService(),
         super.onDestroy()
         isRun = false
         pause = true
+        abandonFocus()
         unregisterReceiver(broadcastReceiver)
         postEvent(EventBus.ALOUD_STATE, Status.STOP)
         upMediaSessionPlaybackState(PlaybackStateCompat.STATE_STOPPED)
@@ -110,7 +112,7 @@ abstract class BaseReadAloudService : BaseService(),
                 intent.getIntExtra("pageIndex", ReadBook.durPageIndex),
                 intent.getIntExtra("startPos", 0)
             )
-            IntentAction.pause -> pauseReadAloud(true)
+            IntentAction.pause -> pauseReadAloud()
             IntentAction.resume -> resumeReadAloud()
             IntentAction.upTtsSpeechRate -> upSpeechRate(true)
             IntentAction.prevParagraph -> prevP()
@@ -143,6 +145,7 @@ abstract class BaseReadAloudService : BaseService(),
     open fun play() {
         isRun = true
         pause = false
+        needResumeOnAudioFocusGain = false
         upNotification()
         postEvent(EventBus.ALOUD_STATE, Status.PLAY)
     }
@@ -150,8 +153,11 @@ abstract class BaseReadAloudService : BaseService(),
     abstract fun playStop()
 
     @CallSuper
-    open fun pauseReadAloud(pause: Boolean) {
-        BaseReadAloudService.pause = pause
+    open fun pauseReadAloud(abandonFocus: Boolean = true) {
+        pause = true
+        if (abandonFocus) {
+            abandonFocus()
+        }
         upNotification()
         upMediaSessionPlaybackState(PlaybackStateCompat.STATE_PAUSED)
         postEvent(EventBus.ALOUD_STATE, Status.PAUSE)
@@ -231,14 +237,26 @@ abstract class BaseReadAloudService : BaseService(),
     }
 
     /**
+     * 请求音频焦点
      * @return 音频焦点
      */
     fun requestFocus(): Boolean {
-        val requestFocus = MediaHelp.requestFocus(audioManager, mFocusRequest)
+        if (AppConfig.ignoreAudioFocus) {
+            return true
+        }
+        val requestFocus = MediaHelp.requestFocus(mFocusRequest)
         if (!requestFocus) {
             toastOnUi("未获取到音频焦点")
         }
         return requestFocus
+    }
+
+    /**
+     * 放弃音频焦点
+     */
+    private fun abandonFocus() {
+        @Suppress("DEPRECATION")
+        audioManager.abandonAudioFocus(this)
     }
 
     /**
@@ -301,22 +319,33 @@ abstract class BaseReadAloudService : BaseService(),
      * 音频焦点变化
      */
     override fun onAudioFocusChange(focusChange: Int) {
+        if (AppConfig.ignoreAudioFocus) {
+            AppLog.put("忽略音频焦点处理(TTS)")
+            return
+        }
         when (focusChange) {
             AudioManager.AUDIOFOCUS_GAIN -> {
-                audioFocusLossTransient = false
-                if (!pause) resumeReadAloud()
-            }
-            AudioManager.AUDIOFOCUS_LOSS -> {
-                if (audioFocusLossTransient) {
-                    pauseReadAloud(true)
+                if (needResumeOnAudioFocusGain) {
+                    AppLog.put("音频焦点获得,继续朗读")
+                    resumeReadAloud()
+                } else {
+                    AppLog.put("音频焦点获得")
                 }
             }
+            AudioManager.AUDIOFOCUS_LOSS -> {
+                AppLog.put("音频焦点丢失,暂停朗读")
+                pauseReadAloud()
+            }
             AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> {
-                audioFocusLossTransient = true
-                if (!pause) pauseReadAloud(false)
+                AppLog.put("音频焦点暂时丢失并会很快再次获得,暂停朗读")
+                if (!pause) {
+                    needResumeOnAudioFocusGain = true
+                    pauseReadAloud(false)
+                }
             }
             AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> {
                 // 短暂丢失焦点，这种情况是被其他应用申请了短暂的焦点希望其他声音能压低音量（或者关闭声音）凸显这个声音（比如短信提示音），
+                AppLog.put("音频焦点短暂丢失,不做处理")
             }
         }
     }

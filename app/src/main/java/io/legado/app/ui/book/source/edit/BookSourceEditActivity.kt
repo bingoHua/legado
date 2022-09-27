@@ -12,12 +12,14 @@ import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel
 import io.legado.app.R
 import io.legado.app.base.VMBaseActivity
 import io.legado.app.constant.BookType
+import io.legado.app.data.appDb
 import io.legado.app.data.entities.BookSource
 import io.legado.app.data.entities.rule.*
 import io.legado.app.databinding.ActivityBookSourceEditBinding
 import io.legado.app.help.config.LocalConfig
 import io.legado.app.lib.dialogs.SelectItem
 import io.legado.app.lib.dialogs.alert
+import io.legado.app.lib.dialogs.selector
 import io.legado.app.lib.theme.accentColor
 import io.legado.app.lib.theme.backgroundColor
 import io.legado.app.lib.theme.primaryColor
@@ -30,6 +32,9 @@ import io.legado.app.ui.widget.dialog.UrlOptionDialog
 import io.legado.app.ui.widget.keyboard.KeyboardToolPop
 import io.legado.app.utils.*
 import io.legado.app.utils.viewbindingdelegate.viewBinding
+import kotlinx.coroutines.Dispatchers.IO
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class BookSourceEditActivity :
     VMBaseActivity<ActivityBookSourceEditBinding, BookSourceEditViewModel>(false),
@@ -87,7 +92,7 @@ class BookSourceEditActivity :
     }
 
     override fun onMenuOpened(featureId: Int, menu: Menu): Boolean {
-        menu.findItem(R.id.menu_login)?.isVisible = !viewModel.bookSource?.loginUrl.isNullOrBlank()
+        menu.findItem(R.id.menu_login)?.isVisible = !getSource().loginUrl.isNullOrBlank()
         menu.findItem(R.id.menu_auto_complete)?.isChecked = viewModel.autoComplete
         return super.onMenuOpened(featureId, menu)
     }
@@ -216,6 +221,7 @@ class BookSourceEditActivity :
             add(EditEntity("loginUrl", source?.loginUrl, R.string.login_url))
             add(EditEntity("loginUi", source?.loginUi, R.string.login_ui))
             add(EditEntity("loginCheckJs", source?.loginCheckJs, R.string.login_check_js))
+            add(EditEntity("coverDecodeJs", source?.coverDecodeJs, R.string.cover_decode_js))
             add(EditEntity("bookUrlPattern", source?.bookUrlPattern, R.string.book_url_pattern))
             add(EditEntity("header", source?.header, R.string.source_http_header))
             add(EditEntity("variableComment", source?.variableComment, R.string.variable_comment))
@@ -292,6 +298,7 @@ class BookSourceEditActivity :
             add(EditEntity("sourceRegex", cr?.sourceRegex, R.string.rule_source_regex))
             add(EditEntity("replaceRegex", cr?.replaceRegex, R.string.rule_replace_regex))
             add(EditEntity("imageStyle", cr?.imageStyle, R.string.rule_image_style))
+            add(EditEntity("imageDecode", cr?.imageDecode, R.string.rule_image_decode))
             add(EditEntity("payAction", cr?.payAction, R.string.rule_pay_action))
         }
         // 段评
@@ -339,6 +346,7 @@ class BookSourceEditActivity :
                 "loginUrl" -> source.loginUrl = it.value
                 "loginUi" -> source.loginUi = it.value
                 "loginCheckJs" -> source.loginCheckJs = it.value
+                "coverDecodeJs" -> source.coverDecodeJs = it.value
                 "bookUrlPattern" -> source.bookUrlPattern = it.value
                 "header" -> source.header = it.value
                 "bookSourceComment" -> source.bookSourceComment = it.value
@@ -446,6 +454,7 @@ class BookSourceEditActivity :
                 "sourceRegex" -> contentRule.sourceRegex = it.value
                 "replaceRegex" -> contentRule.replaceRegex = it.value
                 "imageStyle" -> contentRule.imageStyle = it.value
+                "imageDecode" -> contentRule.imageDecode = it.value
                 "payAction" -> contentRule.payAction = it.value
             }
         }
@@ -484,21 +493,46 @@ class BookSourceEditActivity :
         return true
     }
 
+    private fun alertGroups() {
+        launch {
+            val groups = withContext(IO) {
+                appDb.bookSourceDao.allGroups
+            }
+            selector(groups) { _, s, _ ->
+                sendText(s)
+            }
+        }
+    }
+
     override fun helpActions(): List<SelectItem<String>> {
-        return arrayListOf(
+        val helpActions = arrayListOf(
             SelectItem("插入URL参数", "urlOption"),
             SelectItem("书源教程", "ruleHelp"),
             SelectItem("js教程", "jsHelp"),
             SelectItem("正则教程", "regexHelp"),
-            SelectItem("选择文件", "selectFile"),
         )
+        val view = window.decorView.findFocus()
+        if (view is EditText) {
+            when (view.getTag(R.id.tag)) {
+                "bookSourceGroup" -> {
+                    helpActions.add(
+                        SelectItem("插入分组", "addGroup")
+                    )
+                }
+                else -> {
+                    helpActions.add(
+                        SelectItem("选择文件", "selectFile")
+                    )
+                }
+            }
+        }
+        return helpActions
     }
 
     override fun onHelpActionSelect(action: String) {
         when (action) {
-            "urlOption" -> UrlOptionDialog(this) {
-                sendText(it)
-            }.show()
+            "addGroup" -> alertGroups()
+            "urlOption" -> UrlOptionDialog(this) { sendText(it) }.show()
             "ruleHelp" -> showHelp("ruleHelp")
             "jsHelp" -> showHelp("jsHelp")
             "regexHelp" -> showHelp("regexHelp")

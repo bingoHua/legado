@@ -9,8 +9,6 @@ import android.view.*
 import android.webkit.*
 import androidx.activity.viewModels
 import androidx.core.view.size
-import androidx.webkit.WebSettingsCompat
-import androidx.webkit.WebViewFeature
 import io.legado.app.R
 import io.legado.app.base.VMBaseActivity
 import io.legado.app.constant.AppConst
@@ -127,9 +125,9 @@ class ReadRssActivity : VMBaseActivity<ActivityRssReadBinding, ReadRssViewModel>
             domStorageEnabled = true
             allowContentAccess = true
             builtInZoomControls = true
+            setDarkeningAllowed(AppConfig.isNightTheme)
         }
         binding.webView.addJavascriptInterface(this, "app")
-        upWebViewTheme()
         binding.webView.setOnLongClickListener {
             val hitTestResult = binding.webView.hitTestResult
             if (hitTestResult.type == WebView.HitTestResult.IMAGE_TYPE ||
@@ -216,25 +214,6 @@ class ReadRssActivity : VMBaseActivity<ActivityRssReadBinding, ReadRssViewModel>
         }
     }
 
-    private fun upWebViewTheme() {
-        if (AppConfig.isNightTheme) {
-            if (WebViewFeature.isFeatureSupported(WebViewFeature.FORCE_DARK_STRATEGY)) {
-                @Suppress("DEPRECATION")
-                WebSettingsCompat.setForceDarkStrategy(
-                    binding.webView.settings,
-                    WebSettingsCompat.DARK_STRATEGY_PREFER_WEB_THEME_OVER_USER_AGENT_DARKENING
-                )
-            }
-            if (WebViewFeature.isFeatureSupported(WebViewFeature.FORCE_DARK)) {
-                @Suppress("DEPRECATION")
-                WebSettingsCompat.setForceDark(
-                    binding.webView.settings,
-                    WebSettingsCompat.FORCE_DARK_ON
-                )
-            }
-        }
-    }
-
     override fun upStarMenu() {
         if (viewModel.rssStar != null) {
             starMenuItem?.setIcon(R.drawable.ic_star)
@@ -288,16 +267,15 @@ class ReadRssActivity : VMBaseActivity<ActivityRssReadBinding, ReadRssViewModel>
 
     @SuppressLint("SetJavaScriptEnabled")
     private fun readAloud() {
-        if (viewModel.textToSpeech?.isSpeaking == true) {
-            viewModel.textToSpeech?.stop()
+        if (viewModel.tts?.isSpeaking == true) {
+            viewModel.tts?.stop()
             upTtsMenu(false)
         } else {
             binding.webView.settings.javaScriptEnabled = true
             binding.webView.evaluateJavascript("document.documentElement.outerHTML") {
                 val html = StringEscapeUtils.unescapeJson(it)
                     .replace("^\"|\"$".toRegex(), "")
-                Jsoup.parse(html).text()
-                viewModel.readAloud(Jsoup.parse(html).textArray())
+                viewModel.readAloud(Jsoup.parse(html).textArray().joinToString("\n"))
             }
         }
     }
@@ -340,7 +318,7 @@ class ReadRssActivity : VMBaseActivity<ActivityRssReadBinding, ReadRssViewModel>
             return true
         }
 
-        @Suppress("DEPRECATION", "OVERRIDE_DEPRECATION")
+        @Suppress("DEPRECATION", "OVERRIDE_DEPRECATION", "KotlinRedundantDiagnosticSuppress")
         override fun shouldOverrideUrlLoading(view: WebView?, url: String?): Boolean {
             url?.let {
                 return shouldOverrideUrlLoading(Uri.parse(it))

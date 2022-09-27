@@ -10,6 +10,7 @@ import androidx.appcompat.widget.SearchView
 import io.legado.app.R
 import io.legado.app.base.VMBaseActivity
 import io.legado.app.databinding.ActivitySourceDebugBinding
+import io.legado.app.help.source.exploreKinds
 import io.legado.app.lib.theme.accentColor
 import io.legado.app.lib.theme.primaryColor
 import io.legado.app.ui.qrcode.QrCodeResult
@@ -88,16 +89,6 @@ class BookSourceDebugActivity : VMBaseActivity<ActivitySourceDebugBinding, BookS
                 binding.textMy.text = it
             }
         }
-        viewModel.bookSource?.exploreKinds?.firstOrNull {
-            !it.url.isNullOrBlank()
-        }?.let {
-            binding.textFx.text = "${it.title}::${it.url}"
-            if (it.title.startsWith("ERROR:")) {
-                adapter.addItem("获取发现出错\n${it.url}")
-                openOrCloseHelp(false)
-                searchView.clearFocus()
-            }
-        }
         binding.textMy.onClick {
             searchView.setQuery(binding.textMy.text, true)
         }
@@ -135,6 +126,18 @@ class BookSourceDebugActivity : VMBaseActivity<ActivitySourceDebugBinding, BookS
                     searchView.setQuery("--$query", true)
                 } else {
                     searchView.setQuery(query, true)
+                }
+            }
+        }
+        launch {
+            viewModel.bookSource?.exploreKinds()?.firstOrNull {
+                !it.url.isNullOrBlank()
+            }?.let {
+                binding.textFx.text = "${it.title}::${it.url}"
+                if (it.title.startsWith("ERROR:")) {
+                    adapter.addItem("获取发现出错\n${it.url}")
+                    openOrCloseHelp(false)
+                    searchView.clearFocus()
                 }
             }
         }

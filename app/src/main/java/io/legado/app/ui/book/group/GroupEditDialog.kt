@@ -29,7 +29,11 @@ class GroupEditDialog() : BaseDialogFragment(R.layout.dialog_book_group_edit) {
     val selectImage = registerForActivityResult(SelectImageContract()) {
         readUri(it?.uri) { fileDoc, inputStream ->
             var file = requireContext().externalFiles
-            file = FileUtils.createFileIfNotExist(file, "covers", fileDoc.name)
+            val suffix = fileDoc.name.substringAfterLast(".")
+            val fileName = it.uri!!.inputStream(requireContext())!!.use {
+                MD5Utils.md5Encode(it) + ".$suffix"
+            }
+            file = FileUtils.createFileIfNotExist(file, "covers", fileName)
             FileOutputStream(file).use { outputStream ->
                 inputStream.copyTo(outputStream)
             }
@@ -47,6 +51,7 @@ class GroupEditDialog() : BaseDialogFragment(R.layout.dialog_book_group_edit) {
         @Suppress("DEPRECATION")
         bookGroup = arguments?.getParcelable("group")
         bookGroup?.let {
+            binding.btnDelete.visible(it.groupId > 0)
             binding.tieGroupName.setText(it.groupName)
             binding.ivCover.load(it.cover)
         } ?: let {

@@ -14,7 +14,6 @@ import io.legado.app.data.appDb
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookChapter
 import io.legado.app.data.entities.BookProgress
-import io.legado.app.data.entities.BookSource
 import io.legado.app.exception.NoStackTraceException
 import io.legado.app.help.AppWebDav
 import io.legado.app.help.BookHelp
@@ -93,7 +92,7 @@ class ReadBookViewModel(application: Application) : BaseViewModel(application) {
             if (ReadBook.durChapterIndex > ReadBook.chapterSize - 1) {
                 ReadBook.durChapterIndex = ReadBook.chapterSize - 1
             }
-            ReadBook.loadContent(resetPageOffset = isSameBook)
+            ReadBook.loadContent(resetPageOffset = false)
         }
         if (!isSameBook || !BaseReadAloudService.isRun) {
             syncBookProgress(book)
@@ -210,20 +209,11 @@ class ReadBookViewModel(application: Application) : BaseViewModel(application) {
     /**
      * 换源
      */
-    fun changeTo(source: BookSource, book: Book, toc: List<BookChapter>) {
+    fun changeTo(book: Book, toc: List<BookChapter>) {
         changeSourceCoroutine?.cancel()
         changeSourceCoroutine = execute {
             ReadBook.upMsg(context.getString(R.string.loading))
             ReadBook.book?.changeTo(book, toc)
-            val nextChapter = toc.getOrElse(book.durChapterIndex) {
-                toc.first()
-            }
-            WebBook.getContentAwait(
-                bookSource = source,
-                book = book,
-                bookChapter = toc[book.durChapterIndex],
-                nextChapterUrl = nextChapter.url
-            )
             appDb.bookDao.insert(book)
             appDb.bookChapterDao.insert(*toc.toTypedArray())
             ReadBook.resetData(book)
@@ -250,11 +240,25 @@ class ReadBookViewModel(application: Application) : BaseViewModel(application) {
                         WebBook.getBookInfoAwait(source, book)
                     }
                     val toc = WebBook.getChapterListAwait(source, book).getOrThrow()
-                    changeTo(source, book, toc)
-                    return@execute
+                    val chapter = toc.getOrElse(book.durChapterIndex) {
+                        toc.last()
+                    }
+                    val nextChapter = toc.getOrElse(chapter.index) {
+                        toc.first()
+                    }
+                    kotlin.runCatching {
+                        WebBook.getContentAwait(
+                            bookSource = source,
+                            book = book,
+                            bookChapter = chapter,
+                            nextChapterUrl = nextChapter.url
+                        )
+                        changeTo(book, toc)
+                        return@execute
+                    }
                 }
             }
-            throw NoStackTraceException("没有搜索到 ${name}(${author})")
+            throw NoStackTraceException("没有合适书源")
         }.onStart {
             ReadBook.upMsg(context.getString(R.string.source_auto_changing))
         }.onError {
@@ -384,7 +388,7 @@ class ReadBookViewModel(application: Application) : BaseViewModel(application) {
 
         // calculate search result's lineIndex
         val currentPage = pages[pageIndex]
-        val curTextLines = currentPage.textLines
+        val curTextLines = currentPage.lines
         var lineIndex = 0
         var curLine = curTextLines[lineIndex]
         length = length - currentPage.text.length + curLine.text.length
@@ -397,7 +401,7 @@ class ReadBookViewModel(application: Application) : BaseViewModel(application) {
         }
 
         // charIndex
-        val currentLine = currentPage.textLines[lineIndex]
+        val currentLine = currentPage.lines[lineIndex]
         var curLineLength = currentLine.text.length
         if (currentLine.isParagraphEnd) curLineLength++
         length -= curLineLength
@@ -411,7 +415,7 @@ class ReadBookViewModel(application: Application) : BaseViewModel(application) {
             charIndex2 = charIndex + queryLength - curLineLength - 1
         }
         // changePage
-        if ((lineIndex + addLine + 1) > currentPage.textLines.size) {
+        if ((lineIndex + addLine + 1) > currentPage.lines.size) {
             addLine = -1
             charIndex2 = charIndex + queryLength - curLineLength - 1
         }

@@ -11,7 +11,6 @@ import io.legado.app.R
 import io.legado.app.constant.AppLog
 import io.legado.app.constant.AppPattern
 import io.legado.app.constant.EventBus
-import io.legado.app.data.entities.HttpTTS
 import io.legado.app.exception.ConcurrentException
 import io.legado.app.exception.NoStackTraceException
 import io.legado.app.help.config.AppConfig
@@ -85,6 +84,7 @@ class HttpReadAloudService : BaseReadAloudService(),
                 }
             }.onFailure {
                 toastOnUi("朗读出错:${it.localizedMessage}")
+                AppLog.put("朗读出错:${it.localizedMessage}", it)
             }
         }
     }
@@ -124,7 +124,15 @@ class HttpReadAloudService : BaseReadAloudService(),
                             playAudio(file)
                         }
                     } else if (speakText.isEmpty()) {
+                        AppLog.put(
+                            "阅读段落内容为空，使用无声音频代替。\n朗读文本：$content"
+                        )
                         createSilentSound(fileName)
+                        if (index == nowSpeak) {
+                            val file = getSpeakFileAsMd5(fileName)
+                            playerQueue[index] = file
+                            playAudio(file)
+                        }
                         return@forEachIndexed
                     } else {
                         downloadSingleFile(httpTts, speakText, fileName, index)
@@ -181,14 +189,14 @@ class HttpReadAloudService : BaseReadAloudService(),
                 is CancellationException -> Unit
                 is ConcurrentException -> {
                     delay(it.waitTime.toLong())
-                    downloadSingleFile(httpTts,speakText,fileName,index)
+                    downloadSingleFile(httpTts, speakText, fileName, index)
                 }
                 is ScriptException, is WrappedException -> {
                     AppLog.put("js错误\n${it.localizedMessage}", it)
                     toastOnUi("js错误\n${it.localizedMessage}")
                     it.printOnDebug()
                     cancel()
-                    pauseReadAloud(true)
+                    pauseReadAloud()
                 }
                 is SocketTimeoutException, is ConnectException -> {
                     downloadErrorNo++
@@ -196,9 +204,9 @@ class HttpReadAloudService : BaseReadAloudService(),
                         val msg = "tts超时或连接错误超过5次\n${it.localizedMessage}"
                         AppLog.put(msg, it)
                         toastOnUi(msg)
-                        pauseReadAloud(true)
+                        pauseReadAloud()
                     } else {
-                        downloadSingleFile(httpTts,speakText,fileName,index)
+                        downloadSingleFile(httpTts, speakText, fileName, index)
                     }
                 }
                 else -> {
@@ -206,7 +214,7 @@ class HttpReadAloudService : BaseReadAloudService(),
                     val msg = "tts下载错误\n${it.localizedMessage}"
                     AppLog.put(msg, it)
                     it.printOnDebug()
-                    downloadSingleFile(httpTts,speakText,fileName,index)
+                    downloadSingleFile(httpTts, speakText, fileName, index)
                 }
             }
         }
@@ -260,8 +268,10 @@ class HttpReadAloudService : BaseReadAloudService(),
     private fun removeCacheFile() {
         val titleMd5 = MD5Utils.md5Encode16(textChapter?.title ?: "")
         FileUtils.listDirsAndFiles(ttsFolderPath)?.forEach {
-            if (!it.name.startsWith(titleMd5)
-                && System.currentTimeMillis() - it.lastModified() > 600000
+            val isSilentSound = it.length() == 2160L
+            if ((!it.name.startsWith(titleMd5)
+                        && System.currentTimeMillis() - it.lastModified() > 600000)
+                || isSilentSound
             ) {
                 FileUtils.delete(it.absolutePath)
             }
@@ -269,8 +279,8 @@ class HttpReadAloudService : BaseReadAloudService(),
     }
 
 
-    override fun pauseReadAloud(pause: Boolean) {
-        super.pauseReadAloud(pause)
+    override fun pauseReadAloud(abandonFocus: Boolean) {
+        super.pauseReadAloud(abandonFocus)
         kotlin.runCatching {
             playIndexJob?.cancel()
             exoPlayer.pause()
@@ -349,6 +359,7 @@ class HttpReadAloudService : BaseReadAloudService(),
         playErrorNo++
         if (playErrorNo >= 5) {
             toastOnUi("朗读连续5次错误, 最后一次错误代码(${error.localizedMessage})")
+            AppLog.put("朗读连续5次错误, 最后一次错误代码(${error.localizedMessage})", error)
             ReadAloud.pause(this)
         } else {
             playNext()

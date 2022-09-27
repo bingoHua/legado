@@ -14,16 +14,19 @@ import androidx.recyclerview.widget.RecyclerView
 import io.legado.app.R
 import io.legado.app.base.VMBaseFragment
 import io.legado.app.constant.AppLog
-import io.legado.app.constant.AppPattern
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.BookSource
 import io.legado.app.databinding.FragmentExploreBinding
 import io.legado.app.help.config.AppConfig
+import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.theme.primaryColor
 import io.legado.app.lib.theme.primaryTextColor
 import io.legado.app.ui.book.explore.ExploreShowActivity
 import io.legado.app.ui.book.source.edit.BookSourceEditActivity
-import io.legado.app.utils.*
+import io.legado.app.utils.applyTint
+import io.legado.app.utils.cnCompare
+import io.legado.app.utils.setEdgeEffectColor
+import io.legado.app.utils.startActivity
 import io.legado.app.utils.viewbindingdelegate.viewBinding
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -104,11 +107,9 @@ class ExploreFragment : VMBaseFragment<ExploreViewModel>(R.layout.fragment_explo
 
     private fun initGroupData() {
         launch {
-            appDb.bookSourceDao.flowExploreGroup().conflate().collect {
+            appDb.bookSourceDao.flowExploreGroups().conflate().collect {
                 groups.clear()
-                it.map { group ->
-                    groups.addAll(group.splitNotBlank(AppPattern.splitGroupRegex))
-                }
+                groups.addAll(it)
                 upGroupsMenu()
             }
         }
@@ -156,10 +157,6 @@ class ExploreFragment : VMBaseFragment<ExploreViewModel>(R.layout.fragment_explo
         }
     }
 
-    override fun refreshData() {
-        upExploreData(searchView.query?.toString())
-    }
-
     override fun scrollTo(pos: Int) {
         (binding.rvFind.layoutManager as LinearLayoutManager).scrollToPositionWithOffset(pos, 0)
     }
@@ -181,6 +178,16 @@ class ExploreFragment : VMBaseFragment<ExploreViewModel>(R.layout.fragment_explo
 
     override fun toTop(source: BookSource) {
         viewModel.topSource(source)
+    }
+
+    override fun deleteSource(source: BookSource) {
+        alert(R.string.draw) {
+            setMessage(getString(R.string.sure_del) + "\n" + source.bookSourceName)
+            noButton()
+            yesButton {
+                viewModel.deleteSource(source)
+            }
+        }
     }
 
     fun compressExplore() {
