@@ -11,6 +11,7 @@ import io.legado.app.R
 import io.legado.app.constant.AppLog
 import io.legado.app.constant.AppPattern
 import io.legado.app.constant.EventBus
+import io.legado.app.data.entities.HttpTTS
 import io.legado.app.exception.ConcurrentException
 import io.legado.app.exception.NoStackTraceException
 import io.legado.app.help.config.AppConfig
@@ -48,7 +49,7 @@ class HttpReadAloudService : BaseReadAloudService(),
     private var downloadTaskIsActive = false
     private var downloadErrorNo: Int = 0
     private var playErrorNo = 0
-    private var playerTask : Coroutine<*>? = null
+    private var playerTask: Coroutine<*>? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -148,7 +149,12 @@ class HttpReadAloudService : BaseReadAloudService(),
         }
     }
 
-    private suspend fun downloadSingleFile(httpTts : HttpTTS,speakText: String,fileName: String,index: Int) {
+    private suspend fun downloadSingleFile(
+        httpTts: HttpTTS,
+        speakText: String,
+        fileName: String,
+        index: Int
+    ) {
         runCatching {
             val analyzeUrl = AnalyzeUrl(
                 httpTts.url,
