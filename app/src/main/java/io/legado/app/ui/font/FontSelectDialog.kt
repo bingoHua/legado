@@ -9,6 +9,7 @@ import androidx.documentfile.provider.DocumentFile
 import androidx.recyclerview.widget.LinearLayoutManager
 import io.legado.app.R
 import io.legado.app.base.BaseDialogFragment
+import io.legado.app.constant.AppLog
 import io.legado.app.constant.PreferKey
 import io.legado.app.databinding.DialogFontSelectBinding
 import io.legado.app.help.config.AppConfig
@@ -17,13 +18,16 @@ import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.permission.Permissions
 import io.legado.app.lib.permission.PermissionsCompat
 import io.legado.app.lib.theme.primaryColor
-import io.legado.app.ui.document.HandleFileContract
+import io.legado.app.ui.file.HandleFileContract
 import io.legado.app.utils.*
 import io.legado.app.utils.viewbindingdelegate.viewBinding
 import kotlinx.coroutines.Dispatchers.Main
 import kotlinx.coroutines.launch
 import java.io.File
 
+/**
+ * 字体选择对话框
+ */
 class FontSelectDialog : BaseDialogFragment(R.layout.dialog_font_select),
     Toolbar.OnMenuItemClickListener,
     FontAdapter.CallBack {
@@ -35,11 +39,11 @@ class FontSelectDialog : BaseDialogFragment(R.layout.dialog_font_select),
     }
     private val selectFontDir = registerForActivityResult(HandleFileContract()) {
         it.uri?.let { uri ->
-            if (uri.toString().isContentScheme()) {
+            if (uri.isContentScheme()) {
                 putPrefString(PreferKey.fontFolder, uri.toString())
                 val doc = DocumentFile.fromTreeUri(requireContext(), uri)
                 if (doc != null) {
-                    loadFontFiles(doc)
+                    loadFontFiles(FileDoc.fromDocumentFile(doc))
                 } else {
                     RealPathUtil.getPath(requireContext(), uri)?.let { path ->
                         loadFontFilesByPermission(path)
@@ -75,7 +79,7 @@ class FontSelectDialog : BaseDialogFragment(R.layout.dialog_font_select),
             if (fontPath.isContentScheme()) {
                 val doc = DocumentFile.fromTreeUri(requireContext(), Uri.parse(fontPath))
                 if (doc?.canRead() == true) {
-                    loadFontFiles(doc)
+                    loadFontFiles(FileDoc.fromDocumentFile(doc))
                 } else {
                     openFolder()
                 }
@@ -117,43 +121,33 @@ class FontSelectDialog : BaseDialogFragment(R.layout.dialog_font_select),
 
     private fun getLocalFonts(): ArrayList<FileDoc> {
         val path = FileUtils.getPath(requireContext().externalFiles, "font")
-        return DocumentUtils.listFiles(path) {
+        return File(path).listFileDocs {
             it.name.matches(fontRegex)
         }
     }
 
-    private fun loadFontFiles(doc: DocumentFile) {
-        execute {
-            val fontItems = DocumentUtils.listFiles(doc.uri) {
-                it.name.matches(fontRegex)
-            }
-            mergeFontItems(fontItems, getLocalFonts())
-        }.onSuccess {
-            adapter.setItems(it)
-        }.onError {
-            toastOnUi("getFontFiles:${it.localizedMessage}")
-        }
-    }
-
     private fun loadFontFilesByPermission(path: String) {
-        PermissionsCompat.Builder(this@FontSelectDialog)
+        PermissionsCompat.Builder()
             .addPermissions(*Permissions.Group.STORAGE)
             .rationale(R.string.tip_perm_request_storage)
             .onGranted {
-                loadFontFiles(path)
+                loadFontFiles(
+                    FileDoc.fromFile(File(path))
+                )
             }
             .request()
     }
 
-    private fun loadFontFiles(path: String) {
+    private fun loadFontFiles(fileDoc: FileDoc) {
         execute {
-            val fontItems = DocumentUtils.listFiles(path) {
+            val fontItems = fileDoc.list {
                 it.name.matches(fontRegex)
-            }
+            } ?: ArrayList()
             mergeFontItems(fontItems, getLocalFonts())
         }.onSuccess {
             adapter.setItems(it)
         }.onError {
+            AppLog.put("加载字体文件失败\n${it.localizedMessage}", it)
             toastOnUi("getFontFiles:${it.localizedMessage}")
         }
     }

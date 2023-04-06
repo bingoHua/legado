@@ -3,8 +3,8 @@ package io.legado.app.model.analyzeRule
 import android.text.TextUtils
 import androidx.annotation.Keep
 import com.script.SimpleBindings
-import io.legado.app.constant.AppConst.SCRIPT_ENGINE
 import io.legado.app.constant.AppPattern.JS_PATTERN
+import io.legado.app.constant.SCRIPT_ENGINE
 import io.legado.app.data.entities.*
 import io.legado.app.help.CacheManager
 import io.legado.app.help.JsExtensions
@@ -142,8 +142,19 @@ class AnalyzeRule(
         val content = mContent ?: this.content
         if (content != null && ruleList.isNotEmpty()) {
             result = content
-            if (content is NativeObject) {
-                result = content[ruleList[0].rule]?.toString()
+            if (result is NativeObject) {
+                val sourceRule = ruleList.first()
+                putRule(sourceRule.putMap)
+                sourceRule.makeUpRule(result)
+                result = if (sourceRule.getParamSize() > 1) {
+                    // get {{}}
+                    sourceRule.rule
+                } else {
+                    // 键值直接访问
+                    result[sourceRule.rule]?.toString()
+                }?.let {
+                    replaceRegex(it, sourceRule)
+                }
             } else {
                 for (sourceRule in ruleList) {
                     putRule(sourceRule.putMap)
@@ -201,18 +212,36 @@ class AnalyzeRule(
         return getString(ruleList, mContent, isUrl)
     }
 
+    fun getString(ruleStr: String?, unescape: Boolean): String {
+        if (TextUtils.isEmpty(ruleStr)) return ""
+        val ruleList = splitSourceRule(ruleStr)
+        return getString(ruleList, unescape = unescape)
+    }
+
     @JvmOverloads
     fun getString(
         ruleList: List<SourceRule>,
         mContent: Any? = null,
-        isUrl: Boolean = false
+        isUrl: Boolean = false,
+        unescape: Boolean = true
     ): String {
         var result: Any? = null
         val content = mContent ?: this.content
         if (content != null && ruleList.isNotEmpty()) {
             result = content
             if (result is NativeObject) {
-                result = result[ruleList[0].rule]?.toString()
+                val sourceRule = ruleList.first()
+                putRule(sourceRule.putMap)
+                sourceRule.makeUpRule(result)
+                result = if (sourceRule.getParamSize() > 1) {
+                    // get {{}}
+                    sourceRule.rule
+                } else {
+                    // 键值直接访问
+                    result[sourceRule.rule]?.toString()
+                }?.let {
+                    replaceRegex(it, sourceRule)
+                }
             } else {
                 for (sourceRule in ruleList) {
                     putRule(sourceRule.putMap)
@@ -239,13 +268,15 @@ class AnalyzeRule(
             }
         }
         if (result == null) result = ""
-        val str = kotlin.runCatching {
-            Entities.unescape(result.toString())
-        }.onFailure {
-            log("Entities.unescape() error\n${it.localizedMessage}")
-        }.getOrElse {
-            result.toString()
-        }
+        val str = if (unescape) {
+            kotlin.runCatching {
+                Entities.unescape(result.toString())
+            }.onFailure {
+                log("Entities.unescape() error\n${it.localizedMessage}")
+            }.getOrElse {
+                result.toString()
+            }
+        } else result.toString()
         if (isUrl) {
             return if (str.isBlank()) {
                 baseUrl ?: ""
@@ -604,19 +635,30 @@ class AnalyzeRule(
                     || ruleStr.startsWith("$[")
                     || ruleStr.startsWith("//")
         }
+
+        fun getParamSize(): Int {
+            return ruleParam.size
+        }
     }
 
     enum class Mode {
         XPath, Json, Default, Js, Regex
     }
 
+    /**
+     * 保存数据
+     */
     fun put(key: String, value: String): String {
         chapter?.putVariable(key, value)
             ?: book?.putVariable(key, value)
             ?: ruleData?.putVariable(key, value)
+            ?: source?.put(key, value)
         return value
     }
 
+    /**
+     * 获取保存的数据
+     */
     fun get(key: String): String {
         when (key) {
             "bookName" -> book?.let {
@@ -626,9 +668,10 @@ class AnalyzeRule(
                 return it.title
             }
         }
-        return chapter?.getVariable(key)
-            ?: book?.getVariable(key)
-            ?: ruleData?.getVariable(key)
+        return chapter?.getVariable(key)?.takeIf { it.isNotEmpty() }
+            ?: book?.getVariable(key)?.takeIf { it.isNotEmpty() }
+            ?: ruleData?.getVariable(key)?.takeIf { it.isNotEmpty() }
+            ?: source?.get(key)?.takeIf { it.isNotEmpty() }
             ?: ""
     }
 
@@ -658,7 +701,12 @@ class AnalyzeRule(
     /**
      * js实现跨域访问,不能删
      */
-    override fun ajax(urlStr: String): String? {
+    override fun ajax(url: Any): String? {
+        val urlStr = if (url is List<*>) {
+            url.firstOrNull().toString()
+        } else {
+            url.toString()
+        }
         return runBlocking {
             kotlin.runCatching {
                 val analyzeUrl = AnalyzeUrl(urlStr, source = source, ruleData = book)

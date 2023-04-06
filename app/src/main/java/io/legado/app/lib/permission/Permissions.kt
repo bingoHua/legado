@@ -1,7 +1,11 @@
 package io.legado.app.lib.permission
 
+import android.os.Build
+
 @Suppress("unused")
 object Permissions {
+
+    const val POST_NOTIFICATIONS = "android.permission.POST_NOTIFICATIONS"
 
     const val READ_CALENDAR = "android.permission.READ_CALENDAR"
     const val WRITE_CALENDAR = "android.permission.WRITE_CALENDAR"
@@ -35,11 +39,16 @@ object Permissions {
 
     const val READ_EXTERNAL_STORAGE = "android.permission.READ_EXTERNAL_STORAGE"
     const val WRITE_EXTERNAL_STORAGE = "android.permission.WRITE_EXTERNAL_STORAGE"
+    const val MANAGE_EXTERNAL_STORAGE = "android.permission.MANAGE_EXTERNAL_STORAGE"
 
     const val ACCESS_MEDIA_LOCATION = "android.permission.ACCESS_MEDIA_LOCATION"
 
     object Group {
-        val STORAGE = arrayOf(READ_EXTERNAL_STORAGE, WRITE_EXTERNAL_STORAGE)
+        val STORAGE = if (isManageExternalStorage()) {
+            arrayOf(MANAGE_EXTERNAL_STORAGE)
+        } else {
+            arrayOf(READ_EXTERNAL_STORAGE, WRITE_EXTERNAL_STORAGE)
+        }
 
         val CAMERA = arrayOf(Permissions.CAMERA)
 
@@ -70,5 +79,9 @@ object Permissions {
             RECEIVE_WAP_PUSH,
             RECEIVE_MMS
         )
+    }
+
+    fun isManageExternalStorage(): Boolean {
+        return Build.VERSION.SDK_INT >= Build.VERSION_CODES.R
     }
 }

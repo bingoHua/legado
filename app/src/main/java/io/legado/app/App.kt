@@ -1,5 +1,6 @@
 package io.legado.app
 
+import android.app.Application
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
@@ -7,7 +8,6 @@ import android.content.res.AssetManager
 import android.content.pm.ActivityInfo
 import android.content.res.Configuration
 import android.os.Build
-import androidx.multidex.MultiDexApplication
 import com.github.liuyueyi.quick.transfer.ChineseUtils
 import com.github.liuyueyi.quick.transfer.constants.TransType
 import com.jeremyliao.liveeventbus.LiveEventBus
@@ -18,20 +18,23 @@ import io.legado.app.constant.AppConst.channelIdWeb
 import io.legado.app.constant.PreferKey
 import io.legado.app.data.appDb
 import io.legado.app.help.*
+import io.legado.app.help.book.BookHelp
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.ThemeConfig.applyDayNight
 import io.legado.app.help.coroutine.Coroutine
-import io.legado.app.help.http.cronet.CronetLoader
+import io.legado.app.help.http.Cronet
 import io.legado.app.model.BookCover
 import io.legado.app.utils.defaultSharedPreferences
 import io.legado.app.utils.getPrefBoolean
+import kotlinx.coroutines.launch
+import splitties.init.appCtx
 import splitties.systemservices.notificationManager
 import java.io.FileOutputStream
 import java.io.IOException
 import java.io.InputStream
 import java.util.concurrent.TimeUnit
 
-class App : MultiDexApplication() {
+class App : Application() {
 
     private lateinit var oldConfig: Configuration
 
@@ -40,7 +43,7 @@ class App : MultiDexApplication() {
         oldConfig = Configuration(resources.configuration)
         CrashHandler(this)
         //预下载Cronet so
-        CronetLoader.preDownload()
+        Cronet.preDownload()
         createNotificationChannels()
         applyDayNight(this)
         LiveEventBus.config()
@@ -49,7 +52,9 @@ class App : MultiDexApplication() {
         registerActivityLifecycleCallbacks(LifecycleHelp)
         copyAssetsFile("ssml.xml")
         defaultSharedPreferences.registerOnSharedPreferenceChangeListener(AppConfig)
+        DefaultData.upVersion()
         Coroutine.async {
+            launch { installGmsTlsProvider(appCtx) }
             //初始化封面
             BookCover.toString()
             //清除过期数据
@@ -66,7 +71,7 @@ class App : MultiDexApplication() {
                 2 -> ChineseUtils.preLoad(true, TransType.SIMPLE_TO_TRADITIONAL)
             }
             //同步阅读记录
-            if (AppWebDav.syncBookProgress) {
+            if (AppConfig.syncBookProgress) {
                 AppWebDav.downloadAllBookProgress()
             }
         }
@@ -115,6 +120,31 @@ class App : MultiDexApplication() {
             applyDayNight(this)
         }
         oldConfig = Configuration(newConfig)
+    }
+
+    /**
+     * 尝试在安装了GMS的设备上(GMS或者MicroG)使用GMS内置的Conscrypt
+     * 作为首选JCE提供程序，而使Okhttp在低版本Android上
+     * 能够启用TLSv1.3
+     * https://f-droid.org/zh_Hans/2020/05/29/android-updates-and-tls-connections.html
+     * https://developer.android.google.cn/reference/javax/net/ssl/SSLSocket
+     *
+     * @param context
+     * @return
+     */
+    private fun installGmsTlsProvider(context: Context) {
+        try {
+            val gms = context.createPackageContext(
+                "com.google.android.gms",
+                CONTEXT_INCLUDE_CODE or CONTEXT_IGNORE_SECURITY
+            )
+            gms.classLoader
+                .loadClass("com.google.android.gms.common.security.ProviderInstallerImpl")
+                .getMethod("insertProvider", Context::class.java)
+                .invoke(null, gms)
+        } catch (e: java.lang.Exception) {
+            e.printStackTrace()
+        }
     }
 
     /**

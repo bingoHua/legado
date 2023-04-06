@@ -1,11 +1,14 @@
 package io.legado.app.base
 
+import android.content.DialogInterface
+import android.content.DialogInterface.OnDismissListener
 import android.os.Bundle
 import android.view.View
 import androidx.annotation.LayoutRes
 import androidx.fragment.app.DialogFragment
 import androidx.fragment.app.FragmentManager
 import io.legado.app.R
+import io.legado.app.constant.AppLog
 import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.lib.theme.ThemeStore
 import kotlinx.coroutines.CoroutineScope
@@ -18,9 +21,13 @@ import kotlin.coroutines.CoroutineContext
 abstract class BaseDialogFragment(
     @LayoutRes layoutID: Int,
     private val adaptationSoftKeyboard: Boolean = false
-) : DialogFragment(layoutID),
+) : DialogFragment(layoutID), CoroutineScope by MainScope() {
 
-    CoroutineScope by MainScope() {
+    private var onDismissListener: OnDismissListener? = null
+
+    fun setOnDismissListener(onDismissListener: OnDismissListener?) {
+        this.onDismissListener = onDismissListener
+    }
 
     override fun onStart() {
         super.onStart()
@@ -48,7 +55,14 @@ abstract class BaseDialogFragment(
             //在每个add事务前增加一个remove事务，防止连续的add
             manager.beginTransaction().remove(this).commit()
             super.show(manager, tag)
+        }.onFailure {
+            AppLog.put("显示对话框失败 tag:$tag", it)
         }
+    }
+
+    override fun onDismiss(dialog: DialogInterface) {
+        super.onDismiss(dialog)
+        onDismissListener?.onDismiss(dialog)
     }
 
     override fun onDestroy() {

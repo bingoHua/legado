@@ -15,30 +15,34 @@ class GroupViewModel(application: Application) : BaseViewModel(application) {
         }
     }
 
-    fun addGroup(groupName: String, cover: String?, finally: () -> Unit) {
+    fun addGroup(
+        groupName: String,
+        bookSort: Int,
+        enableRefresh: Boolean,
+        cover: String?,
+        finally: () -> Unit
+    ) {
         execute {
+            val groupId = appDb.bookGroupDao.getUnusedId()
             val bookGroup = BookGroup(
-                groupId = appDb.bookGroupDao.getUnusedId(),
+                groupId = groupId,
                 groupName = groupName,
                 cover = cover,
+                bookSort = bookSort,
+                enableRefresh = enableRefresh,
                 order = appDb.bookGroupDao.maxOrder.plus(1)
             )
+            appDb.bookGroupDao.getByID(groupId) ?: appDb.bookDao.removeGroup(groupId)
             appDb.bookGroupDao.insert(bookGroup)
         }.onFinally {
             finally()
         }
     }
 
-    fun delGroup(vararg bookGroup: BookGroup, finally: () -> Unit) {
+    fun delGroup(bookGroup: BookGroup, finally: () -> Unit) {
         execute {
-            appDb.bookGroupDao.delete(*bookGroup)
-            bookGroup.forEach { group ->
-                val books = appDb.bookDao.getBooksByGroup(group.groupId)
-                books.forEach {
-                    it.group = it.group - group.groupId
-                }
-                appDb.bookDao.update(*books.toTypedArray())
-            }
+            appDb.bookGroupDao.delete(bookGroup)
+            appDb.bookDao.removeGroup(bookGroup.groupId)
         }.onFinally {
             finally()
         }

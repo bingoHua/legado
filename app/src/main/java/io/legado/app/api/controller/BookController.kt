@@ -2,17 +2,19 @@ package io.legado.app.api.controller
 
 import androidx.core.graphics.drawable.toBitmap
 import io.legado.app.api.ReturnData
-import io.legado.app.constant.PreferKey
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookProgress
 import io.legado.app.data.entities.BookSource
 import io.legado.app.help.AppWebDav
-import io.legado.app.help.BookHelp
 import io.legado.app.help.CacheManager
-import io.legado.app.help.ContentProcessor
+import io.legado.app.help.book.BookHelp
+import io.legado.app.help.book.ContentProcessor
+import io.legado.app.help.book.isLocal
+import io.legado.app.help.config.AppConfig
 import io.legado.app.help.glide.ImageLoader
 import io.legado.app.model.BookCover
+import io.legado.app.model.ReadBook
 import io.legado.app.model.localBook.LocalBook
 import io.legado.app.model.webBook.WebBook
 import io.legado.app.ui.book.read.page.provider.ImageProvider
@@ -37,7 +39,7 @@ object BookController {
             return if (books.isEmpty()) {
                 returnData.setErrorMsg("还没有添加小说")
             } else {
-                val data = when (appCtx.getPrefInt(PreferKey.bookshelfSort)) {
+                val data = when (AppConfig.bookshelfSort) {
                     1 -> books.sortedByDescending { it.latestChapterTime }
                     2 -> books.sortedWith { o1, o2 ->
                         o1.name.cnCompare(o2.name)
@@ -98,7 +100,7 @@ object BookController {
             }
             val book = appDb.bookDao.getBook(bookUrl)
                 ?: return returnData.setErrorMsg("bookUrl不对")
-            if (book.isLocalBook()) {
+            if (book.isLocal) {
                 val toc = LocalBook.getChapterList(book)
                 appDb.bookChapterDao.delByBook(book.bookUrl)
                 appDb.bookChapterDao.insert(*toc.toTypedArray())
@@ -171,7 +173,7 @@ object BookController {
             val contentProcessor = ContentProcessor.get(book.name, book.origin)
             content = runBlocking {
                 contentProcessor.getContent(book, chapter, content!!, includeTitle = false)
-                    .joinToString("\n")
+                    .toString()
             }
             return returnData.setData(content)
         }
@@ -182,7 +184,7 @@ object BookController {
                 WebBook.getContentAwait(bookSource, book, chapter).let {
                     val contentProcessor = ContentProcessor.get(book.name, book.origin)
                     contentProcessor.getContent(book, chapter, it, includeTitle = false)
-                        .joinToString("\n")
+                        .toString()
                 }
             }
             returnData.setData(content)
@@ -220,6 +222,13 @@ object BookController {
                     book.durChapterTime = bookProgress.durChapterTime
                     appDb.bookDao.update(book)
                     AppWebDav.uploadBookProgress(bookProgress)
+                    ReadBook.book?.let {
+                        if (it.name == bookProgress.name &&
+                            it.author == bookProgress.author
+                        ) {
+                            ReadBook.webBookProgress = bookProgress
+                        }
+                    }
                     return returnData.setData("")
                 }
             }

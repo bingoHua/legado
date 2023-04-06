@@ -6,7 +6,7 @@ import com.script.ScriptException
 import io.legado.app.R
 import io.legado.app.base.BaseService
 import io.legado.app.constant.AppConst
-import io.legado.app.constant.BookType
+import io.legado.app.constant.BookSourceType
 import io.legado.app.constant.EventBus
 import io.legado.app.constant.IntentAction
 import io.legado.app.data.appDb
@@ -15,6 +15,7 @@ import io.legado.app.data.entities.BookSource
 import io.legado.app.exception.ContentEmptyException
 import io.legado.app.exception.NoStackTraceException
 import io.legado.app.exception.TocEmptyException
+import io.legado.app.help.IntentData
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.source.exploreKinds
 import io.legado.app.model.CheckSource
@@ -31,6 +32,7 @@ import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.launch
 import org.mozilla.javascript.WrappedException
+import splitties.init.appCtx
 import java.util.concurrent.Executors
 import kotlin.math.min
 
@@ -44,7 +46,7 @@ class CheckSourceService : BaseService() {
     private val allIds = ArrayList<String>()
     private val checkedIds = ArrayList<String>()
     private var processIndex = 0
-    private var notificationMsg = ""
+    private var notificationMsg = appCtx.getString(R.string.service_starting)
 
     private val notificationBuilder by lazy {
         NotificationCompat.Builder(this, AppConst.channelIdReadAloud)
@@ -62,20 +64,14 @@ class CheckSourceService : BaseService() {
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
     }
 
-    override fun onCreate() {
-        super.onCreate()
-        notificationMsg = getString(R.string.start)
-        upNotification()
-    }
-
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
-            IntentAction.start -> intent.getStringArrayListExtra("selectIds")?.let {
+            IntentAction.start -> IntentData.get<List<String>>("checkSourceSelectedIds")?.let {
                 check(it)
             }
 
             IntentAction.resume -> upNotification()
-            else -> stopSelf()
+            IntentAction.stop -> stopSelf()
         }
         return super.onStartCommand(intent, flags, startId)
     }
@@ -214,7 +210,7 @@ class CheckSourceService : BaseService() {
                 }
                 //校验目录
                 if (CheckSource.checkCategory &&
-                    source.bookSourceType != BookType.file
+                    source.bookSourceType != BookSourceType.file
                 ) {
                     val toc = WebBook.getChapterListAwait(source, mBook).getOrThrow()
                     val nextChapterUrl = toc.getOrNull(1)?.url ?: toc.first().url
@@ -260,7 +256,7 @@ class CheckSourceService : BaseService() {
     /**
      * 更新通知
      */
-    private fun upNotification() {
+    override fun upNotification() {
         notificationBuilder.setContentText(notificationMsg)
         notificationBuilder.setProgress(allIds.size, checkedIds.size, false)
         postEvent(EventBus.CHECK_SOURCE, notificationMsg)

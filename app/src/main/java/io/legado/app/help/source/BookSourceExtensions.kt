@@ -35,8 +35,8 @@ suspend fun BookSource.exploreKinds(): List<ExploreKind> {
         withContext(Dispatchers.IO) {
             kotlin.runCatching {
                 var ruleStr = exploreUrl
-                if (exploreUrl.startsWith("<js>", false)
-                    || exploreUrl.startsWith("@js:", false)
+                if (exploreUrl.startsWith("<js>", true)
+                    || exploreUrl.startsWith("@js:", true)
                 ) {
                     ruleStr = aCache.getAsString(exploreKindsKey)
                     if (ruleStr.isNullOrBlank()) {
@@ -50,8 +50,8 @@ suspend fun BookSource.exploreKinds(): List<ExploreKind> {
                     }
                 }
                 if (ruleStr.isJsonArray()) {
-                    GSON.fromJsonArray<ExploreKind>(ruleStr).getOrThrow()?.let {
-                        kinds.addAll(it)
+                    GSON.fromJsonArray<ExploreKind?>(ruleStr).getOrThrow().let {
+                        kinds.addAll(it.filterNotNull())
                     }
                 } else {
                     ruleStr.split("(&&|\n)+".toRegex()).forEach { kindStr ->
@@ -75,4 +75,14 @@ suspend fun BookSource.clearExploreKindsCache() {
         aCache.remove(exploreKindsKey)
         exploreKindsMap.remove(getExploreKindsKey())
     }
+}
+
+fun BookSource.contains(word: String?): Boolean {
+    if (word.isNullOrEmpty()) {
+        return true
+    }
+    return bookSourceName.contains(word)
+            || bookSourceUrl.contains(word)
+            || bookSourceGroup?.contains(word) == true
+            || bookSourceComment?.contains(word) == true
 }

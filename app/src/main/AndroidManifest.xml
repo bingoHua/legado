@@ -1,20 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools"
-    package="io.legado.app">
+    xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.ACCESS_MEDIA_LOCATION" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <uses-permission android:name="android.permission.DOWNLOAD_WITHOUT_NOTIFICATION" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-permission
-        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
         tools:ignore="ScopedStorage" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
 
     <application
         android:name=".App"
@@ -111,8 +113,9 @@
         <!-- 主界面 -->
         <activity
             android:name=".ui.main.MainActivity"
-            android:configChanges="locale|keyboardHidden|orientation|screenSize|smallestScreenSize|screenLayout|uiMode"
             android:alwaysRetainTaskState="true"
+            android:configChanges="locale|keyboardHidden|orientation|screenSize|smallestScreenSize|screenLayout|uiMode"
+            android:exported="true"
             android:launchMode="singleTask" />
         <!-- 阅读界面 -->
         <activity
@@ -164,7 +167,7 @@
             android:configChanges="locale|keyboardHidden|orientation|screenSize|smallestScreenSize|screenLayout"
             android:launchMode="singleTask"
             android:windowSoftInputMode="adjustResize|stateHidden" />
-        <!-- 书源编辑 -->
+        <!-- 替换规则编辑 -->
         <activity
             android:name=".ui.replace.edit.ReplaceEditActivity"
             android:configChanges="locale|keyboardHidden|orientation|screenSize|smallestScreenSize|screenLayout"
@@ -200,7 +203,7 @@
             android:screenOrientation="behind" />
         <!-- txt目录规则管理 -->
         <activity
-            android:name=".ui.book.local.rule.TxtTocRuleActivity"
+            android:name=".ui.book.toc.rule.TxtTocRuleActivity"
             android:launchMode="singleTop"
             android:screenOrientation="behind" />
         <!-- 替换规则界面 -->
@@ -240,11 +243,11 @@
             android:launchMode="singleTop" />
         <!-- 导入书籍 -->
         <activity
-            android:name=".ui.book.local.ImportBookActivity"
+            android:name=".ui.book.import.local.ImportBookActivity"
             android:launchMode="singleTop" />
         <!-- 添加远程 -->
         <activity
-            android:name=".ui.book.remote.RemoteBookActivity"
+            android:name=".ui.book.import.remote.RemoteBookActivity"
             android:launchMode="singleTop" />
         <!-- 发现界面 -->
         <activity
@@ -269,6 +272,7 @@
         <!-- WebView界面 -->
         <activity
             android:name=".ui.browser.WebViewActivity"
+            android:configChanges="locale|keyboardHidden|orientation|screenSize|smallestScreenSize|screenLayout"
             android:launchMode="standard" />
         <!-- 书源登录 -->
         <activity
@@ -281,9 +285,19 @@
             android:name=".ui.about.ReadRecordActivity"
             android:configChanges="orientation|screenSize"
             android:hardwareAccelerated="true" />
+        <!-- 字典管理 -->
+        <activity
+            android:name=".ui.dict.rule.DictRuleActivity"
+            android:configChanges="orientation|screenSize"
+            android:hardwareAccelerated="true" />
+        <!-- 文件管理 -->
+        <activity
+            android:name=".ui.file.FileManageActivity"
+            android:configChanges="orientation|screenSize"
+            android:hardwareAccelerated="true" />
         <!-- 选择文件 -->
         <activity
-            android:name=".ui.document.HandleFileActivity"
+            android:name=".ui.file.HandleFileActivity"
             android:configChanges="orientation|screenSize"
             android:hardwareAccelerated="true"
             android:theme="@style/AppTheme.Transparent" />
@@ -329,8 +343,7 @@
             android:name=".ui.association.VerificationCodeActivity"
             android:configChanges="locale|keyboardHidden|orientation|screenSize|smallestScreenSize|screenLayout"
             android:exported="true"
-            android:theme="@style/AppTheme.Transparent">
-        </activity>
+            android:theme="@style/AppTheme.Transparent" />
         <!-- 打开文件 -->
         <activity
             android:name=".ui.association.FileAssociationActivity"
@@ -354,6 +367,8 @@
                 <data android:mimeType="application/json" />
                 <!-- EPUB -->
                 <data android:mimeType="application/epub+zip" />
+                <!-- pdf -->
+                <data android:mimeType="application/pdf" />
             </intent-filter>
             <!-- Works when an app doesn't know the media type, e.g. Dropbox -->
             <intent-filter>
@@ -370,14 +385,33 @@
                 <!-- This media type is necessary, otherwise it won't match on the file extension -->
                 <data android:mimeType="*/*" />
                 <!--TXT-->
+                <data android:pathAdvancedPattern=".*\\.[tT][xX][tT]" />
                 <data android:pathPattern=".*\\.txt" />
                 <data android:pathPattern=".*\\.TXT" />
                 <!--JSON-->
+                <data android:pathAdvancedPattern=".*\\.[jJ][sS][oO][nN]" />
                 <data android:pathPattern=".*\\.json" />
                 <data android:pathPattern=".*\\.JSON" />
                 <!-- EPUB -->
+                <data android:pathAdvancedPattern=".*\\.[eE][pP][uU][bB]" />
                 <data android:pathPattern=".*\\.epub" />
                 <data android:pathPattern=".*\\.EPUB" />
+                <!-- pdf -->
+                <data android:pathAdvancedPattern=".*\\.[pP][dD][fF]" />
+                <data android:pathPattern=".*\\.pdf" />
+                <data android:pathPattern=".*\\.PDF" />
+                <!-- zip -->
+                <data android:pathAdvancedPattern=".*\\.[zZ][iI][pP]" />
+                <data android:pathPattern=".*\\.zip" />
+                <data android:pathPattern=".*\\.ZIP" />
+                <!-- rar -->
+                <data android:pathAdvancedPattern=".*\\.[rR][aA][rR]" />
+                <data android:pathPattern=".*\\.rar" />
+                <data android:pathPattern=".*\\.RAR" />
+                <!-- 7z -->
+                <data android:pathAdvancedPattern=".*\\.7[zZ]" />
+                <data android:pathPattern=".*\\.7z" />
+                <data android:pathPattern=".*\\.7Z" />
             </intent-filter>
         </activity>
 

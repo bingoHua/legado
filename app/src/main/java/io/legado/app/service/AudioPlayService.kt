@@ -9,6 +9,7 @@ import android.graphics.BitmapFactory
 import android.media.AudioManager
 import android.net.Uri
 import android.os.Build
+import android.os.PowerManager
 import android.support.v4.media.session.MediaSessionCompat
 import android.support.v4.media.session.PlaybackStateCompat
 import androidx.core.app.NotificationCompat
@@ -36,6 +37,7 @@ import io.legado.app.utils.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.Dispatchers.Main
 import splitties.systemservices.audioManager
+import splitties.systemservices.powerManager
 
 /**
  * 音频播放服务
@@ -55,12 +57,18 @@ class AudioPlayService : BaseService(),
 
         @JvmStatic
         var timeMinute: Int = 0
-            private set
 
         var url: String = ""
             private set
     }
 
+    private val useWakeLock = AppConfig.audioPlayUseWakeLock
+    private val wakeLock by lazy {
+        powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "legado:AudioPlayService")
+            .apply {
+                this.setReferenceCounted(false)
+            }
+    }
     private val mFocusRequest: AudioFocusRequestCompat by lazy {
         MediaHelp.buildAudioFocusRequestCompat(this)
     }
@@ -85,7 +93,6 @@ class AudioPlayService : BaseService(),
     override fun onCreate() {
         super.onCreate()
         isRun = true
-        upNotification()
         exoPlayer.addListener(this)
         initMediaSession()
         initBroadcastReceiver()
@@ -120,6 +127,7 @@ class AudioPlayService : BaseService(),
 
     override fun onDestroy() {
         super.onDestroy()
+        if (useWakeLock) wakeLock.release()
         isRun = false
         abandonFocus()
         exoPlayer.release()
@@ -134,6 +142,7 @@ class AudioPlayService : BaseService(),
      * 播放音频
      */
     private fun play() {
+        if (useWakeLock) wakeLock.acquire(10 * 60 * 1000L /*10 minutes*/)
         upNotification()
         if (requestFocus()) {
             execute(context = Main) {
@@ -168,6 +177,7 @@ class AudioPlayService : BaseService(),
      * 暂停播放
      */
     private fun pause(abandonFocus: Boolean = true) {
+        if (useWakeLock) wakeLock.release()
         try {
             pause = true
             if (abandonFocus) {
@@ -189,6 +199,7 @@ class AudioPlayService : BaseService(),
      * 恢复播放
      */
     private fun resume() {
+        if (useWakeLock) wakeLock.acquire(10 * 60 * 1000L /*10 minutes*/)
         try {
             pause = false
             if (url.isEmpty()) {
@@ -483,7 +494,7 @@ class AudioPlayService : BaseService(),
     /**
      * 更新通知
      */
-    private fun upNotification() {
+    override fun upNotification() {
         execute {
             var nTitle: String = when {
                 pause -> getString(R.string.audio_pause)

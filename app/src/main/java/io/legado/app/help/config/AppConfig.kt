@@ -2,15 +2,16 @@ package io.legado.app.help.config
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.os.Build
 import io.legado.app.BuildConfig
 import io.legado.app.constant.AppConst
 import io.legado.app.constant.PreferKey
+import io.legado.app.data.appDb
 import io.legado.app.utils.*
 import splitties.init.appCtx
 
 @Suppress("MemberVisibilityCanBePrivate")
 object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
-    val isGooglePlay = appCtx.channel == "google"
     val isCronet = appCtx.getPrefBoolean(PreferKey.cronet)
     val useAntiAlias = appCtx.getPrefBoolean(PreferKey.antiAlias)
     var userAgent: String = getPrefUserAgent()
@@ -33,19 +34,19 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
             PreferKey.clickActionTC -> clickActionTC =
                 appCtx.getPrefInt(PreferKey.clickActionTC, 2)
             PreferKey.clickActionTR -> clickActionTR =
-                appCtx.getPrefInt(PreferKey.clickActionTR, 2)
+                appCtx.getPrefInt(PreferKey.clickActionTR, 1)
             PreferKey.clickActionML -> clickActionML =
                 appCtx.getPrefInt(PreferKey.clickActionML, 2)
             PreferKey.clickActionMC -> clickActionMC =
-                appCtx.getPrefInt(PreferKey.clickActionMC, 2)
+                appCtx.getPrefInt(PreferKey.clickActionMC, 0)
             PreferKey.clickActionMR -> clickActionMR =
-                appCtx.getPrefInt(PreferKey.clickActionMR, 2)
+                appCtx.getPrefInt(PreferKey.clickActionMR, 1)
             PreferKey.clickActionBL -> clickActionBL =
                 appCtx.getPrefInt(PreferKey.clickActionBL, 2)
             PreferKey.clickActionBC -> clickActionBC =
-                appCtx.getPrefInt(PreferKey.clickActionBC, 2)
+                appCtx.getPrefInt(PreferKey.clickActionBC, 1)
             PreferKey.clickActionBR -> clickActionBR =
-                appCtx.getPrefInt(PreferKey.clickActionBR, 2)
+                appCtx.getPrefInt(PreferKey.clickActionBR, 1)
             PreferKey.readBodyToLh -> ReadBookConfig.readBodyToLh =
                 appCtx.getPrefBoolean(PreferKey.readBodyToLh, true)
             PreferKey.useZhLayout -> ReadBookConfig.useZhLayout =
@@ -79,6 +80,12 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
         get() = appCtx.getPrefBoolean(PreferKey.showUnread, true)
         set(value) {
             appCtx.putPrefBoolean(PreferKey.showUnread, value)
+        }
+
+    var showLastUpdateTime: Boolean
+        get() = appCtx.getPrefBoolean(PreferKey.showLastUpdateTime, false)
+        set(value) {
+            appCtx.putPrefBoolean(PreferKey.showLastUpdateTime, value)
         }
 
     var readBrightness: Int
@@ -135,6 +142,7 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
             }
         }
 
+    // 书籍保存位置
     var defaultBookTreeUri: String?
         get() = appCtx.getPrefString(PreferKey.defaultBookTreeUri)
         set(value) {
@@ -166,6 +174,13 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
             appCtx.putPrefInt(PreferKey.threadCount, value)
         }
 
+    var remoteServerId: Long
+        get() = appCtx.getPrefLong(PreferKey.remoteServerId)
+        set(value) {
+            appCtx.putPrefLong(PreferKey.remoteServerId, value)
+        }
+
+    // 添加本地选择的目录
     var importBookPath: String?
         get() = appCtx.getPrefString("importBookPath")
         set(value) {
@@ -182,12 +197,21 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
             appCtx.putPrefBoolean(PreferKey.ttsFollowSys, value)
         }
 
+    val noAnimScrollPage: Boolean
+        get() = appCtx.getPrefBoolean(PreferKey.noAnimScrollPage, false)
+
     const val defaultSpeechRate = 5
 
     var ttsSpeechRate: Int
         get() = appCtx.getPrefInt(PreferKey.ttsSpeechRate, defaultSpeechRate)
         set(value) {
             appCtx.putPrefInt(PreferKey.ttsSpeechRate, value)
+        }
+
+    var ttsTimer: Int
+        get() = appCtx.getPrefInt(PreferKey.ttsTimer, 0)
+        set(value) {
+            appCtx.putPrefInt(PreferKey.ttsTimer, value)
         }
 
     val speechRatePlay: Int get() = if (ttsFlowSys) defaultSpeechRate else ttsSpeechRate
@@ -313,6 +337,7 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
         }
 
     val importKeepName get() = appCtx.getPrefBoolean(PreferKey.importKeepName)
+    val importKeepGroup get() = appCtx.getPrefBoolean(PreferKey.importKeepGroup)
 
     var preDownloadNum
         get() = appCtx.getPrefInt(PreferKey.preDownloadNum, 10)
@@ -320,11 +345,15 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
             appCtx.putPrefInt(PreferKey.preDownloadNum, value)
         }
 
+    val syncBookProgress get() = appCtx.getPrefBoolean(PreferKey.syncBookProgress, true)
+
     val mediaButtonOnExit get() = appCtx.getPrefBoolean("mediaButtonOnExit", true)
 
     val replaceEnableDefault get() = appCtx.getPrefBoolean(PreferKey.replaceEnableDefault, true)
 
     val webDavDir get() = appCtx.getPrefString(PreferKey.webDavDir, "legado")
+
+    val webDavDeviceName get() = appCtx.getPrefString(PreferKey.webDavDeviceName, Build.MODEL)
 
     val recordLog get() = appCtx.getPrefBoolean(PreferKey.recordLog)
 
@@ -339,6 +368,15 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
     val doublePageHorizontal: String?
         get() = appCtx.getPrefString(PreferKey.doublePageHorizontal)
 
+    val progressBarBehavior: String?
+        get() = appCtx.getPrefString(PreferKey.progressBarBehavior, "page")
+
+    var searchScope: String
+        get() = appCtx.getPrefString("searchScope") ?: ""
+        set(value) {
+            appCtx.putPrefString("searchScope", value)
+        }
+
     var searchGroup: String
         get() = appCtx.getPrefString("searchGroup") ?: ""
         set(value) {
@@ -351,10 +389,21 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
             appCtx.putPrefInt(PreferKey.pageTouchSlop, value)
         }
 
+    var bookshelfSort: Int
+        get() = appCtx.getPrefInt(PreferKey.bookshelfSort, 0)
+        set(value) {
+            appCtx.putPrefInt(PreferKey.bookshelfSort, value)
+        }
+
+    fun getBookSortByGroupId(groupId: Long): Int {
+        return appDb.bookGroupDao.getByID(groupId)?.getRealBookSort()
+            ?: bookshelfSort
+    }
+
     private fun getPrefUserAgent(): String {
         val ua = appCtx.getPrefString(PreferKey.userAgent)
         if (ua.isNullOrBlank()) {
-            return "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/" + BuildConfig.Cronet_Version + " Safari/537.36"
+            return "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/" + BuildConfig.Cronet_Main_Version + " Safari/537.36"
         }
         return ua
     }
@@ -365,15 +414,43 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
             appCtx.putPrefInt(PreferKey.bitmapCacheSize, value)
         }
 
-    var showReadTitleBarAddition : Boolean
+    var showReadTitleBarAddition: Boolean
         get() = appCtx.getPrefBoolean(PreferKey.showReadTitleAddition, true)
         set(value) {
             appCtx.putPrefBoolean(PreferKey.showReadTitleAddition, value)
         }
-    var readBarStyleFollowPage : Boolean
+    var readBarStyleFollowPage: Boolean
         get() = appCtx.getPrefBoolean(PreferKey.readBarStyleFollowPage, false)
         set(value) {
             appCtx.putPrefBoolean(PreferKey.readBarStyleFollowPage, value)
         }
+
+    var sourceEditMaxLine: Int
+        get() {
+            val maxLine = appCtx.getPrefInt(PreferKey.sourceEditMaxLine, Int.MAX_VALUE)
+            if (maxLine < 10) {
+                return Int.MAX_VALUE
+            }
+            return maxLine
+        }
+        set(value) {
+            appCtx.putPrefInt(PreferKey.sourceEditMaxLine, value)
+        }
+
+    var audioPlayUseWakeLock: Boolean
+        get() = appCtx.getPrefBoolean(PreferKey.audioPlayWakeLock)
+        set(value) {
+            appCtx.putPrefBoolean(PreferKey.audioPlayWakeLock, value)
+        }
+
+    fun detectClickArea() {
+        if (clickActionTL * clickActionTC * clickActionTR
+            * clickActionML * clickActionMC * clickActionMR
+            * clickActionBL * clickActionBC * clickActionBR != 0
+        ) {
+            appCtx.putPrefInt(PreferKey.clickActionMC, 0)
+            appCtx.toastOnUi("当前没有配置菜单区域,自动恢复中间区域为菜单.")
+        }
+    }
 }
 

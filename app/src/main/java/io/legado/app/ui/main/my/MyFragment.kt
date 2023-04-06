@@ -8,10 +8,10 @@ import android.view.View
 import androidx.preference.Preference
 import io.legado.app.R
 import io.legado.app.base.BaseFragment
+import io.legado.app.constant.AppConst
 import io.legado.app.constant.EventBus
 import io.legado.app.constant.PreferKey
 import io.legado.app.databinding.FragmentMyConfigBinding
-import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.ThemeConfig
 import io.legado.app.lib.dialogs.selector
 import io.legado.app.lib.prefs.NameListPreference
@@ -25,8 +25,11 @@ import io.legado.app.ui.about.DonateActivity
 import io.legado.app.ui.about.ReadRecordActivity
 import io.legado.app.ui.book.bookmark.AllBookmarkActivity
 import io.legado.app.ui.book.source.manage.BookSourceActivity
+import io.legado.app.ui.book.toc.rule.TxtTocRuleActivity
 import io.legado.app.ui.config.ConfigActivity
 import io.legado.app.ui.config.ConfigTag
+import io.legado.app.ui.dict.rule.DictRuleActivity
+import io.legado.app.ui.file.FileManageActivity
 import io.legado.app.ui.replace.ReplaceRuleActivity
 import io.legado.app.ui.widget.dialog.TextDialog
 import io.legado.app.utils.*
@@ -53,7 +56,7 @@ class MyFragment : BaseFragment(R.layout.fragment_my_config) {
         when (item.itemId) {
             R.id.menu_help -> {
                 val text = String(requireContext().assets.open("help/appHelp.md").readBytes())
-                showDialogFragment(TextDialog(text, TextDialog.Mode.MD))
+                showDialogFragment(TextDialog(getString(R.string.help), text, TextDialog.Mode.MD))
             }
         }
     }
@@ -67,7 +70,7 @@ class MyFragment : BaseFragment(R.layout.fragment_my_config) {
         override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
             putPrefBoolean(PreferKey.webService, WebService.isRun)
             addPreferencesFromResource(R.xml.pref_main)
-            if (AppConfig.isGooglePlay) {
+            if (AppConst.isPlayChannel) {
                 findPreference<PreferenceCategory>("aboutCategory")
                     ?.removePreferenceRecursively("donate")
             }
@@ -136,6 +139,8 @@ class MyFragment : BaseFragment(R.layout.fragment_my_config) {
             when (preference.key) {
                 "bookSourceManage" -> startActivity<BookSourceActivity>()
                 "replaceManage" -> startActivity<ReplaceRuleActivity>()
+                "dictRuleManage" -> startActivity<DictRuleActivity>()
+                "txtTocRuleManage" -> startActivity<TxtTocRuleActivity>()
                 "bookmark" -> startActivity<AllBookmarkActivity>()
                 "setting" -> startActivity<ConfigActivity> {
                     putExtra("configTag", ConfigTag.OTHER_CONFIG)
@@ -146,6 +151,7 @@ class MyFragment : BaseFragment(R.layout.fragment_my_config) {
                 "theme_setting" -> startActivity<ConfigActivity> {
                     putExtra("configTag", ConfigTag.THEME_CONFIG)
                 }
+                "fileManage" -> startActivity<FileManageActivity>()
                 "readRecord" -> startActivity<ReadRecordActivity>()
                 "donate" -> startActivity<DonateActivity>()
                 "about" -> startActivity<AboutActivity>()

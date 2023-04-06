@@ -15,14 +15,8 @@
         app:allowDividerBelow="false"
         app:iconSpaceReserved="false" />
 
-    <io.legado.app.lib.prefs.Preference
-        android:key="check_update"
-        android:title="@string/check_update"
-        app:allowDividerAbove="false"
-        app:allowDividerBelow="false"
-        app:iconSpaceReserved="false" />
-
     <io.legado.app.lib.prefs.PreferenceCategory
+        android:key="lx"
         android:title="@string/contact"
         app:allowDividerAbove="true"
         app:allowDividerBelow="false"
@@ -97,6 +91,11 @@
         <io.legado.app.lib.prefs.Preference
             android:key="crashLog"
             android:title="@string/crash_log"
+            app:iconSpaceReserved="false" />
+
+        <io.legado.app.lib.prefs.Preference
+            android:key="privacyPolicy"
+            android:title="@string/privacy_policy"
             app:iconSpaceReserved="false" />
 
         <io.legado.app.lib.prefs.Preference

@@ -186,7 +186,7 @@ val Context.sysScreenOffTime: Int
     }
 
 val Context.statusBarHeight: Int
-    @SuppressLint("DiscouragedApi")
+    @SuppressLint("DiscouragedApi", "InternalInsetResource")
     get() {
         if (Build.BOARD == "windows") {
             return 0
@@ -196,7 +196,7 @@ val Context.statusBarHeight: Int
     }
 
 val Context.navigationBarHeight: Int
-    @SuppressLint("DiscouragedApi")
+    @SuppressLint("DiscouragedApi", "InternalInsetResource")
     get() {
         val resourceId = resources.getIdentifier("navigation_bar_height", "dimen", "android")
         return resources.getDimensionPixelSize(resourceId)
@@ -304,6 +304,7 @@ fun Context.openUrl(url: String) {
         startActivity(IntentHelp.getBrowserIntent(url))
     } catch (e: Exception) {
         toastOnUi(e.localizedMessage ?: "open url error")
+        e.printOnDebug()
     }
 }
 
@@ -312,6 +313,7 @@ fun Context.openUrl(uri: Uri) {
         startActivity(IntentHelp.getBrowserIntent(uri))
     } catch (e: Exception) {
         toastOnUi(e.localizedMessage ?: "open url error")
+        e.printOnDebug()
     }
 }
 
@@ -328,6 +330,7 @@ fun Context.openFileUri(uri: Uri, type: String? = null) {
         startActivity(intent)
     } catch (e: Exception) {
         toastOnUi(e.stackTraceStr)
+        e.printOnDebug()
     }
 }
 

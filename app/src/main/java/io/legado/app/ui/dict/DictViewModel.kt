@@ -1,83 +1,37 @@
 package io.legado.app.ui.dict
 
 import android.app.Application
-import androidx.lifecycle.MutableLiveData
 import io.legado.app.base.BaseViewModel
-import io.legado.app.help.http.get
-import io.legado.app.help.http.newCallStrResponse
-import io.legado.app.help.http.okHttpClient
-import io.legado.app.utils.toastOnUi
-import org.jsoup.Jsoup
-import java.util.regex.Pattern
+import io.legado.app.data.appDb
+import io.legado.app.data.entities.DictRule
+import io.legado.app.help.coroutine.Coroutine
 
 class DictViewModel(application: Application) : BaseViewModel(application) {
 
-    var dictHtmlData: MutableLiveData<String> = MutableLiveData()
+    private var dictJob: Coroutine<String>? = null
 
-    fun dict(word: String) {
-        if (isChinese(word)) {
-            baiduDict(word)
-        } else {
-            haiciDict(word)
-        }
-
-    }
-
-    /**
-     * 海词英文词典
-     *
-     * @param word
-     */
-    private fun haiciDict(word: String) {
+    fun initData(onSuccess: (List<DictRule>) -> Unit) {
         execute {
-            val body = okHttpClient.newCallStrResponse {
-                get("https://apii.dict.cn/mini.php", mapOf(Pair("q", word)))
-            }.body
-            val jsoup = Jsoup.parse(body!!)
-            jsoup.body()
+            appDb.dictRuleDao.enabled
         }.onSuccess {
-            dictHtmlData.postValue(it.html())
-        }.onError {
-            context.toastOnUi(it.localizedMessage)
+            onSuccess.invoke(it)
         }
     }
 
-    /**
-     * 百度汉语词典
-     *
-     * @param word
-     */
-    private fun baiduDict(word: String) {
-        execute {
-            val body = okHttpClient.newCallStrResponse {
-                get("https://dict.baidu.com/s", mapOf(Pair("wd", word)))
-            }.body
-            val jsoup = Jsoup.parse(body!!)
-            jsoup.select("script").remove()//移除script
-            jsoup.select("#word-header").remove()//移除单字的header
-            jsoup.select("#term-header").remove()//移除词语的header
-            jsoup.select(".more-button").remove()//移除展示更多
-            jsoup.select(".disactive").remove()
-            jsoup.select("#download-wrapper").remove()//移除下载广告
-            jsoup.select("#right-panel").remove()//移除右侧广告
-            jsoup.select("#content-panel")
+    fun dict(
+        dictRule: DictRule,
+        word: String,
+        onFinally: (String) -> Unit
+    ) {
+        dictJob?.cancel()
+        dictJob = execute {
+            dictRule.search(word)
         }.onSuccess {
-            dictHtmlData.postValue(it.html())
+            onFinally.invoke(it)
         }.onError {
-            context.toastOnUi(it.localizedMessage)
+            onFinally.invoke(it.localizedMessage ?: "ERROR")
         }
     }
 
-    /**
-     * 判断是否包含汉字
-     * @param str
-     * @return
-     */
-
-    private fun isChinese(str: String): Boolean {
-        val p = Pattern.compile("[\u4e00-\u9fa5]")
-        val m = p.matcher(str)
-        return m.find()
-    }
 
 }

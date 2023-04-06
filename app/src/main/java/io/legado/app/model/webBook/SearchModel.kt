@@ -5,8 +5,10 @@ import io.legado.app.constant.PreferKey
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.BookSource
 import io.legado.app.data.entities.SearchBook
+import io.legado.app.exception.NoStackTraceException
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.coroutine.CompositeCoroutine
+import io.legado.app.ui.book.search.SearchScope
 import io.legado.app.utils.getPrefBoolean
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExecutorCoroutineDispatcher
@@ -50,20 +52,13 @@ class SearchModel(private val scope: CoroutineScope, private val callBack: CallB
             initSearchPool()
             mSearchId = searchId
             searchPage = 1
-            val searchGroup = AppConfig.searchGroup
             bookSourceList.clear()
             searchBooks.clear()
             callBack.onSearchSuccess(searchBooks)
-            if (searchGroup.isBlank()) {
-                bookSourceList.addAll(appDb.bookSourceDao.allEnabled)
-            } else {
-                val sources = appDb.bookSourceDao.getEnabledByGroup(searchGroup)
-                if (sources.isEmpty()) {
-                    AppConfig.searchGroup = ""
-                    bookSourceList.addAll(appDb.bookSourceDao.allEnabled)
-                } else {
-                    bookSourceList.addAll(sources)
-                }
+            bookSourceList.addAll(callBack.getSearchScope().getBookSources())
+            if (bookSourceList.isEmpty()) {
+                callBack.onSearchCancel(NoStackTraceException("启用书源为空"))
+                return
             }
         } else {
             searchPage++
@@ -203,10 +198,11 @@ class SearchModel(private val scope: CoroutineScope, private val callBack: CallB
     }
 
     interface CallBack {
+        fun getSearchScope(): SearchScope
         fun onSearchStart()
         fun onSearchSuccess(searchBooks: ArrayList<SearchBook>)
         fun onSearchFinish(isEmpty: Boolean)
-        fun onSearchCancel()
+        fun onSearchCancel(exception: Exception? = null)
     }
 
 }

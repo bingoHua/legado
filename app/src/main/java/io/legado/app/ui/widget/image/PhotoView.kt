@@ -189,11 +189,9 @@ class PhotoView @JvmOverloads constructor(
 
     @SuppressLint("UseCompatLoadingForDrawables")
     override fun setImageResource(resId: Int) {
-        var drawable: Drawable? = null
-        try {
-            drawable = resources.getDrawable(resId, null)
-        } catch (e: Exception) {
-        }
+        val drawable: Drawable? = kotlin.runCatching {
+            resources.getDrawable(resId, null)
+        }.getOrNull()
         setImageDrawable(drawable)
     }
 
@@ -1106,7 +1104,7 @@ class PhotoView @JvmOverloads constructor(
         }
 
         override fun onFling(
-            e1: MotionEvent,
+            e1: MotionEvent?,
             e2: MotionEvent,
             velocityX: Float,
             velocityY: Float
@@ -1140,8 +1138,9 @@ class PhotoView @JvmOverloads constructor(
             return super.onFling(e1, e2, velocityX, velocityY)
         }
 
+
         override fun onScroll(
-            e1: MotionEvent,
+            e1: MotionEvent?,
             e2: MotionEvent,
             distanceX: Float,
             distanceY: Float

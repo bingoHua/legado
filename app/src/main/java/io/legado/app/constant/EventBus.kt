@@ -12,7 +12,6 @@ object EventBus {
     const val BATTERY_CHANGED = "batteryChanged"
     const val TIME_CHANGED = "timeChanged"
     const val UP_CONFIG = "upConfig"
-    const val OPEN_CHAPTER = "openChapter"
     const val AUDIO_SUB_TITLE = "audioSubTitle"
     const val AUDIO_STATE = "audioState"
     const val AUDIO_PROGRESS = "audioProgress"
@@ -28,6 +27,7 @@ object EventBus {
     const val TIP_COLOR = "tipColor"
     const val SOURCE_CHANGED = "sourceChanged"
     const val SEARCH_RESULT = "searchResult"
-    const val BOOK_URL_CHANGED = "bookUrlChanged"
-    const val updateReadActionBar = "updateReadActionBar"
+    const val UPDATE_READ_ACTION_BAR = "updateReadActionBar"
+    const val UP_SEEK_BAR = "upSeekBar"
+    const val READ_ALOUD_PLAY = "readAloudPlay"
 }

@@ -2,16 +2,12 @@ package io.legado.app.ui.association
 
 import android.app.Application
 import android.net.Uri
-import androidx.documentfile.provider.DocumentFile
 import androidx.lifecycle.MutableLiveData
 import io.legado.app.constant.AppLog
+import io.legado.app.constant.AppPattern
 import io.legado.app.constant.AppPattern.bookFileRegex
-import io.legado.app.exception.NoStackTraceException
 import io.legado.app.model.localBook.LocalBook
-import io.legado.app.utils.inputStream
-import io.legado.app.utils.isJson
-import io.legado.app.utils.printOnDebug
-import java.io.File
+import io.legado.app.utils.*
 
 class FileAssociationViewModel(application: Application) : BaseAssociationViewModel(application) {
     val importBookLiveData = MutableLiveData<Uri>()
@@ -24,29 +20,18 @@ class FileAssociationViewModel(application: Application) : BaseAssociationViewMo
         execute {
             lateinit var fileName: String
             //如果是普通的url，需要根据返回的内容判断是什么
-            if (uri.scheme == "file" || uri.scheme == "content") {
-                fileName = if (uri.scheme == "file") {
-                    val file = File(uri.path.toString())
-                    file.name
-                } else {
-                    val file = DocumentFile.fromSingleUri(context, uri)
-                    if (file?.exists() != true) throw NoStackTraceException("文件不存在")
-                    file.name ?: ""
-                }
-                kotlin.runCatching {
-                    if (uri.inputStream(context).isJson()) {
-                        importJson(uri)
-                        return@execute
+            if (uri.isContentScheme() || uri.isFileScheme()) {
+                val fileDoc = FileDoc.fromUri(uri, false)
+                fileName = fileDoc.name
+                if (fileName.matches(AppPattern.archiveFileRegex)) {
+                    ArchiveUtils.deCompress(fileDoc, ArchiveUtils.TEMP_PATH) {
+                        it.matches(bookFileRegex)
+                    }.forEach {
+                        dispatch(FileDoc.fromFile(it))
                     }
-                }.onFailure {
-                    it.printOnDebug()
-                    AppLog.put("尝试导入为JSON文件失败\n${it.localizedMessage}", it)
+                } else {
+                    dispatch(fileDoc)
                 }
-                if (fileName.matches(bookFileRegex)) {
-                    importBookLiveData.postValue(uri)
-                    return@execute
-                }
-                notSupportedLiveData.postValue(Pair(uri, fileName))
             } else {
                 onLineImportLive.postValue(uri)
             }
@@ -55,6 +40,23 @@ class FileAssociationViewModel(application: Application) : BaseAssociationViewMo
             errorLive.postValue(it.localizedMessage)
             AppLog.put("无法打开文件\n${it.localizedMessage}", it)
         }
+    }
+
+    fun dispatch(fileDoc: FileDoc) {
+        kotlin.runCatching {
+            if (fileDoc.openInputStream().getOrNull().isJson()) {
+                importJson(fileDoc.uri)
+                return
+            }
+        }.onFailure {
+            it.printOnDebug()
+            AppLog.put("尝试导入为JSON文件失败\n${it.localizedMessage}", it)
+        }
+        if (fileDoc.name.matches(bookFileRegex)) {
+            importBookLiveData.postValue(fileDoc.uri)
+            return
+        }
+        notSupportedLiveData.postValue(Pair(fileDoc.uri, fileDoc.name))
     }
 
     fun importBook(uri: Uri) {

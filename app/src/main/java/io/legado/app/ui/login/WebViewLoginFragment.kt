@@ -64,14 +64,12 @@ class WebViewLoginFragment : BaseFragment(R.layout.fragment_web_view_login) {
             loadWithOverviewMode = true
             builtInZoomControls = true
             javaScriptEnabled = true
+            displayZoomControls = false
             source.getHeaderMap()[AppConst.UA_NAME]?.let {
                 userAgentString = it
             }
         }
         val cookieManager = CookieManager.getInstance()
-        source.loginUrl?.let {
-            cookieManager.setCookie(it, CookieStore.getCookie(it))
-        }
         binding.webView.webViewClient = object : WebViewClient() {
             override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                 val cookie = cookieManager.getCookie(url)

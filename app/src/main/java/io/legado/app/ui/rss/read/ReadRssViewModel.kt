@@ -21,18 +21,20 @@ import io.legado.app.model.analyzeRule.AnalyzeUrl
 import io.legado.app.model.rss.Rss
 import io.legado.app.utils.*
 import kotlinx.coroutines.Dispatchers.IO
+import splitties.init.appCtx
 import java.io.File
 import java.util.*
 
 
 class ReadRssViewModel(application: Application) : BaseViewModel(application) {
-    var callBack: CallBack? = null
     var rssSource: RssSource? = null
     var rssArticle: RssArticle? = null
     var tts: TTS? = null
     val contentLiveData = MutableLiveData<String>()
     val urlLiveData = MutableLiveData<AnalyzeUrl>()
     var rssStar: RssStar? = null
+    val upTtsMenuData = MutableLiveData<Boolean>()
+    val upStarMenuData = MutableLiveData<Boolean>()
 
     fun initData(intent: Intent) {
         execute {
@@ -71,7 +73,7 @@ class ReadRssViewModel(application: Application) : BaseViewModel(application) {
                 }
             }
         }.onFinally {
-            callBack?.upStarMenu()
+            upStarMenuData.postValue(true)
         }
     }
 
@@ -108,7 +110,10 @@ class ReadRssViewModel(application: Application) : BaseViewModel(application) {
                 } else {
                     finish.invoke()
                 }
-            } ?: finish.invoke()
+            } ?: let {
+                appCtx.toastOnUi("订阅源不存在")
+                finish.invoke()
+            }
         } ?: finish.invoke()
     }
 
@@ -122,7 +127,7 @@ class ReadRssViewModel(application: Application) : BaseViewModel(application) {
                 rssStar = it
             }
         }.onSuccess {
-            callBack?.upStarMenu()
+            upStarMenuData.postValue(true)
         }
     }
 
@@ -192,11 +197,11 @@ class ReadRssViewModel(application: Application) : BaseViewModel(application) {
             tts = TTS().apply {
                 setSpeakStateListener(object : TTS.SpeakStateListener {
                     override fun onStart() {
-                        callBack?.upTtsMenu(true)
+                        upTtsMenuData.postValue(true)
                     }
 
                     override fun onDone() {
-                        callBack?.upTtsMenu(false)
+                        upTtsMenuData.postValue(false)
                     }
                 })
             }
@@ -209,8 +214,4 @@ class ReadRssViewModel(application: Application) : BaseViewModel(application) {
         tts?.clearTts()
     }
 
-    interface CallBack {
-        fun upStarMenu()
-        fun upTtsMenu(isPlaying: Boolean)
-    }
 }

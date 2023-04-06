@@ -9,6 +9,9 @@ import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import androidx.viewbinding.ViewBinding
+import io.legado.app.help.coroutine.Coroutine
+import io.legado.app.utils.buildMainHandler
+import kotlinx.coroutines.ensureActive
 import splitties.views.onLongClick
 import java.util.*
 
@@ -30,6 +33,8 @@ abstract class RecyclerAdapter<ITEM, VB : ViewBinding>(protected val context: Co
 
     private var itemClickListener: ((holder: ItemViewHolder, item: ITEM) -> Unit)? = null
     private var itemLongClickListener: ((holder: ItemViewHolder, item: ITEM) -> Boolean)? = null
+
+    private var diffJob: Coroutine<*>? = null
 
     var itemAnimation: ItemAnimation? = null
 
@@ -103,6 +108,7 @@ abstract class RecyclerAdapter<ITEM, VB : ViewBinding>(protected val context: Co
     @Synchronized
     fun setItems(items: List<ITEM>?, itemCallback: DiffUtil.ItemCallback<ITEM>) {
         kotlin.runCatching {
+            val oldItems = this.items.toList()
             val callback = object : DiffUtil.Callback() {
                 override fun getOldListSize(): Int {
                     return itemCount
@@ -113,7 +119,7 @@ abstract class RecyclerAdapter<ITEM, VB : ViewBinding>(protected val context: Co
                 }
 
                 override fun areItemsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean {
-                    val oldItem = getItem(oldItemPosition - getHeaderCount())
+                    val oldItem = oldItems.getOrNull(oldItemPosition - getHeaderCount())
                         ?: return true
                     val newItem = items?.getOrNull(newItemPosition - getHeaderCount())
                         ?: return true
@@ -124,7 +130,7 @@ abstract class RecyclerAdapter<ITEM, VB : ViewBinding>(protected val context: Co
                     oldItemPosition: Int,
                     newItemPosition: Int
                 ): Boolean {
-                    val oldItem = getItem(oldItemPosition - getHeaderCount())
+                    val oldItem = oldItems.getOrNull(oldItemPosition - getHeaderCount())
                         ?: return true
                     val newItem = items?.getOrNull(newItemPosition - getHeaderCount())
                         ?: return true
@@ -132,22 +138,28 @@ abstract class RecyclerAdapter<ITEM, VB : ViewBinding>(protected val context: Co
                 }
 
                 override fun getChangePayload(oldItemPosition: Int, newItemPosition: Int): Any? {
-                    val oldItem = getItem(oldItemPosition - getHeaderCount())
+                    val oldItem = oldItems.getOrNull(oldItemPosition - getHeaderCount())
                         ?: return null
                     val newItem = items?.getOrNull(newItemPosition - getHeaderCount())
                         ?: return null
                     return itemCallback.getChangePayload(oldItem, newItem)
                 }
             }
-            val diffResult = DiffUtil.calculateDiff(callback)
-            if (this.items.isNotEmpty()) {
-                this.items.clear()
+            diffJob?.cancel()
+            diffJob = Coroutine.async {
+                val diffResult = DiffUtil.calculateDiff(callback)
+                ensureActive()
+                handler.post {
+                    if (this@RecyclerAdapter.items.isNotEmpty()) {
+                        this@RecyclerAdapter.items.clear()
+                    }
+                    if (items != null) {
+                        this@RecyclerAdapter.items.addAll(items)
+                    }
+                    diffResult.dispatchUpdatesTo(this@RecyclerAdapter)
+                    onCurrentListChanged()
+                }
             }
-            if (items != null) {
-                this.items.addAll(items)
-            }
-            diffResult.dispatchUpdatesTo(this)
-            onCurrentListChanged()
         }
     }
 
@@ -310,7 +322,7 @@ abstract class RecyclerAdapter<ITEM, VB : ViewBinding>(protected val context: Co
 
     fun getItemByLayoutPosition(position: Int) = items.getOrNull(getActualPosition(position))
 
-    fun getItems(): List<ITEM> = items
+    fun getItems(): List<ITEM> = items.toList()
 
     protected open fun getItemViewType(item: ITEM, position: Int) = 0
 
@@ -449,6 +461,7 @@ abstract class RecyclerAdapter<ITEM, VB : ViewBinding>(protected val context: Co
     companion object {
         private const val TYPE_HEADER_VIEW = Int.MIN_VALUE
         private const val TYPE_FOOTER_VIEW = Int.MAX_VALUE - 999
+        private val handler by lazy { buildMainHandler() }
     }
 
 }

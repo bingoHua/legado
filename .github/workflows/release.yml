@@ -19,14 +19,14 @@ jobs:
     steps:
       - id: set-ver
         run: |
-          echo "::set-output name=version::$(date -d "8 hour" -u +3.%y.%m%d%H)"
+          echo "version=$(date -d "8 hour" -u +3.%y.%m%d%H)" >> $GITHUB_OUTPUT
       - id: check
         run: |
           if [ ! -z "${{ secrets.RELEASE_KEY_STORE }}" ]; then
-            echo "::set-output name=sign::yes"
+            echo "sign=yes" >> $GITHUB_OUTPUT
           fi
           if [ ! -z "${{ secrets.SERVICE_ACCOUNT_JSON }}" ]; then
-            echo "::set-output name=play::yes"
+            echo "play=yes" >> $GITHUB_OUTPUT
           fi
 
   build:
@@ -43,21 +43,11 @@ jobs:
       play: ${{ needs.prepare.outputs.play }}
     steps:
       - uses: actions/checkout@v3
-        with:
-          fetch-depth: 1
-          
-      - uses: actions/cache@v3
-        with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: ${{ runner.os }}-legado-${{ hashFiles('**/updateLog.md') }}-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
-          restore-keys: |
-            ${{ runner.os }}-legado-${{ hashFiles('**/updateLog.md') }}-
 
       - name: Release Apk Sign
         run: |
-          echo "::set-output name=KeyStore::yes"
+          # not use this output
+          # echo "KeyStore=yes" >> $GITHUB_OUTPUT
           echo RELEASE_KEY_ALIAS='${{ secrets.RELEASE_KEY_ALIAS }}' >> gradle.properties
           echo RELEASE_KEY_PASSWORD='${{ secrets.RELEASE_KEY_PASSWORD }}' >> gradle.properties
           echo RELEASE_STORE_PASSWORD='${{ secrets.RELEASE_STORE_PASSWORD }}' >> gradle.properties
@@ -68,6 +58,9 @@ jobs:
         run: |
           echo "统一版本号"
           sed "/def version/c def version = \"${{ env.VERSION }}\"" $GITHUB_WORKSPACE/app/build.gradle  -i
+
+      - name: Set up Gradle
+        uses: gradle/gradle-build-action@v2
 
       - name: Build With Gradle
         run: |
@@ -88,7 +81,7 @@ jobs:
 
       - name: Release
         if: ${{ env.product == 'app' }}
-        uses: softprops/action-gh-release@1e07f4398721186383de40550babbdf2b84acfc5
+        uses: softprops/action-gh-release@de2c0eb89ae2a093876385947365aca7b0e5f844
         with:
           name: legado_app_${{ env.VERSION }}
           tag_name: ${{ env.VERSION }}

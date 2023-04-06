@@ -6,6 +6,7 @@ import android.view.Menu
 import android.view.MenuItem
 import android.widget.EditText
 import androidx.activity.viewModels
+import com.google.android.material.tabs.TabLayout
 import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel
 import io.legado.app.R
 import io.legado.app.base.VMBaseActivity
@@ -14,20 +15,28 @@ import io.legado.app.databinding.ActivityRssSourceEditBinding
 import io.legado.app.help.config.LocalConfig
 import io.legado.app.lib.dialogs.SelectItem
 import io.legado.app.lib.dialogs.alert
+import io.legado.app.lib.theme.accentColor
+import io.legado.app.lib.theme.backgroundColor
 import io.legado.app.lib.theme.primaryColor
-import io.legado.app.ui.document.HandleFileContract
+import io.legado.app.ui.file.HandleFileContract
 import io.legado.app.ui.login.SourceLoginActivity
 import io.legado.app.ui.qrcode.QrCodeResult
 import io.legado.app.ui.rss.source.debug.RssSourceDebugActivity
 import io.legado.app.ui.widget.dialog.TextDialog
 import io.legado.app.ui.widget.dialog.UrlOptionDialog
+import io.legado.app.ui.widget.dialog.VariableDialog
 import io.legado.app.ui.widget.keyboard.KeyboardToolPop
+import io.legado.app.ui.widget.text.EditEntity
 import io.legado.app.utils.*
 import io.legado.app.utils.viewbindingdelegate.viewBinding
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class RssSourceEditActivity :
     VMBaseActivity<ActivityRssSourceEditBinding, RssSourceEditViewModel>(false),
-    KeyboardToolPop.CallBack {
+    KeyboardToolPop.CallBack,
+    VariableDialog.Callback {
 
     override val binding by viewBinding(ActivityRssSourceEditBinding::inflate)
     override val viewModel by viewModels<RssSourceEditViewModel>()
@@ -36,6 +45,8 @@ class RssSourceEditActivity :
     }
     private val adapter by lazy { RssSourceEditAdapter() }
     private val sourceEntities: ArrayList<EditEntity> = ArrayList()
+    private val listEntities: ArrayList<EditEntity> = ArrayList()
+    private val webViewEntities: ArrayList<EditEntity> = ArrayList()
     private val selectDoc = registerForActivityResult(HandleFileContract()) {
         it.uri?.let { uri ->
             if (uri.isContentScheme()) {
@@ -57,7 +68,7 @@ class RssSourceEditActivity :
         softKeyboardTool.attachToWindow(window)
         initView()
         viewModel.initData(intent) {
-            upSourceView()
+            upSourceView(viewModel.rssSource)
         }
     }
 
@@ -70,7 +81,7 @@ class RssSourceEditActivity :
 
     override fun finish() {
         val source = getRssSource()
-        if (!source.equal(viewModel.rssSource)) {
+        if (!source.equal(viewModel.rssSource ?: RssSource())) {
             alert(R.string.exit) {
                 setMessage(R.string.exit_no_save)
                 positiveButton(R.string.yes)
@@ -94,42 +105,29 @@ class RssSourceEditActivity :
     }
 
     override fun onMenuOpened(featureId: Int, menu: Menu): Boolean {
-        menu.findItem(R.id.menu_login)?.isVisible = !viewModel.rssSource.loginUrl.isNullOrBlank()
+        menu.findItem(R.id.menu_login)?.isVisible = !viewModel.rssSource?.loginUrl.isNullOrBlank()
         menu.findItem(R.id.menu_auto_complete)?.isChecked = viewModel.autoComplete
         return super.onMenuOpened(featureId, menu)
     }
 
     override fun onCompatOptionsItemSelected(item: MenuItem): Boolean {
         when (item.itemId) {
-            R.id.menu_save -> {
-                val source = getRssSource()
-                if (checkSource(source)) {
-                    viewModel.save(source) {
-                        setResult(Activity.RESULT_OK)
-                        finish()
-                    }
+            R.id.menu_save -> viewModel.save(getRssSource()) {
+                setResult(Activity.RESULT_OK)
+                finish()
+            }
+            R.id.menu_debug_source -> viewModel.save(getRssSource()) { source ->
+                startActivity<RssSourceDebugActivity> {
+                    putExtra("key", source.sourceUrl)
                 }
             }
-            R.id.menu_debug_source -> {
-                val source = getRssSource()
-                if (checkSource(source)) {
-                    viewModel.save(source) {
-                        startActivity<RssSourceDebugActivity> {
-                            putExtra("key", source.sourceUrl)
-                        }
-                    }
+            R.id.menu_login -> viewModel.save(getRssSource()) {
+                startActivity<SourceLoginActivity> {
+                    putExtra("type", "rssSource")
+                    putExtra("key", it.sourceUrl)
                 }
             }
-            R.id.menu_login -> getRssSource().let {
-                if (checkSource(it)) {
-                    viewModel.save(it) {
-                        startActivity<SourceLoginActivity> {
-                            putExtra("type", "rssSource")
-                            putExtra("key", it.sourceUrl)
-                        }
-                    }
-                }
-            }
+            R.id.menu_set_source_variable -> setSourceVariable()
             R.id.menu_clear_cookie -> viewModel.clearCookie(getRssSource().sourceUrl)
             R.id.menu_auto_complete -> viewModel.autoComplete = !viewModel.autoComplete
             R.id.menu_copy_source -> sendToClip(GSON.toJson(getRssSource()))
@@ -147,53 +145,109 @@ class RssSourceEditActivity :
     }
 
     private fun initView() {
+        binding.tabLayout.addTab(binding.tabLayout.newTab().apply {
+            setText(R.string.source_tab_base)
+        })
+        binding.tabLayout.addTab(binding.tabLayout.newTab().apply {
+            setText(R.string.source_tab_list)
+        })
+        binding.tabLayout.addTab(binding.tabLayout.newTab().apply {
+            text = "WEB_VIEW"
+        })
         binding.recyclerView.setEdgeEffectColor(primaryColor)
         binding.recyclerView.adapter = adapter
+        binding.tabLayout.setBackgroundColor(backgroundColor)
+        binding.tabLayout.setSelectedTabIndicatorColor(accentColor)
+        binding.tabLayout.addOnTabSelectedListener(object : TabLayout.OnTabSelectedListener {
+            override fun onTabReselected(tab: TabLayout.Tab?) {
+
+            }
+
+            override fun onTabUnselected(tab: TabLayout.Tab?) {
+
+            }
+
+            override fun onTabSelected(tab: TabLayout.Tab?) {
+                setEditEntities(tab?.position)
+            }
+        })
     }
 
-    private fun upSourceView(source: RssSource? = viewModel.rssSource) {
-        source?.let {
-            binding.cbIsEnable.isChecked = source.enabled
-            binding.cbSingleUrl.isChecked = source.singleUrl
-            binding.cbIsEnableCookie.isChecked = source.enabledCookieJar == true
-            binding.cbEnableJs.isChecked = source.enableJs
-            binding.cbEnableBaseUrl.isChecked = source.loadWithBaseUrl
+    private fun setEditEntities(tabPosition: Int?) {
+        when (tabPosition) {
+            1 -> adapter.editEntities = listEntities
+            2 -> adapter.editEntities = webViewEntities
+            else -> adapter.editEntities = sourceEntities
+        }
+        binding.recyclerView.scrollToPosition(0)
+    }
+
+    private fun upSourceView(rssSource: RssSource?) {
+        val rs = rssSource ?: RssSource()
+        rs.let {
+            binding.cbIsEnable.isChecked = rs.enabled
+            binding.cbSingleUrl.isChecked = rs.singleUrl
+            binding.cbIsEnableCookie.isChecked = rs.enabledCookieJar == true
         }
         sourceEntities.clear()
         sourceEntities.apply {
-            add(EditEntity("sourceName", source?.sourceName, R.string.source_name))
-            add(EditEntity("sourceUrl", source?.sourceUrl, R.string.source_url))
-            add(EditEntity("sourceIcon", source?.sourceIcon, R.string.source_icon))
-            add(EditEntity("sourceGroup", source?.sourceGroup, R.string.source_group))
-            add(EditEntity("sourceComment", source?.sourceComment, R.string.comment))
-            add(EditEntity("loginUrl", source?.loginUrl, R.string.login_url))
-            add(EditEntity("loginUi", source?.loginUi, R.string.login_ui))
-            add(EditEntity("loginCheckJs", source?.loginCheckJs, R.string.login_check_js))
-            add(EditEntity("coverDecodeJs", source?.coverDecodeJs, R.string.cover_decode_js))
-            add(EditEntity("header", source?.header, R.string.source_http_header))
-            add(EditEntity("variableComment", source?.variableComment, R.string.variable_comment))
-            add(EditEntity("concurrentRate", source?.concurrentRate, R.string.concurrent_rate))
-            add(EditEntity("sortUrl", source?.sortUrl, R.string.sort_url))
-            add(EditEntity("ruleArticles", source?.ruleArticles, R.string.r_articles))
-            add(EditEntity("ruleNextPage", source?.ruleNextPage, R.string.r_next))
-            add(EditEntity("ruleTitle", source?.ruleTitle, R.string.r_title))
-            add(EditEntity("rulePubDate", source?.rulePubDate, R.string.r_date))
-            add(EditEntity("ruleDescription", source?.ruleDescription, R.string.r_description))
-            add(EditEntity("ruleImage", source?.ruleImage, R.string.r_image))
-            add(EditEntity("ruleLink", source?.ruleLink, R.string.r_link))
-            add(EditEntity("ruleContent", source?.ruleContent, R.string.r_content))
-            add(EditEntity("style", source?.style, R.string.r_style))
+            add(EditEntity("sourceName", rs.sourceName, R.string.source_name))
+            add(EditEntity("sourceUrl", rs.sourceUrl, R.string.source_url))
+            add(EditEntity("sourceIcon", rs.sourceIcon, R.string.source_icon))
+            add(EditEntity("sourceGroup", rs.sourceGroup, R.string.source_group))
+            add(EditEntity("sourceComment", rs.sourceComment, R.string.comment))
+            add(EditEntity("sortUrl", rs.sortUrl, R.string.sort_url))
+            add(EditEntity("loginUrl", rs.loginUrl, R.string.login_url))
+            add(EditEntity("loginUi", rs.loginUi, R.string.login_ui))
+            add(EditEntity("loginCheckJs", rs.loginCheckJs, R.string.login_check_js))
+            add(EditEntity("coverDecodeJs", rs.coverDecodeJs, R.string.cover_decode_js))
+            add(EditEntity("header", rs.header, R.string.source_http_header))
+            add(EditEntity("variableComment", rs.variableComment, R.string.variable_comment))
+            add(EditEntity("concurrentRate", rs.concurrentRate, R.string.concurrent_rate))
         }
-        adapter.editEntities = sourceEntities
+        listEntities.clear()
+        listEntities.apply {
+            add(EditEntity("ruleArticles", rs.ruleArticles, R.string.r_articles))
+            add(EditEntity("ruleNextPage", rs.ruleNextPage, R.string.r_next))
+            add(EditEntity("ruleTitle", rs.ruleTitle, R.string.r_title))
+            add(EditEntity("rulePubDate", rs.rulePubDate, R.string.r_date))
+            add(EditEntity("ruleDescription", rs.ruleDescription, R.string.r_description))
+            add(EditEntity("ruleImage", rs.ruleImage, R.string.r_image))
+            add(EditEntity("ruleLink", rs.ruleLink, R.string.r_link))
+        }
+        webViewEntities.clear()
+        webViewEntities.apply {
+            add(
+                EditEntity(
+                    "enableJs",
+                    rs.enableJs.toString(),
+                    R.string.enable_js,
+                    EditEntity.ViewType.checkBox
+                )
+            )
+            add(
+                EditEntity(
+                    "loadWithBaseUrl",
+                    rs.loadWithBaseUrl.toString(),
+                    R.string.load_with_base_url,
+                    EditEntity.ViewType.checkBox
+                )
+            )
+            add(EditEntity("ruleContent", rs.ruleContent, R.string.r_content))
+            add(EditEntity("style", rs.style, R.string.r_style))
+            add(EditEntity("injectJs", rs.injectJs, R.string.r_inject_js))
+            add(EditEntity("contentWhitelist", rs.contentWhitelist, R.string.c_whitelist))
+            add(EditEntity("contentBlacklist", rs.contentBlacklist, R.string.c_blacklist))
+        }
+        binding.tabLayout.selectTab(binding.tabLayout.getTabAt(0))
+        setEditEntities(0)
     }
 
     private fun getRssSource(): RssSource {
-        val source = viewModel.rssSource
+        val source = viewModel.rssSource?.copy() ?: RssSource()
         source.enabled = binding.cbIsEnable.isChecked
         source.singleUrl = binding.cbSingleUrl.isChecked
         source.enabledCookieJar = binding.cbIsEnableCookie.isChecked
-        source.enableJs = binding.cbEnableJs.isChecked
-        source.loadWithBaseUrl = binding.cbEnableBaseUrl.isChecked
         sourceEntities.forEach {
             when (it.key) {
                 "sourceName" -> source.sourceName = it.value ?: ""
@@ -209,6 +263,10 @@ class RssSourceEditActivity :
                 "variableComment" -> source.variableComment = it.value
                 "concurrentRate" -> source.concurrentRate = it.value
                 "sortUrl" -> source.sortUrl = it.value
+            }
+        }
+        listEntities.forEach {
+            when (it.key) {
                 "ruleArticles" -> source.ruleArticles = it.value
                 "ruleNextPage" -> source.ruleNextPage =
                     viewModel.ruleComplete(it.value, source.ruleArticles, 2)
@@ -222,20 +280,42 @@ class RssSourceEditActivity :
                     viewModel.ruleComplete(it.value, source.ruleArticles, 3)
                 "ruleLink" -> source.ruleLink =
                     viewModel.ruleComplete(it.value, source.ruleArticles)
+            }
+        }
+        webViewEntities.forEach {
+            when (it.key) {
+                "enableJs" -> source.enableJs = it.value.isTrue()
+                "loadWithBaseUrl" -> source.loadWithBaseUrl = it.value.isTrue()
                 "ruleContent" -> source.ruleContent =
                     viewModel.ruleComplete(it.value, source.ruleArticles)
                 "style" -> source.style = it.value
+                "injectJs" -> source.injectJs = it.value
+                "contentWhitelist" -> source.contentWhitelist = it.value
+                "contentBlacklist" -> source.contentBlacklist = it.value
             }
         }
         return source
     }
 
-    private fun checkSource(source: RssSource): Boolean {
-        if (source.sourceName.isBlank() || source.sourceName.isBlank()) {
-            toastOnUi("名称或url不能为空")
-            return false
+    private fun setSourceVariable() {
+        viewModel.save(getRssSource()) { source ->
+            launch {
+                val comment = source.getDisplayVariableComment("源变量可在js中通过source.getVariable()获取")
+                val variable = withContext(Dispatchers.IO) { source.getVariable() }
+                showDialogFragment(
+                    VariableDialog(
+                        getString(R.string.set_source_variable),
+                        source.getKey(),
+                        variable,
+                        comment
+                    )
+                )
+            }
         }
-        return true
+    }
+
+    override fun setVariable(key: String, variable: String?) {
+        viewModel.rssSource?.setVariable(variable)
     }
 
     override fun helpActions(): List<SelectItem<String>> {
@@ -280,7 +360,7 @@ class RssSourceEditActivity :
     private fun showHelp(fileName: String) {
         //显示目录help下的帮助文档
         val mdText = String(assets.open("help/${fileName}.md").readBytes())
-        showDialogFragment(TextDialog(mdText, TextDialog.Mode.MD))
+        showDialogFragment(TextDialog(getString(R.string.help), mdText, TextDialog.Mode.MD))
     }
 
 }

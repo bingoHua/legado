@@ -1,0 +1,3 @@
+-keep class j$.util.List$-EL {
+    void sort(java.util.List, java.util.Comparator);
+}

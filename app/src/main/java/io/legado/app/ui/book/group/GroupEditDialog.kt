@@ -12,6 +12,7 @@ import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.theme.primaryColor
 import io.legado.app.utils.*
 import io.legado.app.utils.viewbindingdelegate.viewBinding
+import splitties.init.appCtx
 import splitties.views.onClick
 import java.io.FileOutputStream
 
@@ -19,25 +20,31 @@ class GroupEditDialog() : BaseDialogFragment(R.layout.dialog_book_group_edit) {
 
     constructor(bookGroup: BookGroup? = null) : this() {
         arguments = Bundle().apply {
-            putParcelable("group", bookGroup)
+            putParcelable("group", bookGroup?.copy())
         }
     }
 
     private val binding by viewBinding(DialogBookGroupEditBinding::bind)
     private val viewModel by viewModels<GroupViewModel>()
     private var bookGroup: BookGroup? = null
-    val selectImage = registerForActivityResult(SelectImageContract()) {
-        readUri(it?.uri) { fileDoc, inputStream ->
-            var file = requireContext().externalFiles
-            val suffix = fileDoc.name.substringAfterLast(".")
-            val fileName = it.uri!!.inputStream(requireContext())!!.use {
-                MD5Utils.md5Encode(it) + ".$suffix"
+    private val selectImage = registerForActivityResult(SelectImageContract()) {
+        it ?: return@registerForActivityResult
+        it.uri ?: return@registerForActivityResult
+        readUri(it.uri) { fileDoc, inputStream ->
+            try {
+                var file = requireContext().externalFiles
+                val suffix = fileDoc.name.substringAfterLast(".")
+                val fileName = it.uri.inputStream(requireContext()).getOrThrow().use { tmp ->
+                    MD5Utils.md5Encode(tmp) + ".$suffix"
+                }
+                file = FileUtils.createFileIfNotExist(file, "covers", fileName)
+                FileOutputStream(file).use { outputStream ->
+                    inputStream.copyTo(outputStream)
+                }
+                binding.ivCover.load(file.absolutePath)
+            } catch (e: Exception) {
+                appCtx.toastOnUi(e.localizedMessage)
             }
-            file = FileUtils.createFileIfNotExist(file, "covers", fileName)
-            FileOutputStream(file).use { outputStream ->
-                inputStream.copyTo(outputStream)
-            }
-            binding.ivCover.load(file.absolutePath)
         }
     }
 
@@ -51,9 +58,11 @@ class GroupEditDialog() : BaseDialogFragment(R.layout.dialog_book_group_edit) {
         @Suppress("DEPRECATION")
         bookGroup = arguments?.getParcelable("group")
         bookGroup?.let {
-            binding.btnDelete.visible(it.groupId > 0)
+            binding.btnDelete.visible(it.groupId > 0 || it.groupId == Long.MIN_VALUE)
             binding.tieGroupName.setText(it.groupName)
             binding.ivCover.load(it.cover)
+            binding.spSort.setSelection(it.bookSort + 1)
+            binding.cbEnableRefresh.isChecked = it.enableRefresh
         } ?: let {
             binding.toolBar.title = getString(R.string.add_group)
             binding.btnDelete.gone()
@@ -71,14 +80,24 @@ class GroupEditDialog() : BaseDialogFragment(R.layout.dialog_book_group_edit) {
                 if (groupName.isNullOrEmpty()) {
                     toastOnUi("分组名称不能为空")
                 } else {
+                    val bookSort = binding.spSort.selectedItemPosition - 1
+                    val coverPath = binding.ivCover.bitmapPath
+                    val enableRefresh = binding.cbEnableRefresh.isChecked
                     bookGroup?.let {
                         it.groupName = groupName
-                        it.cover = binding.ivCover.bitmapPath
+                        it.cover = coverPath
+                        it.bookSort = bookSort
+                        it.enableRefresh = enableRefresh
                         viewModel.upGroup(it) {
                             dismiss()
                         }
                     } ?: let {
-                        viewModel.addGroup(groupName, binding.ivCover.bitmapPath) {
+                        viewModel.addGroup(
+                            groupName,
+                            bookSort,
+                            enableRefresh,
+                            coverPath
+                        ) {
                             dismiss()
                         }
                     }

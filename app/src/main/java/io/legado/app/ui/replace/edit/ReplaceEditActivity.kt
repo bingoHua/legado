@@ -14,8 +14,9 @@ import io.legado.app.databinding.ActivityReplaceEditBinding
 import io.legado.app.lib.dialogs.SelectItem
 import io.legado.app.ui.widget.dialog.TextDialog
 import io.legado.app.ui.widget.keyboard.KeyboardToolPop
+import io.legado.app.utils.GSON
+import io.legado.app.utils.sendToClip
 import io.legado.app.utils.showDialogFragment
-import io.legado.app.utils.toastOnUi
 import io.legado.app.utils.viewbindingdelegate.viewBinding
 
 /**
@@ -68,16 +69,13 @@ class ReplaceEditActivity :
 
     override fun onCompatOptionsItemSelected(item: MenuItem): Boolean {
         when (item.itemId) {
-            R.id.menu_save -> {
-                val rule = getReplaceRule()
-                if (!rule.isValid()) {
-                    toastOnUi(R.string.replace_rule_invalid)
-                } else {
-                    viewModel.save(rule) {
-                        setResult(RESULT_OK)
-                        finish()
-                    }
-                }
+            R.id.menu_save -> viewModel.save(getReplaceRule()) {
+                setResult(RESULT_OK)
+                finish()
+            }
+            R.id.menu_copy_rule -> sendToClip(GSON.toJson(getReplaceRule()))
+            R.id.menu_paste_rule -> viewModel.pasteRule {
+                upReplaceView(it)
             }
         }
         return true
@@ -147,7 +145,7 @@ class ReplaceEditActivity :
     private fun showHelp(fileName: String) {
         //显示目录help下的帮助文档
         val mdText = String(assets.open("help/${fileName}.md").readBytes())
-        showDialogFragment(TextDialog(mdText, TextDialog.Mode.MD))
+        showDialogFragment(TextDialog(getString(R.string.help), mdText, TextDialog.Mode.MD))
     }
 
 }

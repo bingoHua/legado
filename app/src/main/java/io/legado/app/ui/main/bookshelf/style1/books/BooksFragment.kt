@@ -10,10 +10,15 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import io.legado.app.R
 import io.legado.app.base.BaseFragment
-import io.legado.app.constant.*
+import io.legado.app.constant.AppConst
+import io.legado.app.constant.AppLog
+import io.legado.app.constant.EventBus
+import io.legado.app.constant.PreferKey
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.Book
+import io.legado.app.data.entities.BookGroup
 import io.legado.app.databinding.FragmentBooksBinding
+import io.legado.app.help.book.isAudio
 import io.legado.app.help.config.AppConfig
 import io.legado.app.lib.theme.accentColor
 import io.legado.app.lib.theme.primaryColor
@@ -23,14 +28,11 @@ import io.legado.app.ui.book.read.ReadBookActivity
 import io.legado.app.ui.main.MainViewModel
 import io.legado.app.utils.*
 import io.legado.app.utils.viewbindingdelegate.viewBinding
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.launch
 import kotlin.math.max
 
 /**
@@ -39,10 +41,12 @@ import kotlin.math.max
 class BooksFragment() : BaseFragment(R.layout.fragment_books),
     BaseBooksAdapter.CallBack {
 
-    constructor(position: Int, groupId: Long) : this() {
+    constructor(position: Int, group: BookGroup) : this() {
         val bundle = Bundle()
         bundle.putInt("position", position)
-        bundle.putLong("groupId", groupId)
+        bundle.putLong("groupId", group.groupId)
+        bundle.putInt("bookSort", group.getRealBookSort())
+        bundle.putBoolean("enableRefresh", group.enableRefresh)
         arguments = bundle
     }
 
@@ -60,14 +64,21 @@ class BooksFragment() : BaseFragment(R.layout.fragment_books),
     }
     private var booksFlowJob: Job? = null
     private var savedInstanceState: Bundle? = null
-    private var position = 0
-    private var groupId = -1L
+    var position = 0
+        private set
+    var groupId = -1L
+        private set
+    var bookSort = 0
+        private set
+    private var upLastUpdateTimeJob: Job? = null
 
     override fun onFragmentCreated(view: View, savedInstanceState: Bundle?) {
         this.savedInstanceState = savedInstanceState
         arguments?.let {
             position = it.getInt("position", 0)
             groupId = it.getLong("groupId", -1)
+            bookSort = it.getInt("bookSort", 0)
+            binding.refreshLayout.isEnabled = it.getBoolean("enableRefresh", true)
         }
         initRecyclerView()
         upRecyclerData()
@@ -103,6 +114,19 @@ class BooksFragment() : BaseFragment(R.layout.fragment_books),
                 }
             }
         })
+        startLastUpdateTimeJob()
+    }
+
+    fun upBookSort(sort: Int) {
+        binding.root.post {
+            arguments?.putInt("bookSort", sort)
+            bookSort = sort
+            upRecyclerData()
+        }
+    }
+
+    fun setEnableRefresh(enableRefresh: Boolean) {
+        binding.refreshLayout.isEnabled = enableRefresh
     }
 
     private fun upRecyclerData() {
@@ -114,9 +138,10 @@ class BooksFragment() : BaseFragment(R.layout.fragment_books),
                 AppConst.bookGroupAudioId -> appDb.bookDao.flowAudio()
                 AppConst.bookGroupNetNoneId -> appDb.bookDao.flowNetNoGroup()
                 AppConst.bookGroupLocalNoneId -> appDb.bookDao.flowLocalNoGroup()
+                AppConst.bookGroupErrorId -> appDb.bookDao.flowUpdateError()
                 else -> appDb.bookDao.flowByGroup(groupId)
             }.conflate().map { list ->
-                when (getPrefInt(PreferKey.bookshelfSort)) {
+                when (bookSort) {
                     1 -> list.sortedByDescending { it.latestChapterTime }
                     2 -> list.sortedWith { o1, o2 ->
                         o1.name.cnCompare(o2.name)
@@ -145,6 +170,33 @@ class BooksFragment() : BaseFragment(R.layout.fragment_books),
                 layoutManager.scrollToPositionWithOffset(leavePosition, leaveOffset)
             }
             savedInstanceState!!.putBoolean("needRecoverState", false)
+        }
+    }
+
+    override fun onPause() {
+        super.onPause()
+        upLastUpdateTimeJob?.cancel()
+        booksFlowJob?.cancel()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        startLastUpdateTimeJob()
+        upRecyclerData()
+    }
+
+    private fun startLastUpdateTimeJob() {
+        upLastUpdateTimeJob?.cancel()
+        if (!AppConfig.showLastUpdateTime) {
+            return
+        }
+        upLastUpdateTimeJob = launch {
+            while (isActive) {
+                if (SystemUtils.isScreenOn()) {
+                    booksAdapter.upLastUpdateTime()
+                }
+                delay(30 * 1000)
+            }
         }
     }
 
@@ -187,8 +239,8 @@ class BooksFragment() : BaseFragment(R.layout.fragment_books),
     }
 
     override fun open(book: Book) {
-        when (book.type) {
-            BookType.audio ->
+        when {
+            book.isAudio ->
                 startActivity<AudioPlayActivity> {
                     putExtra("bookUrl", book.bookUrl)
                 }
@@ -217,6 +269,7 @@ class BooksFragment() : BaseFragment(R.layout.fragment_books),
         }
         observeEvent<String>(EventBus.BOOKSHELF_REFRESH) {
             booksAdapter.notifyDataSetChanged()
+            startLastUpdateTimeJob()
         }
     }
 }

@@ -13,10 +13,24 @@
         app:iconSpaceReserved="false" />
 
     <io.legado.app.lib.prefs.Preference
+        android:key="txtTocRuleManage"
+        android:title="@string/txt_toc_rule"
+        android:summary="@string/config_txt_toc_rule"
+        android:icon="@drawable/ic_cfg_source"
+        app:iconSpaceReserved="false" />
+
+    <io.legado.app.lib.prefs.Preference
         android:key="replaceManage"
         android:title="@string/replace_purify"
         android:summary="@string/replace_purify_desc"
         android:icon="@drawable/ic_cfg_replace"
+        app:iconSpaceReserved="false" />
+
+    <io.legado.app.lib.prefs.Preference
+        android:key="dictRuleManage"
+        android:title="@string/dict_rule"
+        android:summary="@string/config_dict_rule"
+        android:icon="@drawable/ic_translate"
         app:iconSpaceReserved="false" />
 
     <io.legado.app.lib.prefs.NameListPreference
@@ -88,6 +102,13 @@
             android:title="@string/read_record"
             android:summary="@string/read_record_summary"
             android:icon="@drawable/ic_history"
+            app:iconSpaceReserved="false" />
+
+        <io.legado.app.lib.prefs.Preference
+            android:key="fileManage"
+            android:title="@string/file_manage"
+            android:summary="@string/file_manage_summary"
+            android:icon="@drawable/ic_folder_outline"
             app:iconSpaceReserved="false" />
 
         <io.legado.app.lib.prefs.Preference

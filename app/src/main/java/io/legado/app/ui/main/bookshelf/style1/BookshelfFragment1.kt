@@ -19,14 +19,13 @@ import io.legado.app.data.entities.BookGroup
 import io.legado.app.databinding.FragmentBookshelfBinding
 import io.legado.app.lib.theme.accentColor
 import io.legado.app.lib.theme.primaryColor
+import io.legado.app.ui.book.group.GroupEditDialog
 import io.legado.app.ui.book.search.SearchActivity
 import io.legado.app.ui.main.bookshelf.BaseBookshelfFragment
 import io.legado.app.ui.main.bookshelf.style1.books.BooksFragment
-import io.legado.app.utils.getPrefInt
-import io.legado.app.utils.putPrefInt
-import io.legado.app.utils.setEdgeEffectColor
-import io.legado.app.utils.toastOnUi
+import io.legado.app.utils.*
 import io.legado.app.utils.viewbindingdelegate.viewBinding
+import kotlin.collections.set
 
 /**
  * 书架界面
@@ -88,15 +87,22 @@ class BookshelfFragment1 : BaseBookshelfFragment(R.layout.fragment_bookshelf),
                 bookGroups.addAll(data)
                 adapter.notifyDataSetChanged()
                 selectLastTab()
+                for (i in 0 until adapter.count) {
+                    tabLayout.getTabAt(i)?.view?.setOnLongClickListener {
+                        showDialogFragment(GroupEditDialog(bookGroups[i]))
+                        true
+                    }
+                }
             }
         }
     }
 
-    @Synchronized
     private fun selectLastTab() {
-        tabLayout.removeOnTabSelectedListener(this)
-        tabLayout.getTabAt(getPrefInt(PreferKey.saveTabPosition, 0))?.select()
-        tabLayout.addOnTabSelectedListener(this)
+        tabLayout.post {
+            tabLayout.removeOnTabSelectedListener(this)
+            tabLayout.getTabAt(getPrefInt(PreferKey.saveTabPosition, 0))?.select()
+            tabLayout.addOnTabSelectedListener(this)
+        }
     }
 
     override fun onTabReselected(tab: TabLayout.Tab) {
@@ -124,13 +130,28 @@ class BookshelfFragment1 : BaseBookshelfFragment(R.layout.fragment_bookshelf),
             return bookGroups[position].groupName
         }
 
+        /**
+         * 确定视图位置是否更改时调用
+         * @return POSITION_NONE 已更改,刷新视图. POSITION_UNCHANGED 未更改,不刷新视图
+         */
         override fun getItemPosition(`object`: Any): Int {
-            return POSITION_NONE
+            val fragment = `object` as BooksFragment
+            val position = fragment.position
+            val group = bookGroups.getOrNull(position)
+            if (fragment.groupId != group?.groupId) {
+                return POSITION_NONE
+            }
+            val bookSort = group.getRealBookSort()
+            fragment.setEnableRefresh(group.enableRefresh)
+            if (fragment.bookSort != bookSort) {
+                fragment.upBookSort(bookSort)
+            }
+            return POSITION_UNCHANGED
         }
 
         override fun getItem(position: Int): Fragment {
             val group = bookGroups[position]
-            return BooksFragment(position, group.groupId)
+            return BooksFragment(position, group)
         }
 
         override fun getCount(): Int {

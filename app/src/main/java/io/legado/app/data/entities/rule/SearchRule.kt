@@ -1,12 +1,17 @@
 package io.legado.app.data.entities.rule
 
 import android.os.Parcelable
+import com.google.gson.JsonDeserializer
+import io.legado.app.utils.INITIAL_GSON
 import kotlinx.parcelize.Parcelize
 
-
+/**
+ * 搜索结果处理规则
+ */
 @Parcelize
 data class SearchRule(
-    var checkKeyWord: String? = null,               // 校验关键字
+    /**校验关键字**/
+    var checkKeyWord: String? = null,
     override var bookList: String? = null,
     override var name: String? = null,
     override var author: String? = null,
@@ -17,4 +22,18 @@ data class SearchRule(
     override var bookUrl: String? = null,
     override var coverUrl: String? = null,
     override var wordCount: String? = null
-) : BookListRule, Parcelable
+) : BookListRule, Parcelable {
+
+    companion object {
+
+        val jsonDeserializer = JsonDeserializer<SearchRule?> { json, _, _ ->
+            when {
+                json.isJsonObject -> INITIAL_GSON.fromJson(json, SearchRule::class.java)
+                json.isJsonPrimitive -> INITIAL_GSON.fromJson(json.asString, SearchRule::class.java)
+                else -> null
+            }
+        }
+
+    }
+
+}

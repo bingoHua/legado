@@ -11,6 +11,7 @@ import androidx.fragment.app.activityViewModels
 import androidx.preference.ListPreference
 import androidx.preference.Preference
 import io.legado.app.R
+import io.legado.app.constant.AppConst
 import io.legado.app.constant.EventBus
 import io.legado.app.constant.PreferKey
 import io.legado.app.databinding.DialogEditTextBinding
@@ -22,7 +23,7 @@ import io.legado.app.model.CheckSource
 import io.legado.app.receiver.SharedReceiverActivity
 import io.legado.app.service.WebService
 import io.legado.app.ui.book.read.page.provider.ImageProvider
-import io.legado.app.ui.document.HandleFileContract
+import io.legado.app.ui.file.HandleFileContract
 import io.legado.app.ui.widget.number.NumberPickerDialog
 import io.legado.app.utils.*
 import splitties.init.appCtx
@@ -48,7 +49,7 @@ class OtherConfigFragment : PreferenceFragment(),
     override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
         putPrefBoolean(PreferKey.processText, isProcessTextEnabled())
         addPreferencesFromResource(R.xml.pref_config_other)
-        if (AppConfig.isGooglePlay) {
+        if (AppConst.isPlayChannel) {
             preferenceScreen.removePreferenceRecursively("Cronet")
         }
         upPreferenceSummary(PreferKey.userAgent, AppConfig.userAgent)
@@ -60,6 +61,7 @@ class OtherConfigFragment : PreferenceFragment(),
         }
         upPreferenceSummary(PreferKey.checkSource, CheckSource.summary)
         upPreferenceSummary(PreferKey.bitmapCacheSize, AppConfig.bitmapCacheSize.toString())
+        upPreferenceSummary(PreferKey.sourceEditMaxLine, AppConfig.sourceEditMaxLine.toString())
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
@@ -84,7 +86,7 @@ class OtherConfigFragment : PreferenceFragment(),
             PreferKey.preDownloadNum -> NumberPickerDialog(requireContext())
                 .setTitle(getString(R.string.pre_download))
                 .setMaxValue(9999)
-                .setMinValue(1)
+                .setMinValue(0)
                 .setValue(AppConfig.preDownloadNum)
                 .show {
                     AppConfig.preDownloadNum = it
@@ -119,7 +121,17 @@ class OtherConfigFragment : PreferenceFragment(),
                         ImageProvider.bitmapLruCache.resize(ImageProvider.cacheSize)
                     }
             }
-
+            PreferKey.sourceEditMaxLine -> {
+                NumberPickerDialog(requireContext())
+                    .setTitle(getString(R.string.source_edit_text_max_line))
+                    .setMaxValue(Int.MAX_VALUE)
+                    .setMinValue(10)
+                    .setValue(AppConfig.sourceEditMaxLine)
+                    .show {
+                        AppConfig.sourceEditMaxLine = it
+                    }
+            }
+            PreferKey.clearWebViewData -> clearWebViewData()
         }
         return super.onPreferenceTreeClick(preference)
     }
@@ -160,6 +172,9 @@ class OtherConfigFragment : PreferenceFragment(),
             PreferKey.bitmapCacheSize -> {
                 upPreferenceSummary(key, AppConfig.bitmapCacheSize.toString())
             }
+            PreferKey.sourceEditMaxLine -> {
+                upPreferenceSummary(key, AppConfig.sourceEditMaxLine.toString())
+            }
         }
     }
 
@@ -170,7 +185,10 @@ class OtherConfigFragment : PreferenceFragment(),
                 getString(R.string.pre_download_s, value)
             PreferKey.threadCount -> preference.summary = getString(R.string.threads_num, value)
             PreferKey.webPort -> preference.summary = getString(R.string.web_port_summary, value)
-            PreferKey.bitmapCacheSize -> preference.summary = getString(R.string.bitmap_cache_size_summary, value)
+            PreferKey.bitmapCacheSize -> preference.summary =
+                getString(R.string.bitmap_cache_size_summary, value)
+            PreferKey.sourceEditMaxLine -> preference.summary =
+                getString(R.string.source_edit_max_line_summary, value)
             else -> if (preference is ListPreference) {
                 val index = preference.findIndexOfValue(value)
                 // Set the summary to reflect the new value.
@@ -208,6 +226,15 @@ class OtherConfigFragment : PreferenceFragment(),
         ) {
             okButton {
                 viewModel.clearCache()
+            }
+            noButton()
+        }
+    }
+
+    private fun clearWebViewData() {
+        alert(R.string.clear_webview_data, R.string.sure_del) {
+            okButton {
+                viewModel.clearWebViewData()
             }
             noButton()
         }

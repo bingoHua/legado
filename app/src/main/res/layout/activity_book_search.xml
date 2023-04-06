@@ -31,12 +31,13 @@
         <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/recycler_view"
             android:layout_width="match_parent"
-            android:layout_height="match_parent" />
+            android:layout_height="match_parent"
+            tools:listitem="@layout/item_search" />
 
     </io.legado.app.ui.widget.dynamiclayout.DynamicFrameLayout>
 
     <LinearLayout
-        android:id="@+id/ll_history"
+        android:id="@+id/ll_input_help"
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:background="@color/background"
@@ -78,6 +79,7 @@
                 android:id="@+id/tv_clear_history"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:background="?attr/selectableItemBackground"
                 android:padding="6dp"
                 android:text="@string/clear" />
 

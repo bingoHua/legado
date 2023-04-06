@@ -8,7 +8,7 @@ import io.legado.app.data.entities.BookSource
 import io.legado.app.data.entities.rule.TocRule
 import io.legado.app.exception.NoStackTraceException
 import io.legado.app.exception.TocEmptyException
-import io.legado.app.help.ContentProcessor
+import io.legado.app.help.book.ContentProcessor
 import io.legado.app.model.Debug
 import io.legado.app.model.analyzeRule.AnalyzeRule
 import io.legado.app.model.analyzeRule.AnalyzeUrl
@@ -61,12 +61,13 @@ object BookChapterList {
                 var nextUrl = chapterData.second[0]
                 while (nextUrl.isNotEmpty() && !nextUrlList.contains(nextUrl)) {
                     nextUrlList.add(nextUrl)
-                    AnalyzeUrl(
+                    val res = AnalyzeUrl(
                         mUrl = nextUrl,
                         source = bookSource,
                         ruleData = book,
                         headerMapF = bookSource.getHeaderMap()
-                    ).getStrResponseAwait().body?.let { nextBody ->
+                    ).getStrResponseAwait() //控制并发访问
+                    res.body?.let { nextBody ->
                         chapterData = analyzeChapterList(
                             book, nextUrl, nextUrl,
                             nextBody, tocRule, listRule, bookSource
@@ -83,13 +84,12 @@ object BookChapterList {
                     val asyncArray = Array(chapterData.second.size) {
                         async(IO) {
                             val urlStr = chapterData.second[it]
-                            val analyzeUrl = AnalyzeUrl(
+                            val res = AnalyzeUrl(
                                 mUrl = urlStr,
                                 source = bookSource,
                                 ruleData = book,
                                 headerMapF = bookSource.getHeaderMap()
-                            )
-                            val res = analyzeUrl.getStrResponseAwait()
+                            ).getStrResponseAwait() //控制并发访问
                             analyzeChapterList(
                                 book, urlStr, res.url,
                                 res.body!!, tocRule, listRule, bookSource, false
@@ -215,12 +215,16 @@ object BookChapterList {
                 }
             }
             Debug.log(bookSource.bookSourceUrl, "└目录列表解析完成", log)
-            Debug.log(bookSource.bookSourceUrl, "≡首章信息", log)
-            Debug.log(bookSource.bookSourceUrl, "◇章节名称:${chapterList[0].title}", log)
-            Debug.log(bookSource.bookSourceUrl, "◇章节链接:${chapterList[0].url}", log)
-            Debug.log(bookSource.bookSourceUrl, "◇章节信息:${chapterList[0].tag}", log)
-            Debug.log(bookSource.bookSourceUrl, "◇是否VIP:${chapterList[0].isVip}", log)
-            Debug.log(bookSource.bookSourceUrl, "◇是否购买:${chapterList[0].isPay}", log)
+            if (chapterList.isEmpty()) {
+                Debug.log(bookSource.bookSourceUrl, "◇章节列表为空", log)
+            } else {
+                Debug.log(bookSource.bookSourceUrl, "≡首章信息", log)
+                Debug.log(bookSource.bookSourceUrl, "◇章节名称:${chapterList[0].title}", log)
+                Debug.log(bookSource.bookSourceUrl, "◇章节链接:${chapterList[0].url}", log)
+                Debug.log(bookSource.bookSourceUrl, "◇章节信息:${chapterList[0].tag}", log)
+                Debug.log(bookSource.bookSourceUrl, "◇是否VIP:${chapterList[0].isVip}", log)
+                Debug.log(bookSource.bookSourceUrl, "◇是否购买:${chapterList[0].isPay}", log)
+            }
         }
         return Pair(chapterList, nextUrlList)
     }

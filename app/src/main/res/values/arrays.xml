@@ -1,5 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources xmlns:tools="http://schemas.android.com/tools">
+
+	<string-array name="server_type">
+		<item>WEBDAV</item>
+	</string-array>
+
 	<string-array name="book_type">
 		<item>Text</item>
 		<item>Audio</item>
@@ -10,6 +15,14 @@
 	<string-array name="group_style">
 		<item>Tab</item>
 		<item>Folder</item>
+	</string-array>
+
+	<string-array name="book_sort">
+		<item>@string/text_default</item>
+		<item>@string/bookshelf_px_0</item>
+		<item>@string/bookshelf_px_1</item>
+		<item>@string/bookshelf_px_2</item>
+		<item>@string/bookshelf_px_3</item>
 	</string-array>
 
 	<string-array name="indent">
@@ -59,12 +72,19 @@
 		<item>@string/screen_portrait</item>
 		<item>@string/screen_landscape</item>
 		<item>@string/screen_sensor</item>
+		<item>反向竖屏</item>
 	</string-array>
 
 	<string-array name="double_page_title">
 		<item>全局单页</item>
 		<item>全局双页</item>
-		<item>横屏双页 竖屏单页</item>
+		<item>横屏双页</item>
+		<item>平板/横屏双页</item>
+	</string-array>
+
+	<string-array name="progress_bar_behavior_title">
+		<item>调整本章页数</item>
+		<item>调整章节位置</item>
 	</string-array>
 
 	<string-array name="icon_names" tools:ignore="Typos">
@@ -97,7 +117,8 @@
 		<item>Battery</item>
 		<item>Battery%</item>
 		<item>Pages</item>
-		<item>Progress</item>
+		<item>Progress(%)</item>
+		<item>Progress(xx/yyy)</item>
 		<item>Pages and progress</item>
 		<item>Time and Battery</item>
 		<item>Time and Battery%</item>

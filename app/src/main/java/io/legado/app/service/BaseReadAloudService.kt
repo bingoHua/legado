@@ -8,12 +8,15 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.graphics.BitmapFactory
 import android.media.AudioManager
+import android.os.Bundle
+import android.os.PowerManager
 import android.support.v4.media.MediaMetadataCompat
 import android.support.v4.media.session.MediaSessionCompat
 import android.support.v4.media.session.PlaybackStateCompat
 import androidx.annotation.CallSuper
 import androidx.core.app.NotificationCompat
 import androidx.media.AudioFocusRequestCompat
+import androidx.media.AudioManagerCompat
 import io.legado.app.R
 import io.legado.app.base.BaseService
 import io.legado.app.constant.*
@@ -26,11 +29,10 @@ import io.legado.app.receiver.MediaButtonReceiver
 import io.legado.app.ui.book.read.ReadBookActivity
 import io.legado.app.ui.book.read.page.entities.TextChapter
 import io.legado.app.utils.*
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.*
+import splitties.init.appCtx
 import splitties.systemservices.audioManager
+import splitties.systemservices.powerManager
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 
@@ -56,8 +58,16 @@ abstract class BaseReadAloudService : BaseService(),
         fun isPlay(): Boolean {
             return isRun && !pause
         }
+
     }
 
+    private val useWakeLock = appCtx.getPrefBoolean(PreferKey.readAloudWakeLock, false)
+    private val wakeLock by lazy {
+        powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "legado:ReadAloudService")
+            .apply {
+                this.setReferenceCounted(false)
+            }
+    }
     private val mFocusRequest: AudioFocusRequestCompat by lazy {
         MediaHelp.buildAudioFocusRequestCompat(this)
     }
@@ -73,6 +83,7 @@ abstract class BaseReadAloudService : BaseService(),
     internal var pageIndex = 0
     private var needResumeOnAudioFocusGain = false
     private var dsJob: Job? = null
+    var pageChanged = false
 
     private val broadcastReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
@@ -82,19 +93,33 @@ abstract class BaseReadAloudService : BaseService(),
         }
     }
 
+    @SuppressLint("WakelockTimeout")
     override fun onCreate() {
         super.onCreate()
         isRun = true
         pause = false
+        observeLiveBus()
         initMediaSession()
         initBroadcastReceiver()
-        upNotification()
         upMediaSessionPlaybackState(PlaybackStateCompat.STATE_PLAYING)
-        doDs()
+        setTimer(AppConfig.ttsTimer)
+        if (AppConfig.ttsTimer > 0) {
+            toastOnUi("朗读定时 ${AppConfig.ttsTimer} 分钟")
+        }
+    }
+
+    fun observeLiveBus() {
+        observeEvent<Bundle>(EventBus.READ_ALOUD_PLAY) {
+            val play = it.getBoolean("play")
+            val pageIndex = it.getInt("pageIndex")
+            val startPos = it.getInt("startPos")
+            newReadAloud(play, pageIndex, startPos)
+        }
     }
 
     override fun onDestroy() {
         super.onDestroy()
+        if (useWakeLock) wakeLock.release()
         isRun = false
         pause = true
         abandonFocus()
@@ -119,7 +144,7 @@ abstract class BaseReadAloudService : BaseService(),
             IntentAction.nextParagraph -> nextP()
             IntentAction.addTimer -> addTimer()
             IntentAction.setTimer -> setTimer(intent.getIntExtra("minute", 0))
-            else -> stopSelf()
+            IntentAction.stop -> stopSelf()
         }
         return super.onStartCommand(intent, flags, startId)
     }
@@ -138,11 +163,12 @@ abstract class BaseReadAloudService : BaseService(),
                         contentList.add(text)
                     }
                 }
-            if (play) play()
+            if (play) play() else pageChanged = true
         }
     }
 
     open fun play() {
+        if (useWakeLock) wakeLock.acquire(10 * 60 * 1000L /*10 minutes*/)
         isRun = true
         pause = false
         needResumeOnAudioFocusGain = false
@@ -154,6 +180,7 @@ abstract class BaseReadAloudService : BaseService(),
 
     @CallSuper
     open fun pauseReadAloud(abandonFocus: Boolean = true) {
+        if (useWakeLock) wakeLock.release()
         pause = true
         if (abandonFocus) {
             abandonFocus()
@@ -165,6 +192,7 @@ abstract class BaseReadAloudService : BaseService(),
         doDs()
     }
 
+    @SuppressLint("WakelockTimeout")
     @CallSuper
     open fun resumeReadAloud() {
         pause = false
@@ -246,6 +274,7 @@ abstract class BaseReadAloudService : BaseService(),
         }
         val requestFocus = MediaHelp.requestFocus(mFocusRequest)
         if (!requestFocus) {
+            pauseReadAloud(false)
             toastOnUi("未获取到音频焦点")
         }
         return requestFocus
@@ -255,8 +284,7 @@ abstract class BaseReadAloudService : BaseService(),
      * 放弃音频焦点
      */
     private fun abandonFocus() {
-        @Suppress("DEPRECATION")
-        audioManager.abandonAudioFocus(this)
+        AudioManagerCompat.abandonAudioFocusRequest(audioManager, mFocusRequest)
     }
 
     /**
@@ -353,7 +381,7 @@ abstract class BaseReadAloudService : BaseService(),
     /**
      * 更新通知
      */
-    private fun upNotification() {
+    override fun upNotification() {
         execute {
             var nTitle: String = when {
                 pause -> getString(R.string.read_aloud_pause)

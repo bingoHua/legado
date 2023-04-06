@@ -10,6 +10,8 @@ import androidx.core.os.bundleOf
 import androidx.core.view.isVisible
 import androidx.fragment.app.viewModels
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
+import androidx.lifecycle.Lifecycle.State.STARTED
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import io.legado.app.R
@@ -21,7 +23,7 @@ import io.legado.app.data.entities.BookChapter
 import io.legado.app.data.entities.BookSource
 import io.legado.app.data.entities.SearchBook
 import io.legado.app.databinding.DialogChapterChangeSourceBinding
-import io.legado.app.help.BookHelp
+import io.legado.app.help.book.BookHelp
 import io.legado.app.help.config.AppConfig
 import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.theme.elevation
@@ -66,7 +68,7 @@ class ChangeChapterSourceDialog() : BaseDialogFragment(R.layout.dialog_chapter_c
         ChangeChapterTocAdapter(requireContext(), this)
     }
     private val contentSuccess: (content: String) -> Unit = {
-        binding.loadingToc.hide()
+        binding.loadingToc.gone()
         callBack?.replaceContent(it)
         dismissAllowingStateLoss()
     }
@@ -202,10 +204,12 @@ class ChangeChapterSourceDialog() : BaseDialogFragment(R.layout.dialog_chapter_c
             }
             binding.toolBar.menu.applyTint(requireContext())
         }
-        lifecycleScope.launchWhenStarted {
-            viewModel.searchDataFlow.conflate().collect {
-                searchBookAdapter.setItems(it)
-                delay(1000)
+        lifecycleScope.launch {
+            repeatOnLifecycle(STARTED) {
+                viewModel.searchDataFlow.conflate().collect {
+                    searchBookAdapter.setItems(it)
+                    delay(1000)
+                }
             }
         }
         launch {
@@ -255,7 +259,7 @@ class ChangeChapterSourceDialog() : BaseDialogFragment(R.layout.dialog_chapter_c
 
     private fun scrollToDurSource() {
         searchBookAdapter.getItems().forEachIndexed { index, searchBook ->
-            if (searchBook.bookUrl == bookUrl) {
+            if (searchBook.bookUrl == oldBookUrl) {
                 (binding.recyclerView.layoutManager as LinearLayoutManager)
                     .scrollToPositionWithOffset(index, 60.dpToPx())
                 return
@@ -267,7 +271,7 @@ class ChangeChapterSourceDialog() : BaseDialogFragment(R.layout.dialog_chapter_c
         this.searchBook = searchBook
         tocAdapter.setItems(null)
         binding.clToc.visible()
-        binding.loadingToc.show()
+        binding.loadingToc.visible()
         val book = searchBook.toBook()
         viewModel.getToc(book, {
             binding.clToc.gone()
@@ -275,13 +279,13 @@ class ChangeChapterSourceDialog() : BaseDialogFragment(R.layout.dialog_chapter_c
         }) { toc: List<BookChapter>, _: BookSource ->
             tocAdapter.durChapterIndex =
                 BookHelp.getDurChapter(viewModel.chapterIndex, viewModel.chapterTitle, toc)
-            binding.loadingToc.hide()
+            binding.loadingToc.gone()
             tocAdapter.setItems(toc)
             binding.recyclerViewToc.scrollToPosition(tocAdapter.durChapterIndex - 5)
         }
     }
 
-    override val bookUrl: String?
+    override val oldBookUrl: String?
         get() = callBack?.oldBook?.bookUrl
 
     override fun topSource(searchBook: SearchBook) {
@@ -304,7 +308,7 @@ class ChangeChapterSourceDialog() : BaseDialogFragment(R.layout.dialog_chapter_c
 
     override fun deleteSource(searchBook: SearchBook) {
         viewModel.del(searchBook)
-        if (bookUrl == searchBook.bookUrl) {
+        if (oldBookUrl == searchBook.bookUrl) {
             viewModel.autoChangeSource(callBack?.oldBook?.type) { book, toc, source ->
                 callBack?.changeTo(source, book, toc)
             }
@@ -321,9 +325,9 @@ class ChangeChapterSourceDialog() : BaseDialogFragment(R.layout.dialog_chapter_c
 
     override fun clickChapter(bookChapter: BookChapter, nextChapterUrl: String?) {
         searchBook?.let {
-            binding.loadingToc.show()
+            binding.loadingToc.visible()
             viewModel.getContent(it.toBook(), bookChapter, nextChapterUrl, contentSuccess) { msg ->
-                binding.loadingToc.hide()
+                binding.loadingToc.gone()
                 binding.clToc.gone()
                 toastOnUi(msg)
             }
@@ -360,7 +364,7 @@ class ChangeChapterSourceDialog() : BaseDialogFragment(R.layout.dialog_chapter_c
             searchBookAdapter.notifyItemRangeChanged(
                 0,
                 searchBookAdapter.itemCount,
-                bundleOf(Pair("upCurSource", bookUrl))
+                bundleOf(Pair("upCurSource", oldBookUrl))
             )
         }
     }

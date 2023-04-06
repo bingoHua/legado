@@ -8,7 +8,7 @@ interface RuleDataInterface {
         return when {
             value == null -> {
                 variableMap.remove(key)
-                putBigVariable(key, value)
+                putBigVariable(key, null)
                 true
             }
             value.length < 10000 -> {
@@ -24,8 +24,8 @@ interface RuleDataInterface {
 
     fun putBigVariable(key: String, value: String?)
 
-    fun getVariable(key: String): String? {
-        return variableMap[key] ?: getBigVariable(key)
+    fun getVariable(key: String): String {
+        return variableMap[key] ?: getBigVariable(key) ?: ""
     }
 
     fun getBigVariable(key: String): String?

@@ -25,7 +25,8 @@ import io.legado.app.utils.viewbindingdelegate.viewBinding
 import io.legado.app.utils.visible
 import splitties.views.onClick
 
-class ImportHttpTtsDialog() : BaseDialogFragment(R.layout.dialog_recycler_view) {
+class ImportHttpTtsDialog() : BaseDialogFragment(R.layout.dialog_recycler_view),
+    CodeDialog.Callback {
 
     constructor(source: String, finishOnDismiss: Boolean = false) : this() {
         arguments = Bundle().apply {
@@ -54,7 +55,7 @@ class ImportHttpTtsDialog() : BaseDialogFragment(R.layout.dialog_recycler_view) 
     override fun onFragmentCreated(view: View, savedInstanceState: Bundle?) {
         binding.toolBar.setBackgroundColor(primaryColor)
         binding.toolBar.setTitle(R.string.import_tts)
-        binding.rotateLoading.show()
+        binding.rotateLoading.visible()
         binding.recyclerView.layoutManager = LinearLayoutManager(requireContext())
         binding.recyclerView.adapter = adapter
         binding.tvCancel.visible()
@@ -82,14 +83,14 @@ class ImportHttpTtsDialog() : BaseDialogFragment(R.layout.dialog_recycler_view) 
             upSelectText()
         }
         viewModel.errorLiveData.observe(this) {
-            binding.rotateLoading.hide()
+            binding.rotateLoading.gone()
             binding.tvMsg.apply {
                 text = it
                 visible()
             }
         }
         viewModel.successLiveData.observe(this) {
-            binding.rotateLoading.hide()
+            binding.rotateLoading.gone()
             if (it > 0) {
                 adapter.setItems(viewModel.allSources)
                 upSelectText()
@@ -175,5 +176,14 @@ class ImportHttpTtsDialog() : BaseDialogFragment(R.layout.dialog_recycler_view) 
             }
         }
 
+    }
+
+    override fun onCodeSave(code: String, requestId: String?) {
+        requestId?.toInt()?.let {
+            HttpTTS.fromJson(code).getOrNull()?.let { source ->
+                viewModel.allSources[it] = source
+                adapter.setItem(it, source)
+            }
+        }
     }
 }

@@ -21,20 +21,20 @@ import io.legado.app.lib.theme.accentColor
 import io.legado.app.lib.theme.primaryTextColor
 import io.legado.app.model.Download
 import io.legado.app.ui.association.OnLineImportActivity
-import io.legado.app.ui.document.HandleFileContract
+import io.legado.app.ui.file.HandleFileContract
 import io.legado.app.ui.login.SourceLoginActivity
 import io.legado.app.utils.*
 import io.legado.app.utils.viewbindingdelegate.viewBinding
 import kotlinx.coroutines.launch
 import org.apache.commons.text.StringEscapeUtils
 import org.jsoup.Jsoup
+import java.io.ByteArrayInputStream
 import java.net.URLDecoder
 
 /**
  * rss阅读界面
  */
-class ReadRssActivity : VMBaseActivity<ActivityRssReadBinding, ReadRssViewModel>(false),
-    ReadRssViewModel.CallBack {
+class ReadRssActivity : VMBaseActivity<ActivityRssReadBinding, ReadRssViewModel>(false) {
 
     override val binding by viewBinding(ActivityRssReadBinding::inflate)
     override val viewModel by viewModels<ReadRssViewModel>()
@@ -49,7 +49,8 @@ class ReadRssActivity : VMBaseActivity<ActivityRssReadBinding, ReadRssViewModel>
     }
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
-        viewModel.callBack = this
+        viewModel.upStarMenuData.observe(this) { upStarMenu() }
+        viewModel.upTtsMenuData.observe(this) { upTtsMenu(it) }
         binding.titleBar.title = intent.getStringExtra("title")
         initWebView()
         initLiveData()
@@ -95,9 +96,13 @@ class ReadRssActivity : VMBaseActivity<ActivityRssReadBinding, ReadRssViewModel>
                 binding.webView.reload()
             }
             R.id.menu_rss_star -> viewModel.favorite()
-            R.id.menu_share_it -> viewModel.rssArticle?.let {
-                share(it.link)
-            } ?: toastOnUi(R.string.null_url)
+            R.id.menu_share_it -> {
+                binding.webView.url?.let {
+                    share(it)
+                } ?: viewModel.rssArticle?.let {
+                    share(it.link)
+                } ?: toastOnUi(R.string.null_url)
+            }
             R.id.menu_aloud -> readAloud()
             R.id.menu_login -> startActivity<SourceLoginActivity> {
                 putExtra("type", "rssSource")
@@ -125,9 +130,13 @@ class ReadRssActivity : VMBaseActivity<ActivityRssReadBinding, ReadRssViewModel>
             domStorageEnabled = true
             allowContentAccess = true
             builtInZoomControls = true
+            displayZoomControls = false
             setDarkeningAllowed(AppConfig.isNightTheme)
         }
-        binding.webView.addJavascriptInterface(this, "app")
+        binding.webView.addJavascriptInterface(this, "thisActivity")
+        viewModel.rssSource?.let {
+            binding.webView.addJavascriptInterface(it, "thisSource")
+        }
         binding.webView.setOnLongClickListener {
             val hitTestResult = binding.webView.hitTestResult
             if (hitTestResult.type == WebView.HitTestResult.IMAGE_TYPE ||
@@ -214,7 +223,8 @@ class ReadRssActivity : VMBaseActivity<ActivityRssReadBinding, ReadRssViewModel>
         }
     }
 
-    override fun upStarMenu() {
+    private fun upStarMenu() {
+        starMenuItem?.isVisible = viewModel.rssArticle != null
         if (viewModel.rssStar != null) {
             starMenuItem?.setIcon(R.drawable.ic_star)
             starMenuItem?.setTitle(R.string.in_favorites)
@@ -225,7 +235,7 @@ class ReadRssActivity : VMBaseActivity<ActivityRssReadBinding, ReadRssViewModel>
         starMenuItem?.icon?.setTintMutate(primaryTextColor)
     }
 
-    override fun upTtsMenu(isPlaying: Boolean) {
+    private fun upTtsMenu(isPlaying: Boolean) {
         launch {
             if (isPlaying) {
                 ttsMenuItem?.setIcon(R.drawable.ic_stop_black_24dp)
@@ -275,7 +285,11 @@ class ReadRssActivity : VMBaseActivity<ActivityRssReadBinding, ReadRssViewModel>
             binding.webView.evaluateJavascript("document.documentElement.outerHTML") {
                 val html = StringEscapeUtils.unescapeJson(it)
                     .replace("^\"|\"$".toRegex(), "")
-                viewModel.readAloud(Jsoup.parse(html).textArray().joinToString("\n"))
+                viewModel.readAloud(
+                    Jsoup.parse(html)
+                        .textArray()
+                        .joinToString("\n")
+                )
             }
         }
     }
@@ -308,38 +322,79 @@ class ReadRssActivity : VMBaseActivity<ActivityRssReadBinding, ReadRssViewModel>
     }
 
     inner class CustomWebViewClient : WebViewClient() {
+
         override fun shouldOverrideUrlLoading(
-            view: WebView?,
-            request: WebResourceRequest?
+            view: WebView,
+            request: WebResourceRequest
         ): Boolean {
-            request?.let {
-                return shouldOverrideUrlLoading(it.url)
-            }
-            return true
+            return shouldOverrideUrlLoading(request.url)
         }
 
         @Suppress("DEPRECATION", "OVERRIDE_DEPRECATION", "KotlinRedundantDiagnosticSuppress")
-        override fun shouldOverrideUrlLoading(view: WebView?, url: String?): Boolean {
-            url?.let {
-                return shouldOverrideUrlLoading(Uri.parse(it))
-            }
-            return true
+        override fun shouldOverrideUrlLoading(view: WebView, url: String): Boolean {
+            return shouldOverrideUrlLoading(Uri.parse(url))
         }
 
-        override fun onPageFinished(view: WebView?, url: String?) {
+        /**
+         * 如果有黑名单,黑名单匹配返回空白,
+         * 没有黑名单再判断白名单,在白名单中的才通过,
+         * 都没有不做处理
+         */
+        override fun shouldInterceptRequest(
+            view: WebView,
+            request: WebResourceRequest
+        ): WebResourceResponse? {
+            val url = request.url.toString()
+            viewModel.rssSource?.let { source ->
+                val blacklist = source.contentBlacklist?.splitNotBlank(",")
+                if (!blacklist.isNullOrEmpty()) {
+                    blacklist.forEach {
+                        if (url.startsWith(it) || url.matches(it.toRegex())) {
+                            return createEmptyResource()
+                        }
+                    }
+                } else {
+                    val whitelist = source.contentWhitelist?.splitNotBlank(",")
+                    if (!whitelist.isNullOrEmpty()) {
+                        whitelist.forEach {
+                            if (url.startsWith(it) || url.matches(it.toRegex())) {
+                                return super.shouldInterceptRequest(view, request)
+                            }
+                        }
+                        return createEmptyResource()
+                    }
+                }
+            }
+            return super.shouldInterceptRequest(view, request)
+        }
+
+        override fun onPageFinished(view: WebView, url: String?) {
             super.onPageFinished(view, url)
-            view?.title?.let { title ->
+            view.title?.let { title ->
                 if (title != url && title != view.url && title.isNotBlank() && url != "about:blank") {
                     binding.titleBar.title = title
                 } else {
                     binding.titleBar.title = intent.getStringExtra("title")
                 }
             }
+            viewModel.rssSource?.injectJs?.let {
+                if (it.isNotBlank()) {
+                    view.evaluateJavascript(it, null)
+                }
+            }
+        }
+
+        private fun createEmptyResource(): WebResourceResponse {
+            return WebResourceResponse(
+                "text/plain",
+                "utf-8",
+                ByteArrayInputStream("".toByteArray())
+            )
         }
 
         private fun shouldOverrideUrlLoading(url: Uri): Boolean {
             when (url.scheme) {
-                "http", "https" -> {
+                "http", "https", "jsbridge" -> {
                     return false
                 }
                 "legado", "yuedu" -> {
@@ -349,7 +404,7 @@ class ReadRssActivity : VMBaseActivity<ActivityRssReadBinding, ReadRssViewModel>
                     return true
                 }
                 else -> {
-                    binding.root.longSnackbar("跳转其它应用", "确认") {
+                    binding.root.longSnackbar(R.string.jump_to_another_app, R.string.confirm) {
                         openUrl(url)
                     }
                     return true

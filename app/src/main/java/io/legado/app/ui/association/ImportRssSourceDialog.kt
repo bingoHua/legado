@@ -63,7 +63,7 @@ class ImportRssSourceDialog() : BaseDialogFragment(R.layout.dialog_recycler_view
     override fun onFragmentCreated(view: View, savedInstanceState: Bundle?) {
         binding.toolBar.setBackgroundColor(primaryColor)
         binding.toolBar.setTitle(R.string.import_rss_source)
-        binding.rotateLoading.show()
+        binding.rotateLoading.visible()
         initMenu()
         binding.recyclerView.layoutManager = LinearLayoutManager(requireContext())
         binding.recyclerView.adapter = adapter
@@ -92,14 +92,14 @@ class ImportRssSourceDialog() : BaseDialogFragment(R.layout.dialog_recycler_view
             upSelectText()
         }
         viewModel.errorLiveData.observe(this) {
-            binding.rotateLoading.hide()
+            binding.rotateLoading.gone()
             binding.tvMsg.apply {
                 text = it
                 visible()
             }
         }
         viewModel.successLiveData.observe(this) {
-            binding.rotateLoading.hide()
+            binding.rotateLoading.gone()
             if (it > 0) {
                 adapter.setItems(viewModel.allSources)
                 upSelectText()
@@ -137,17 +137,23 @@ class ImportRssSourceDialog() : BaseDialogFragment(R.layout.dialog_recycler_view
     private fun initMenu() {
         binding.toolBar.setOnMenuItemClickListener(this)
         binding.toolBar.inflateMenu(R.menu.import_source)
-        binding.toolBar.menu.findItem(R.id.menu_Keep_original_name)?.isChecked =
+        binding.toolBar.menu.findItem(R.id.menu_keep_original_name)?.isChecked =
             AppConfig.importKeepName
+        binding.toolBar.menu.findItem(R.id.menu_keep_group)?.isChecked =
+            AppConfig.importKeepGroup
     }
 
     @SuppressLint("InflateParams")
     override fun onMenuItemClick(item: MenuItem): Boolean {
         when (item.itemId) {
             R.id.menu_new_group -> alertCustomGroup(item)
-            R.id.menu_Keep_original_name -> {
+            R.id.menu_keep_original_name -> {
                 item.isChecked = !item.isChecked
                 putPrefBoolean(PreferKey.importKeepName, item.isChecked)
+            }
+            R.id.menu_keep_group -> {
+                item.isChecked = !item.isChecked
+                putPrefBoolean(PreferKey.importKeepGroup, item.isChecked)
             }
         }
         return false
@@ -184,7 +190,7 @@ class ImportRssSourceDialog() : BaseDialogFragment(R.layout.dialog_recycler_view
 
     override fun onCodeSave(code: String, requestId: String?) {
         requestId?.toInt()?.let {
-            RssSource.fromJson(code).getOrNull()?.let { source ->
+            GSON.fromJsonObject<RssSource>(code).getOrNull()?.let { source ->
                 viewModel.allSources[it] = source
                 adapter.setItem(it, source)
             }

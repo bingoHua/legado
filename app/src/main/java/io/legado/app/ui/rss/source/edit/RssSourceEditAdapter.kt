@@ -9,11 +9,17 @@ import android.view.ViewGroup
 import androidx.recyclerview.widget.RecyclerView
 import io.legado.app.R
 import io.legado.app.databinding.ItemSourceEditBinding
+import io.legado.app.databinding.ItemSourceEditCheckBoxBinding
+import io.legado.app.help.config.AppConfig
 import io.legado.app.ui.widget.code.addJsPattern
 import io.legado.app.ui.widget.code.addJsonPattern
 import io.legado.app.ui.widget.code.addLegadoPattern
+import io.legado.app.ui.widget.text.EditEntity
+import io.legado.app.utils.isTrue
 
-class RssSourceEditAdapter : RecyclerView.Adapter<RssSourceEditAdapter.MyViewHolder>() {
+class RssSourceEditAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
+
+    val editEntityMaxLine = AppConfig.sourceEditMaxLine
 
     var editEntities: ArrayList<EditEntity> = ArrayList()
         @SuppressLint("NotifyDataSetChanged")
@@ -22,26 +28,45 @@ class RssSourceEditAdapter : RecyclerView.Adapter<RssSourceEditAdapter.MyViewHol
             notifyDataSetChanged()
         }
 
-    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): MyViewHolder {
-        val binding = ItemSourceEditBinding
-            .inflate(LayoutInflater.from(parent.context), parent, false)
-        binding.editText.addLegadoPattern()
-        binding.editText.addJsonPattern()
-        binding.editText.addJsPattern()
-        return MyViewHolder(binding)
+    override fun getItemViewType(position: Int): Int {
+        val item = editEntities[position]
+        return item.viewType
     }
 
-    override fun onBindViewHolder(holder: MyViewHolder, position: Int) {
-        holder.bind(editEntities[position])
+    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
+        return when (viewType) {
+            EditEntity.ViewType.checkBox -> {
+                val binding = ItemSourceEditCheckBoxBinding
+                    .inflate(LayoutInflater.from(parent.context), parent, false)
+                CheckBoxViewHolder(binding)
+            }
+            else -> {
+                val binding = ItemSourceEditBinding
+                    .inflate(LayoutInflater.from(parent.context), parent, false)
+                binding.editText.addLegadoPattern()
+                binding.editText.addJsonPattern()
+                binding.editText.addJsPattern()
+                EditTextViewHolder(binding)
+            }
+        }
+    }
+
+    override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
+        when (holder) {
+            is CheckBoxViewHolder -> holder.bind(editEntities[position])
+            is EditTextViewHolder -> holder.bind(editEntities[position])
+        }
     }
 
     override fun getItemCount(): Int {
         return editEntities.size
     }
 
-    class MyViewHolder(val binding: ItemSourceEditBinding) : RecyclerView.ViewHolder(binding.root) {
+    inner class EditTextViewHolder(val binding: ItemSourceEditBinding) :
+        RecyclerView.ViewHolder(binding.root) {
 
         fun bind(editEntity: EditEntity) = binding.run {
+            editText.maxLines = editEntityMaxLine
             if (editText.getTag(R.id.tag1) == null) {
                 val listener = object : View.OnAttachStateChangeListener {
                     override fun onViewAttachedToWindow(v: View) {
@@ -64,7 +89,7 @@ class RssSourceEditAdapter : RecyclerView.Adapter<RssSourceEditAdapter.MyViewHol
                 }
             }
             editText.setText(editEntity.value)
-            textInputLayout.hint = itemView.context.getString(editEntity.hint)
+            textInputLayout.hint = editEntity.hint
             val textWatcher = object : TextWatcher {
                 override fun beforeTextChanged(
                     s: CharSequence,
@@ -87,5 +112,21 @@ class RssSourceEditAdapter : RecyclerView.Adapter<RssSourceEditAdapter.MyViewHol
             editText.setTag(R.id.tag2, textWatcher)
         }
     }
+
+    inner class CheckBoxViewHolder(val binding: ItemSourceEditCheckBoxBinding) :
+        RecyclerView.ViewHolder(binding.root) {
+
+        fun bind(editEntity: EditEntity) = binding.run {
+            checkBox.setOnCheckedChangeListener(null)
+            checkBox.text = editEntity.hint
+            checkBox.isChecked = editEntity.value.isTrue()
+            checkBox.setOnCheckedChangeListener { _, isChecked ->
+                editEntity.value = isChecked.toString()
+            }
+        }
+
+
+    }
+
 
 }

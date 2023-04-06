@@ -6,11 +6,13 @@ import androidx.lifecycle.MutableLiveData
 import com.jayway.jsonpath.JsonPath
 import io.legado.app.R
 import io.legado.app.base.BaseViewModel
+import io.legado.app.constant.AppConst
+import io.legado.app.constant.AppLog
 import io.legado.app.constant.AppPattern
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.BookSource
 import io.legado.app.exception.NoStackTraceException
-import io.legado.app.help.ContentProcessor
+import io.legado.app.help.book.ContentProcessor
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.http.newCallResponseBody
 import io.legado.app.help.http.okHttpClient
@@ -53,16 +55,19 @@ class ImportBookSourceViewModel(app: Application) : BaseViewModel(app) {
         execute {
             val group = groupName?.trim()
             val keepName = AppConfig.importKeepName
+            val keepGroup = AppConfig.importKeepGroup
             val selectSource = arrayListOf<BookSource>()
             selectStatus.forEachIndexed { index, b ->
                 if (b) {
                     val source = allSources[index]
-                    if (keepName) {
-                        checkSources[index]?.let {
+                    checkSources[index]?.let {
+                        if (keepName) {
                             source.bookSourceName = it.bookSourceName
-                            source.bookSourceGroup = it.bookSourceGroup
-                            source.customOrder = it.customOrder
                         }
+                        if (keepGroup) {
+                            source.bookSourceGroup = it.bookSourceGroup
+                        }
+                        source.customOrder = it.customOrder
                     }
                     if (!group.isNullOrEmpty()) {
                         if (isAddGroup) {
@@ -94,33 +99,34 @@ class ImportBookSourceViewModel(app: Application) : BaseViewModel(app) {
                     kotlin.runCatching {
                         val json = JsonPath.parse(mText)
                         json.read<List<String>>("$.sourceUrls")
-                    }.onSuccess {
-                        it.forEach {
+                    }.onSuccess { listUrl ->
+                        listUrl.forEach {
                             importSourceUrl(it)
                         }
                     }.onFailure {
-                        BookSource.fromJson(mText).getOrThrow().let {
+                        GSON.fromJsonObject<BookSource>(mText).getOrThrow().let {
                             allSources.add(it)
                         }
                     }
                 }
-                mText.isJsonArray() -> BookSource.fromJsonArray(mText).getOrThrow().let { items ->
-                    allSources.addAll(items)
-                }
+                mText.isJsonArray() -> GSON.fromJsonArray<BookSource>(mText).getOrThrow()
+                    .let { items ->
+                        allSources.addAll(items)
+                    }
                 mText.isAbsUrl() -> {
                     importSourceUrl(mText)
                 }
                 mText.isUri() -> {
                     val uri = Uri.parse(mText)
-                    uri.inputStream(context)?.let {
-                        allSources.addAll(BookSource.fromJsonArray(it).getOrThrow())
+                    uri.inputStream(context).getOrThrow().let {
+                        allSources.addAll(GSON.fromJsonArray<BookSource>(it).getOrThrow())
                     }
                 }
                 else -> throw NoStackTraceException(context.getString(R.string.wrong_format))
             }
         }.onError {
-            it.printOnDebug()
-            errorLiveData.postValue(it.localizedMessage ?: "")
+            errorLiveData.postValue("ImportError:${it.localizedMessage}")
+            AppLog.put("ImportError:${it.localizedMessage}", it)
         }.onSuccess {
             comparisonSource()
         }
@@ -128,9 +134,14 @@ class ImportBookSourceViewModel(app: Application) : BaseViewModel(app) {
 
     private suspend fun importSourceUrl(url: String) {
         okHttpClient.newCallResponseBody {
-            url(url)
+            if (url.endsWith("#requestWithoutUA")) {
+                url(url.substringBeforeLast("#requestWithoutUA"))
+                header(AppConst.UA_NAME, "null")
+            } else {
+                url(url)
+            }
         }.byteStream().let {
-            allSources.addAll(BookSource.fromJsonArray(it).getOrThrow())
+            allSources.addAll(GSON.fromJsonArray<BookSource>(it).getOrThrow())
         }
     }
 

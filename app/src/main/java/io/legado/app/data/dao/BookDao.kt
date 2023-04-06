@@ -11,8 +11,8 @@ interface BookDao {
 
     @Query(
         """
-        select * from books where type != ${BookType.audio} 
-        and origin != '${BookType.local}' 
+        select * from books where type & ${BookType.text} > 0
+        and type & ${BookType.local} = 0
         and ((SELECT sum(groupId) FROM book_groups where groupId > 0) & `group`) = 0
         and (select show from book_groups where groupId = ${AppConst.bookGroupNetNoneId}) != 1
         """
@@ -22,15 +22,15 @@ interface BookDao {
     @Query("SELECT * FROM books order by durChapterTime desc")
     fun flowAll(): Flow<List<Book>>
 
-    @Query("SELECT * FROM books WHERE type = ${BookType.audio}")
+    @Query("SELECT * FROM books WHERE type & ${BookType.audio} > 0")
     fun flowAudio(): Flow<List<Book>>
 
-    @Query("SELECT * FROM books WHERE origin = '${BookType.local}'")
+    @Query("SELECT * FROM books WHERE type & ${BookType.local} > 0")
     fun flowLocal(): Flow<List<Book>>
 
     @Query(
         """
-        select * from books where type != ${BookType.audio} and origin != '${BookType.local}' 
+        select * from books where type & ${BookType.audio} = 0 and type & ${BookType.local} = 0
         and ((SELECT sum(groupId) FROM book_groups where groupId > 0) & `group`) = 0
         """
     )
@@ -38,14 +38,11 @@ interface BookDao {
 
     @Query(
         """
-        select * from books where type != ${BookType.audio} and origin = '${BookType.local}' 
+        select * from books where type & ${BookType.local} > 0
         and ((SELECT sum(groupId) FROM book_groups where groupId > 0) & `group`) = 0
         """
     )
     fun flowLocalNoGroup(): Flow<List<Book>>
-
-    @Query("SELECT bookUrl FROM books WHERE origin = '${BookType.local}'")
-    fun flowLocalUri(): Flow<List<String>>
 
     @Query("SELECT * FROM books WHERE (`group` & :group) > 0")
     fun flowByGroup(group: Long): Flow<List<Book>>
@@ -53,11 +50,17 @@ interface BookDao {
     @Query("SELECT * FROM books WHERE name like '%'||:key||'%' or author like '%'||:key||'%'")
     fun flowSearch(key: String): Flow<List<Book>>
 
+    @Query("SELECT * FROM books where type & ${BookType.updateError} > 0 order by durChapterTime desc")
+    fun flowUpdateError(): Flow<List<Book>>
+
     @Query("SELECT * FROM books WHERE (`group` & :group) > 0")
     fun getBooksByGroup(group: Long): List<Book>
 
     @Query("SELECT * FROM books WHERE `name` in (:names)")
     fun findByName(vararg names: String): List<Book>
+
+    @Query("select * from books where originName = :fileName")
+    fun getBookByFileName(fileName: String): Book?
 
     @Query("SELECT * FROM books WHERE bookUrl = :bookUrl")
     fun getBook(bookUrl: String): Book?
@@ -65,19 +68,22 @@ interface BookDao {
     @Query("SELECT * FROM books WHERE name = :name and author = :author")
     fun getBook(name: String, author: String): Book?
 
-    @get:Query("select count(bookUrl) from books where (SELECT sum(groupId) FROM book_groups) & `group` = 0")
+    @get:Query("select count(bookUrl) from books where (SELECT sum(groupId) FROM book_groups)")
     val noGroupSize: Int
 
-    @get:Query("SELECT * FROM books where origin <> '${BookType.local}' and type = 0")
+    @get:Query("SELECT * FROM books where type & ${BookType.local} = 0")
     val webBooks: List<Book>
 
-    @get:Query("SELECT * FROM books where origin <> '${BookType.local}' and canUpdate = 1")
+    @get:Query("SELECT * FROM books where type & ${BookType.local} = 0 and canUpdate = 1")
     val hasUpdateBooks: List<Book>
 
     @get:Query("SELECT * FROM books")
     val all: List<Book>
 
-    @get:Query("SELECT * FROM books where type = 0 ORDER BY durChapterTime DESC limit 1")
+    @Query("SELECT * FROM books where type & :type > 0 and type & ${BookType.local} = 0")
+    fun getByTypeOnLine(type: Int): List<Book>
+
+    @get:Query("SELECT * FROM books where type & ${BookType.text} > 0 ORDER BY durChapterTime DESC limit 1")
     val lastReadBook: Book?
 
     @get:Query("SELECT bookUrl FROM books")
@@ -95,7 +101,7 @@ interface BookDao {
     @Query("select 1 from books where bookUrl = :bookUrl")
     fun has(bookUrl: String): Boolean?
 
-    @Query("select 1 from books where originName = :fileName")
+    @Query("select 1 from books where originName = :fileName or origin like '%' || :fileName")
     fun hasFile(fileName: String): Boolean?
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
@@ -113,4 +119,6 @@ interface BookDao {
     @Query("update books set `group` = :newGroupId where `group` = :oldGroupId")
     fun upGroup(oldGroupId: Long, newGroupId: Long)
 
+    @Query("update books set `group` = `group` - :group where `group` & :group > 0")
+    fun removeGroup(group: Long)
 }

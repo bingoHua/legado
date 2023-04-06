@@ -2,6 +2,7 @@ package io.legado.app.ui.book.read.page
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.graphics.Color
 import android.view.LayoutInflater
 import android.widget.FrameLayout
 import androidx.core.view.isGone
@@ -17,10 +18,7 @@ import io.legado.app.ui.book.read.page.entities.TextPage
 import io.legado.app.ui.book.read.page.entities.TextPos
 import io.legado.app.ui.book.read.page.provider.ChapterProvider
 import io.legado.app.ui.widget.BatteryView
-import io.legado.app.utils.activity
-import io.legado.app.utils.dpToPx
-import io.legado.app.utils.statusBarHeight
-import io.legado.app.utils.visible
+import io.legado.app.utils.*
 import splitties.views.backgroundColor
 import java.util.*
 
@@ -38,6 +36,7 @@ class PageView(context: Context) : FrameLayout(context) {
     private var tvBatteryP: BatteryView? = null
     private var tvPage: BatteryView? = null
     private var tvTotalProgress: BatteryView? = null
+    private var tvTotalProgress1: BatteryView? = null
     private var tvPageAndTotal: BatteryView? = null
     private var tvBookName: BatteryView? = null
     private var tvTimeBattery: BatteryView? = null
@@ -70,12 +69,21 @@ class PageView(context: Context) : FrameLayout(context) {
             val tipColor = with(ReadTipConfig) {
                 if (tipColor == 0) it.textColor else tipColor
             }
+            val tipDividerColor = with(ReadTipConfig) {
+                when (tipDividerColor) {
+                    -1 -> Color.parseColor("#66666666")
+                    0 -> tipColor
+                    else -> tipDividerColor
+                }
+            }
             tvHeaderLeft.setColor(tipColor)
             tvHeaderMiddle.setColor(tipColor)
             tvHeaderRight.setColor(tipColor)
             tvFooterLeft.setColor(tipColor)
             tvFooterMiddle.setColor(tipColor)
             tvFooterRight.setColor(tipColor)
+            vwTopDivider.backgroundColor = tipDividerColor
+            vwBottomDivider.backgroundColor = tipDividerColor
             upStatusBar()
             llHeader.setPadding(
                 it.headerPaddingLeft.dpToPx(),
@@ -161,6 +169,12 @@ class PageView(context: Context) : FrameLayout(context) {
             typeface = ChapterProvider.typeface
             textSize = 12f
         }
+        tvTotalProgress1 = getTipView(ReadTipConfig.totalProgress1)?.apply {
+            tag = ReadTipConfig.totalProgress1
+            isBattery = false
+            typeface = ChapterProvider.typeface
+            textSize = 12f
+        }
         tvPageAndTotal = getTipView(ReadTipConfig.pageAndTotal)?.apply {
             tag = ReadTipConfig.pageAndTotal
             isBattery = false
@@ -213,11 +227,7 @@ class PageView(context: Context) : FrameLayout(context) {
      * 更新背景
      */
     fun upBg() {
-        if (ReadBookConfig.bgAlpha < 100) {
-            binding.vwRoot.backgroundColor = ReadBookConfig.bgMeanColor
-        } else {
-            binding.vwRoot.background = null
-        }
+        binding.vwRoot.backgroundColor = ReadBookConfig.bgMeanColor
         binding.vwBg.background = ReadBookConfig.bg
         upBgAlpha()
     }
@@ -292,6 +302,7 @@ class PageView(context: Context) : FrameLayout(context) {
         tvTitle?.text = textPage.title
         tvPage?.text = "${index.plus(1)}/$pageSize"
         tvTotalProgress?.text = readProgress
+        tvTotalProgress1?.text = "${textPage.chapterIndex.plus(1)}/${textPage.chapterSize}"
         tvPageAndTotal?.text = "${index.plus(1)}/$pageSize  $readProgress"
     }
 
@@ -337,6 +348,14 @@ class PageView(context: Context) : FrameLayout(context) {
         return binding.contentTextView.selectText(x, y - headerHeight, select)
     }
 
+    fun getCurVisiblePage(): TextPage {
+        return binding.contentTextView.getCurVisiblePage()
+    }
+
+    fun markAsMainView() {
+        binding.contentTextView.isMainView = true
+    }
+
     fun selectStartMove(x: Float, y: Float) {
         binding.contentTextView.selectStartMove(x, y - headerHeight)
     }
@@ -353,8 +372,8 @@ class PageView(context: Context) : FrameLayout(context) {
         binding.contentTextView.selectEndMoveIndex(relativePagePos, lineIndex, charIndex)
     }
 
-    fun cancelSelect(fromSearchExit: Boolean = false) {
-        binding.contentTextView.cancelSelect(fromSearchExit)
+    fun cancelSelect(clearSearchResult: Boolean = false) {
+        binding.contentTextView.cancelSelect(clearSearchResult)
     }
 
     fun createBookmark(): Bookmark? {

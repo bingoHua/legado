@@ -11,6 +11,7 @@ import io.legado.app.R
 import io.legado.app.base.VMBaseActivity
 import io.legado.app.databinding.ActivitySourceDebugBinding
 import io.legado.app.help.source.exploreKinds
+import io.legado.app.lib.dialogs.selector
 import io.legado.app.lib.theme.accentColor
 import io.legado.app.lib.theme.primaryColor
 import io.legado.app.ui.qrcode.QrCodeResult
@@ -22,6 +23,7 @@ import io.legado.app.utils.toastOnUi
 import io.legado.app.utils.viewbindingdelegate.viewBinding
 import kotlinx.coroutines.launch
 import splitties.views.onClick
+import splitties.views.onLongClick
 
 class BookSourceDebugActivity : VMBaseActivity<ActivitySourceDebugBinding, BookSourceDebugModel>() {
 
@@ -48,7 +50,7 @@ class BookSourceDebugActivity : VMBaseActivity<ActivitySourceDebugBinding, BookS
             launch {
                 adapter.addItem(msg)
                 if (state == -1 || state == 1000) {
-                    binding.rotateLoading.hide()
+                    binding.rotateLoading.gone()
                 }
             }
         }
@@ -106,39 +108,45 @@ class BookSourceDebugActivity : VMBaseActivity<ActivitySourceDebugBinding, BookS
             }
         }
         binding.textToc.onClick {
-            val query = searchView.query
-            if (query.isNullOrBlank() || query.length <= 2) {
-                searchView.setQuery("++", false)
-            } else {
-                if (!query.startsWith("++")) {
-                    searchView.setQuery("++$query", true)
-                } else {
-                    searchView.setQuery(query, true)
-                }
-            }
+            prefixAutoComplete("++")
         }
         binding.textContent.onClick {
-            val query = searchView.query
-            if (query.isNullOrBlank() || query.length <= 2) {
-                searchView.setQuery("--", false)
-            } else {
-                if (!query.startsWith("--")) {
-                    searchView.setQuery("--$query", true)
-                } else {
-                    searchView.setQuery(query, true)
-                }
-            }
+            prefixAutoComplete("--")
         }
         launch {
-            viewModel.bookSource?.exploreKinds()?.firstOrNull {
+            val exploreKinds = viewModel.bookSource?.exploreKinds()?.filter {
                 !it.url.isNullOrBlank()
-            }?.let {
+            }
+            exploreKinds?.firstOrNull()?.let {
                 binding.textFx.text = "${it.title}::${it.url}"
                 if (it.title.startsWith("ERROR:")) {
                     adapter.addItem("获取发现出错\n${it.url}")
                     openOrCloseHelp(false)
                     searchView.clearFocus()
+                    return@launch
                 }
+            }
+            exploreKinds?.map { it.title }?.let { exploreKindTitles ->
+                binding.textFx.onLongClick {
+                    selector("选择发现", exploreKindTitles) { _, index ->
+                        val explore = exploreKinds[index]
+                        binding.textFx.text = "${explore.title}::${explore.url}"
+                        searchView.setQuery(binding.textFx.text, true)
+                    }
+                }
+            }
+        }
+    }
+
+    private fun prefixAutoComplete(prefix: String) {
+        val query = searchView.query
+        if (query.isNullOrBlank() || query.length <= 2) {
+            searchView.setQuery(prefix, false)
+        } else {
+            if (!query.startsWith(prefix)) {
+                searchView.setQuery("$prefix$query", true)
+            } else {
+                searchView.setQuery(query, true)
             }
         }
     }
@@ -157,7 +165,7 @@ class BookSourceDebugActivity : VMBaseActivity<ActivitySourceDebugBinding, BookS
     private fun startSearch(key: String) {
         adapter.clearItems()
         viewModel.startDebug(key, {
-            binding.rotateLoading.show()
+            binding.rotateLoading.visible()
         }, {
             toastOnUi("未获取到书源")
         })
@@ -171,10 +179,10 @@ class BookSourceDebugActivity : VMBaseActivity<ActivitySourceDebugBinding, BookS
     override fun onCompatOptionsItemSelected(item: MenuItem): Boolean {
         when (item.itemId) {
             R.id.menu_scan -> qrCodeResult.launch()
-            R.id.menu_search_src -> showDialogFragment(TextDialog(viewModel.searchSrc))
-            R.id.menu_book_src -> showDialogFragment(TextDialog(viewModel.bookSrc))
-            R.id.menu_toc_src -> showDialogFragment(TextDialog(viewModel.tocSrc))
-            R.id.menu_content_src -> showDialogFragment(TextDialog(viewModel.contentSrc))
+            R.id.menu_search_src -> showDialogFragment(TextDialog("html", viewModel.searchSrc))
+            R.id.menu_book_src -> showDialogFragment(TextDialog("html", viewModel.bookSrc))
+            R.id.menu_toc_src -> showDialogFragment(TextDialog("html", viewModel.tocSrc))
+            R.id.menu_content_src -> showDialogFragment(TextDialog("html", viewModel.contentSrc))
             R.id.menu_help -> showHelp()
         }
         return super.onCompatOptionsItemSelected(item)
@@ -182,7 +190,7 @@ class BookSourceDebugActivity : VMBaseActivity<ActivitySourceDebugBinding, BookS
 
     private fun showHelp() {
         val text = String(assets.open("help/debugHelp.md").readBytes())
-        showDialogFragment(TextDialog(text, TextDialog.Mode.MD))
+        showDialogFragment(TextDialog(getString(R.string.help), text, TextDialog.Mode.MD))
     }
 
 }

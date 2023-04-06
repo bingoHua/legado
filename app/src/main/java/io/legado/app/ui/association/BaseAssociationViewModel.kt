@@ -15,7 +15,7 @@ abstract class BaseAssociationViewModel(application: Application) : BaseViewMode
 
     fun importJson(uri: Uri) {
         when {
-            uri.inputStream(context).contains("bookSourceUrl") ->
+            uri.inputStream(context).getOrNull().contains("bookSourceUrl") ->
                 successLive.postValue(Pair("bookSource", uri.toString()))
             else -> importJson(uri.readText(context))
         }
@@ -30,6 +30,8 @@ abstract class BaseAssociationViewModel(application: Application) : BaseViewMode
                 successLive.postValue(Pair("replaceRule", json))
             json.contains("themeName") ->
                 successLive.postValue(Pair("theme", json))
+            json.contains("urlRule") && json.contains("showRule") ->
+                successLive.postValue(Pair("dictRule", json))
             json.contains("name") && json.contains("rule") ->
                 successLive.postValue(Pair("txtRule", json))
             json.contains("name") && json.contains("url") ->

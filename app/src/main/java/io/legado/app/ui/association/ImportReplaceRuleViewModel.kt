@@ -3,12 +3,13 @@ package io.legado.app.ui.association
 import android.app.Application
 import androidx.lifecycle.MutableLiveData
 import io.legado.app.base.BaseViewModel
+import io.legado.app.constant.AppConst
+import io.legado.app.constant.AppLog
 import io.legado.app.constant.AppPattern
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.ReplaceRule
 import io.legado.app.exception.NoStackTraceException
 import io.legado.app.help.ReplaceAnalyzer
-import io.legado.app.help.config.AppConfig
 import io.legado.app.help.http.newCallResponseBody
 import io.legado.app.help.http.okHttpClient
 import io.legado.app.help.http.text
@@ -51,18 +52,10 @@ class ImportReplaceRuleViewModel(app: Application) : BaseViewModel(app) {
     fun importSelect(finally: () -> Unit) {
         execute {
             val group = groupName?.trim()
-            val keepName = AppConfig.importKeepName
             val selectRules = arrayListOf<ReplaceRule>()
             selectStatus.forEachIndexed { index, b ->
                 if (b) {
                     val rule = allRules[index]
-                    if (keepName) {
-                        checkRules[index]?.let {
-                            rule.name = it.name
-                            rule.group = it.group
-                            rule.order = it.order
-                        }
-                    }
                     if (!group.isNullOrEmpty()) {
                         if (isAddGroup) {
                             val groups = linkedSetOf<String>()
@@ -88,7 +81,8 @@ class ImportReplaceRuleViewModel(app: Application) : BaseViewModel(app) {
         execute {
             importAwait(text.trim())
         }.onError {
-            errorLiveData.postValue(it.localizedMessage ?: "ERROR")
+            errorLiveData.postValue("ImportError:${it.localizedMessage}")
+            AppLog.put("ImportError:${it.localizedMessage}", it)
         }.onSuccess {
             comparisonSource()
         }
@@ -111,7 +105,12 @@ class ImportReplaceRuleViewModel(app: Application) : BaseViewModel(app) {
 
     private suspend fun importUrl(url: String) {
         okHttpClient.newCallResponseBody {
-            url(url)
+            if (url.endsWith("#requestWithoutUA")) {
+                url(url.substringBeforeLast("#requestWithoutUA"))
+                header(AppConst.UA_NAME, "null")
+            } else {
+                url(url)
+            }
         }.text("utf-8").let {
             importAwait(it)
         }

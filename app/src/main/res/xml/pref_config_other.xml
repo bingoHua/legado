@@ -56,10 +56,20 @@
             android:key="userAgent"
             android:title="@string/user_agent" />
 
+        <io.legado.app.lib.prefs.SwitchPreference
+            android:defaultValue="false"
+            android:key="webServiceWakeLock"
+            android:title="@string/web_service_wake_lock"
+            android:summary="@string/web_service_wake_lock_summary" />
+
         <io.legado.app.lib.prefs.Preference
             android:key="defaultBookTreeUri"
             android:summary="@string/book_tree_uri_s"
             android:title="@string/book_tree_uri_t" />
+
+        <io.legado.app.lib.prefs.Preference
+            android:key="sourceEditMaxLine"
+            android:title="@string/source_edit_text_max_line" />
 
         <io.legado.app.lib.prefs.Preference
             android:key="checkSource"
@@ -138,6 +148,12 @@
             android:key="cleanCache"
             android:summary="@string/clear_cache_summary"
             android:title="@string/clear_cache"
+            app:iconSpaceReserved="false" />
+
+        <io.legado.app.lib.prefs.Preference
+            android:key="clearWebViewData"
+            android:summary="@string/clear_webview_data_summary"
+            android:title="@string/clear_webview_data"
             app:iconSpaceReserved="false" />
 
         <io.legado.app.lib.prefs.Preference

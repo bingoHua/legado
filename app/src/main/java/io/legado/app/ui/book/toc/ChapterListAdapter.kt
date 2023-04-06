@@ -9,7 +9,7 @@ import io.legado.app.base.adapter.ItemViewHolder
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookChapter
 import io.legado.app.databinding.ItemChapterListBinding
-import io.legado.app.help.ContentProcessor
+import io.legado.app.help.book.ContentProcessor
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.lib.theme.ThemeUtils
@@ -18,11 +18,8 @@ import io.legado.app.utils.getCompatColor
 import io.legado.app.utils.gone
 import io.legado.app.utils.longToastOnUi
 import io.legado.app.utils.visible
-import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.*
 import kotlinx.coroutines.Dispatchers.Main
-import kotlinx.coroutines.async
-import kotlinx.coroutines.ensureActive
-import kotlinx.coroutines.withContext
 import java.util.concurrent.ConcurrentHashMap
 
 class ChapterListAdapter(context: Context, val callback: Callback) :
@@ -75,7 +72,7 @@ class ChapterListAdapter(context: Context, val callback: Callback) :
             val replaceRules = ContentProcessor.get(book.name, book.origin).getTitleReplaceRules()
             val useReplace = AppConfig.tocUiUseReplace && book.getUseReplaceRule()
             val items = getItems()
-            async {
+            launch {
                 for (i in startIndex until items.size) {
                     val item = items[i]
                     if (displayTitleMap[item.title] == null) {
@@ -88,8 +85,8 @@ class ChapterListAdapter(context: Context, val callback: Callback) :
                         }
                     }
                 }
-            }.start()
-            async {
+            }
+            launch {
                 for (i in startIndex downTo 0) {
                     val item = items[i]
                     if (displayTitleMap[item.title] == null) {
@@ -102,7 +99,7 @@ class ChapterListAdapter(context: Context, val callback: Callback) :
                         }
                     }
                 }
-            }.start()
+            }
         }
     }
 
@@ -122,7 +119,9 @@ class ChapterListAdapter(context: Context, val callback: Callback) :
     ) {
         binding.run {
             val isDur = callback.durChapterIndex() == item.index
-            val cached = callback.isLocalBook || cacheFileNames.contains(item.getFileName())
+            val cached = callback.isLocalBook
+                    || item.isVolume
+                    || cacheFileNames.contains(item.getFileName())
             if (payloads.isEmpty()) {
                 if (isDur) {
                     tvChapterName.setTextColor(context.accentColor)

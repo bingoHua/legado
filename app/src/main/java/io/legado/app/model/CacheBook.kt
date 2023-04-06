@@ -9,17 +9,16 @@ import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookChapter
 import io.legado.app.data.entities.BookSource
 import io.legado.app.exception.ConcurrentException
-import io.legado.app.help.BookHelp
+import io.legado.app.help.book.BookHelp
+import io.legado.app.help.book.isLocal
+import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.model.webBook.WebBook
 import io.legado.app.service.CacheBookService
 import io.legado.app.utils.postEvent
 
 import io.legado.app.utils.startService
-import io.legado.app.utils.toastOnUi
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.runBlocking
-import splitties.init.appCtx
 
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.coroutines.CoroutineContext
@@ -59,7 +58,7 @@ object CacheBook {
     }
 
     fun start(context: Context, book: Book, start: Int, end: Int) {
-        if (!book.isLocalBook()) {
+        if (!book.isLocal) {
             context.startService<CacheBookService> {
                 action = IntentAction.start
                 putExtra("bookUrl", book.bookUrl)
@@ -176,18 +175,6 @@ object CacheBook {
                 }
             }
             postEvent(EventBus.UP_DOWNLOAD, book.bookUrl)
-            val chapterCount = appDb.bookChapterDao.getChapterCount(book.bookUrl)
-            if (chapterCount == 0) {
-                runBlocking {
-                    WebBook.getChapterListAwait(bookSource, book)
-                        .onFailure {
-                            AppLog.put("缓存书籍没有目录且加载目录失败\n${it.localizedMessage}", it)
-                            appCtx.toastOnUi("缓存书籍没有目录且加载目录失败\n${it.localizedMessage}")
-                        }.getOrNull()
-                }?.let { toc ->
-                    appDb.bookChapterDao.insert(*toc.toTypedArray())
-                }
-            }
         }
 
         @Synchronized
@@ -261,12 +248,37 @@ object CacheBook {
                 waitDownloadSet.remove(chapterIndex)
                 return
             }
-            if (BookHelp.hasContent(book, chapter)) {
+            if (chapter.isVolume) {
+                /** 修正下载计数 */
+                postEvent(EventBus.SAVE_CONTENT, Pair(book, chapter))
+                waitDownloadSet.remove(chapterIndex)
+                return
+            }
+            if (BookHelp.hasImageContent(book, chapter)) {
                 waitDownloadSet.remove(chapterIndex)
                 return
             }
             waitDownloadSet.remove(chapterIndex)
             onDownloadSet.add(chapterIndex)
+            if (BookHelp.hasContent(book, chapter)) {
+                Coroutine.async {
+                    BookHelp.getContent(book, chapter)?.let {
+                        BookHelp.saveImages(bookSource, book, chapter, it)
+                    }
+                }.onSuccess {
+                    onSuccess(chapterIndex)
+                }.onError {
+                    onPreError(chapterIndex, it)
+                    //出现错误等待一秒后重新加入待下载列表
+                    delay(1000)
+                    onPostError(chapterIndex, it, chapter.title)
+                }.onCancel {
+                    onCancel(chapterIndex)
+                }.onFinally {
+                    onFinally()
+                }
+                return
+            }
             WebBook.getContent(
                 scope,
                 bookSource,

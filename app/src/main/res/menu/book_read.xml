@@ -29,7 +29,7 @@
         <item
             android:id="@+id/menu_toc_regex"
             android:icon="@drawable/ic_exchange"
-            android:title="@string/txt_toc_regex"
+            android:title="@string/txt_toc_rule"
             android:visible="false"
             app:showAsAction="always" />
     </group>
@@ -75,6 +75,12 @@
         android:checkable="true"
         android:checked="true"
         android:title="@string/replace_rule_title"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/menu_same_title_removed"
+        android:title="@string/same_title_removed"
+        android:checkable="true"
         app:showAsAction="never" />
 
     <item

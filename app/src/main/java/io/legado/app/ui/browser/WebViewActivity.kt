@@ -22,7 +22,7 @@ import io.legado.app.lib.dialogs.SelectItem
 import io.legado.app.lib.theme.accentColor
 import io.legado.app.model.Download
 import io.legado.app.ui.association.OnLineImportActivity
-import io.legado.app.ui.document.HandleFileContract
+import io.legado.app.ui.file.HandleFileContract
 import io.legado.app.utils.*
 import io.legado.app.utils.viewbindingdelegate.viewBinding
 import java.net.URLDecoder
@@ -34,6 +34,7 @@ class WebViewActivity : VMBaseActivity<ActivityWebViewBinding, WebViewModel>() {
     private val imagePathKey = "imagePath"
     private var customWebViewCallback: WebChromeClient.CustomViewCallback? = null
     private var webPic: String? = null
+    private var isCloudflareChallenge = false
     private val saveImage = registerForActivityResult(HandleFileContract()) {
         it.uri?.let { uri ->
             ACache.get().put(imagePathKey, uri.toString())
@@ -68,7 +69,7 @@ class WebViewActivity : VMBaseActivity<ActivityWebViewBinding, WebViewModel>() {
             R.id.menu_copy_url -> sendToClip(viewModel.baseUrl)
             R.id.menu_ok -> {
                 if (viewModel.sourceVerificationEnable) {
-                    viewModel.saveVerificationResult {
+                    viewModel.saveVerificationResult(intent) {
                         finish()
                     }
                 } else {
@@ -92,6 +93,8 @@ class WebViewActivity : VMBaseActivity<ActivityWebViewBinding, WebViewModel>() {
             useWideViewPort = true
             loadWithOverviewMode = true
             javaScriptEnabled = true
+            builtInZoomControls = true
+            displayZoomControls = false
             headerMap[AppConst.UA_NAME]?.let {
                 userAgentString = it
             }
@@ -129,6 +132,7 @@ class WebViewActivity : VMBaseActivity<ActivityWebViewBinding, WebViewModel>() {
             viewModel.saveImage(webPic, path)
         }
     }
+
     private fun selectSaveFolder() {
         val default = arrayListOf<SelectItem<Int>>()
         val path = ACache.get().getAsString(imagePathKey)
@@ -225,6 +229,15 @@ class WebViewActivity : VMBaseActivity<ActivityWebViewBinding, WebViewModel>() {
                     binding.titleBar.title = title
                 } else {
                     binding.titleBar.title = intent.getStringExtra("title")
+                }
+                view.evaluateJavascript("!!window._cf_chl_opt") {
+                    if (it == "true") {
+                        isCloudflareChallenge = true
+                    } else if (isCloudflareChallenge && viewModel.sourceVerificationEnable) {
+                        viewModel.saveVerificationResult(intent) {
+                            finish()
+                        }
+                    }
                 }
             }
         }

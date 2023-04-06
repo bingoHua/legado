@@ -1,0 +1,154 @@
+me/ag2s/epublib/domain/Date.java
+ me.ag2s.epublib.domain.Date
+ me.ag2s.epublib.domain.Date$Event
+me/ag2s/epublib/epub/PackageDocumentWriter.java
+ me.ag2s.epublib.epub.PackageDocumentWriter
+me/ag2s/epublib/Constants.java
+ me.ag2s.epublib.Constants
+me/ag2s/epublib/epub/PackageDocumentMetadataReader.java
+ me.ag2s.epublib.epub.PackageDocumentMetadataReader
+me/ag2s/epublib/domain/LazyResourceProvider.java
+ me.ag2s.epublib.domain.LazyResourceProvider
+me/ag2s/epublib/domain/ManifestProperties.java
+ me.ag2s.epublib.domain.ManifestProperties
+me/ag2s/epublib/util/NoCloseOutputStream.java
+ me.ag2s.epublib.util.NoCloseOutputStream
+me/ag2s/umdlib/domain/UmdHeader.java
+ me.ag2s.umdlib.domain.UmdHeader
+me/ag2s/epublib/util/IOUtil.java
+ me.ag2s.epublib.util.IOUtil
+me/ag2s/epublib/domain/Identifier.java
+ me.ag2s.epublib.domain.Identifier
+ me.ag2s.epublib.domain.Identifier$Scheme
+me/ag2s/epublib/epub/ResourcesLoader.java
+ me.ag2s.epublib.epub.ResourcesLoader
+me/ag2s/epublib/domain/Author.java
+ me.ag2s.epublib.domain.Author
+me/ag2s/epublib/domain/Spine.java
+ me.ag2s.epublib.domain.Spine
+me/ag2s/umdlib/domain/UmdBook.java
+ me.ag2s.umdlib.domain.UmdBook
+me/ag2s/epublib/domain/EpubBook.java
+ me.ag2s.epublib.domain.EpubBook
+me/ag2s/epublib/domain/LazyResource.java
+ me.ag2s.epublib.domain.LazyResource
+me/ag2s/epublib/domain/Resource.java
+ me.ag2s.epublib.domain.Resource
+me/ag2s/epublib/util/NoCloseWriter.java
+ me.ag2s.epublib.util.NoCloseWriter
+me/ag2s/epublib/domain/ResourceReference.java
+ me.ag2s.epublib.domain.ResourceReference
+me/ag2s/epublib/util/commons/io/IOConsumer.java
+ me.ag2s.epublib.util.commons.io.IOConsumer
+me/ag2s/epublib/epub/PackageDocumentMetadataWriter.java
+ me.ag2s.epublib.epub.PackageDocumentMetadataWriter
+me/ag2s/epublib/epub/NCXDocumentV2.java
+ me.ag2s.epublib.epub.NCXDocumentV2
+ me.ag2s.epublib.epub.NCXDocumentV2$NCXAttributeValues
+ me.ag2s.epublib.epub.NCXDocumentV2$NCXAttributes
+ me.ag2s.epublib.epub.NCXDocumentV2$NCXTags
+me/ag2s/epublib/domain/MediaTypes.java
+ me.ag2s.epublib.domain.MediaTypes
+me/ag2s/epublib/domain/SpineReference.java
+ me.ag2s.epublib.domain.SpineReference
+me/ag2s/epublib/domain/ManifestItemProperties.java
+ me.ag2s.epublib.domain.ManifestItemProperties
+me/ag2s/epublib/BuildConfig.java
+ me.ag2s.epublib.BuildConfig
+me/ag2s/epublib/browsersupport/package-info.java
+ me.ag2s.epublib.browsersupport.package-info
+me/ag2s/epublib/epub/PackageDocumentReader.java
+ me.ag2s.epublib.epub.PackageDocumentReader
+me/ag2s/umdlib/tool/UmdUtils.java
+ me.ag2s.umdlib.tool.UmdUtils
+me/ag2s/epublib/epub/BookProcessorPipeline.java
+ me.ag2s.epublib.epub.BookProcessorPipeline
+me/ag2s/epublib/domain/GuideReference.java
+ me.ag2s.epublib.domain.GuideReference
+me/ag2s/epublib/util/StringUtil.java
+ me.ag2s.epublib.util.StringUtil
+me/ag2s/epublib/domain/FileResourceProvider.java
+ me.ag2s.epublib.domain.FileResourceProvider
+me/ag2s/epublib/util/commons/io/BOMInputStream.java
+ me.ag2s.epublib.util.commons.io.BOMInputStream
+me/ag2s/epublib/epub/EpubProcessorSupport.java
+ me.ag2s.epublib.epub.EpubProcessorSupport
+ me.ag2s.epublib.epub.EpubProcessorSupport$EntityResolverImpl
+me/ag2s/epublib/epub/HtmlProcessor.java
+ me.ag2s.epublib.epub.HtmlProcessor
+me/ag2s/umdlib/tool/StreamReader.java
+ me.ag2s.umdlib.tool.StreamReader
+me/ag2s/epublib/util/commons/io/XmlStreamReader.java
+ me.ag2s.epublib.util.commons.io.XmlStreamReader
+me/ag2s/epublib/browsersupport/NavigationEventListener.java
+ me.ag2s.epublib.browsersupport.NavigationEventListener
+me/ag2s/umdlib/domain/UmdCover.java
+ me.ag2s.umdlib.domain.UmdCover
+me/ag2s/epublib/browsersupport/NavigationHistory.java
+ me.ag2s.epublib.browsersupport.NavigationHistory
+ me.ag2s.epublib.browsersupport.NavigationHistory$Location
+me/ag2s/epublib/browsersupport/NavigationEvent.java
+ me.ag2s.epublib.browsersupport.NavigationEvent
+me/ag2s/epublib/domain/TableOfContents.java
+ me.ag2s.epublib.domain.TableOfContents
+me/ag2s/epublib/browsersupport/Navigator.java
+ me.ag2s.epublib.browsersupport.Navigator
+me/ag2s/epublib/domain/ManifestItemRefProperties.java
+ me.ag2s.epublib.domain.ManifestItemRefProperties
+me/ag2s/epublib/epub/NCXDocumentV3.java
+ me.ag2s.epublib.epub.NCXDocumentV3
+ me.ag2s.epublib.epub.NCXDocumentV3$XHTMLAttributeValues
+ me.ag2s.epublib.epub.NCXDocumentV3$XHTMLAttributes
+ me.ag2s.epublib.epub.NCXDocumentV3$XHTMLTgs
+me/ag2s/epublib/util/commons/io/ByteOrderMark.java
+ me.ag2s.epublib.util.commons.io.ByteOrderMark
+me/ag2s/epublib/epub/DOMUtil.java
+ me.ag2s.epublib.epub.DOMUtil
+me/ag2s/umdlib/domain/UmdChapters.java
+ me.ag2s.umdlib.domain.UmdChapters
+me/ag2s/epublib/domain/EpubResourceProvider.java
+ me.ag2s.epublib.domain.EpubResourceProvider
+me/ag2s/epublib/util/commons/io/ProxyInputStream.java
+ me.ag2s.epublib.util.commons.io.ProxyInputStream
+me/ag2s/epublib/domain/TOCReference.java
+ me.ag2s.epublib.domain.TOCReference
+me/ag2s/epublib/epub/EpubWriter.java
+ me.ag2s.epublib.epub.EpubWriter
+me/ag2s/umdlib/domain/UmdEnd.java
+ me.ag2s.umdlib.domain.UmdEnd
+me/ag2s/epublib/domain/Metadata.java
+ me.ag2s.epublib.domain.Metadata
+me/ag2s/umdlib/tool/WrapOutputStream.java
+ me.ag2s.umdlib.tool.WrapOutputStream
+me/ag2s/epublib/domain/TitledResourceReference.java
+ me.ag2s.epublib.domain.TitledResourceReference
+me/ag2s/epublib/epub/EpubReader.java
+ me.ag2s.epublib.epub.EpubReader
+me/ag2s/epublib/domain/ResourceInputStream.java
+ me.ag2s.epublib.domain.ResourceInputStream
+me/ag2s/umdlib/umd/UmdReader.java
+ me.ag2s.umdlib.umd.UmdReader
+me/ag2s/epublib/util/CollectionUtil.java
+ me.ag2s.epublib.util.CollectionUtil
+ me.ag2s.epublib.util.CollectionUtil$IteratorEnumerationAdapter
+me/ag2s/epublib/util/commons/io/XmlStreamReaderException.java
+ me.ag2s.epublib.util.commons.io.XmlStreamReaderException
+me/ag2s/epublib/domain/Guide.java
+ me.ag2s.epublib.domain.Guide
+me/ag2s/epublib/domain/MediaType.java
+ me.ag2s.epublib.domain.MediaType
+me/ag2s/epublib/epub/PackageDocumentBase.java
+ me.ag2s.epublib.epub.PackageDocumentBase
+ me.ag2s.epublib.epub.PackageDocumentBase$DCAttributes
+ me.ag2s.epublib.epub.PackageDocumentBase$DCTags
+ me.ag2s.epublib.epub.PackageDocumentBase$OPFAttributes
+ me.ag2s.epublib.epub.PackageDocumentBase$OPFTags
+ me.ag2s.epublib.epub.PackageDocumentBase$OPFValues
+me/ag2s/epublib/domain/Relator.java
+ me.ag2s.epublib.domain.Relator
+me/ag2s/epublib/epub/BookProcessor.java
+ me.ag2s.epublib.epub.BookProcessor
+me/ag2s/epublib/util/ResourceUtil.java
+ me.ag2s.epublib.util.ResourceUtil
+me/ag2s/epublib/domain/Resources.java
+ me.ag2s.epublib.domain.Resources

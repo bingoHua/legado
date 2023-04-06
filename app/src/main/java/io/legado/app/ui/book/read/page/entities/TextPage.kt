@@ -2,6 +2,7 @@ package io.legado.app.ui.book.read.page.entities
 
 import android.text.Layout
 import android.text.StaticLayout
+import androidx.annotation.Keep
 import io.legado.app.R
 import io.legado.app.help.config.ReadBookConfig
 import io.legado.app.model.ReadBook
@@ -15,6 +16,7 @@ import kotlin.math.min
 /**
  * 页面信息
  */
+@Keep
 @Suppress("unused", "MemberVisibilityCanBePrivate")
 data class TextPage(
     var index: Int = 0,
@@ -31,6 +33,7 @@ data class TextPage(
     val lines: List<TextLine> get() = textLines
     val lineSize: Int get() = textLines.size
     val charSize: Int get() = text.length
+    val searchResult = hashSetOf<TextColumn>()
     var isMsgPage: Boolean = false
 
     fun addLine(line: TextLine) {
@@ -229,5 +232,9 @@ data class TextPage(
             }
         }
         return null
+    }
+
+    fun hasImageOrEmpty(): Boolean {
+        return textLines.any { it.isImage } || textLines.isEmpty()
     }
 }

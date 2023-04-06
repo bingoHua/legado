@@ -6,9 +6,11 @@ import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookChapter
 import io.legado.app.data.entities.BookSource
 import io.legado.app.data.entities.rule.ContentRule
+import io.legado.app.exception.ConcurrentException
 import io.legado.app.exception.ContentEmptyException
 import io.legado.app.exception.NoStackTraceException
-import io.legado.app.help.BookHelp
+import io.legado.app.help.book.BookHelp
+import io.legado.app.help.http.StrResponse
 import io.legado.app.model.Debug
 import io.legado.app.model.analyzeRule.AnalyzeRule
 import io.legado.app.model.analyzeRule.AnalyzeUrl
@@ -16,6 +18,7 @@ import io.legado.app.utils.HtmlFormatter
 import io.legado.app.utils.NetworkUtils
 import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.async
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import splitties.init.appCtx
@@ -73,7 +76,7 @@ object BookContent {
                     source = bookSource,
                     ruleData = book,
                     headerMapF = bookSource.getHeaderMap()
-                ).getStrResponseAwait()
+                ).getStrResponseAwait() //控制并发访问
                 res.body?.let { nextBody ->
                     contentData = analyzeContent(
                         book, nextUrl, res.url, nextBody, contentRule,
@@ -91,13 +94,12 @@ object BookContent {
                 val asyncArray = Array(contentData.second.size) {
                     async(IO) {
                         val urlStr = contentData.second[it]
-                        val analyzeUrl = AnalyzeUrl(
+                        val res = AnalyzeUrl(
                             mUrl = urlStr,
                             source = bookSource,
                             ruleData = book,
                             headerMapF = bookSource.getHeaderMap()
-                        )
-                        val res = analyzeUrl.getStrResponseAwait()
+                        ).getStrResponseAwait() //控制并发访问
                         analyzeContent(
                             book, urlStr, res.url, res.body!!, contentRule,
                             bookChapter, bookSource, mNextChapterUrl, false
@@ -120,7 +122,7 @@ object BookContent {
         Debug.log(bookSource.bookSourceUrl, "└${bookChapter.title}")
         Debug.log(bookSource.bookSourceUrl, "┌获取正文内容")
         Debug.log(bookSource.bookSourceUrl, "└\n$contentStr")
-        if (contentStr.isBlank()) {
+        if (!bookChapter.isVolume && contentStr.isBlank()) {
             throw ContentEmptyException("内容为空")
         }
         if (needSave) {
@@ -148,7 +150,7 @@ object BookContent {
         val nextUrlList = arrayListOf<String>()
         analyzeRule.chapter = chapter
         //获取正文
-        var content = analyzeRule.getString(contentRule.content)
+        var content = analyzeRule.getString(contentRule.content, unescape = false)
         content = HtmlFormatter.formatKeepImg(content, rUrl)
         //获取下一页链接
         val nextUrlRule = contentRule.nextContentUrl

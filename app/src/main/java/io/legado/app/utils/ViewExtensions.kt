@@ -140,6 +140,10 @@ fun View.screenshot(): Bitmap? {
     }
 }
 
+fun View.setPaddingBottom(bottom: Int) {
+    setPadding(paddingLeft, paddingTop, paddingRight, bottom)
+}
+
 fun SeekBar.progressAdd(int: Int) {
     progress += int
 }
@@ -166,6 +170,7 @@ fun RadioGroup.checkByIndex(index: Int) {
     check(get(index).id)
 }
 
+@SuppressLint("ObsoleteSdkInt")
 fun TextView.setHtml(html: String) {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
         text = Html.fromHtml(html, Html.FROM_HTML_MODE_COMPACT)

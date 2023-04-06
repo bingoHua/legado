@@ -1,15 +1,16 @@
 package io.legado.app.model
 
 import io.legado.app.constant.AppLog
-import io.legado.app.constant.BookType
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.*
 import io.legado.app.help.AppWebDav
-import io.legado.app.help.BookHelp
-import io.legado.app.help.ContentProcessor
+import io.legado.app.help.book.BookHelp
+import io.legado.app.help.book.ContentProcessor
+import io.legado.app.help.book.isLocal
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.ReadBookConfig
 import io.legado.app.help.coroutine.Coroutine
+import io.legado.app.model.localBook.TextFile
 import io.legado.app.model.webBook.WebBook
 import io.legado.app.service.BaseReadAloudService
 import io.legado.app.ui.book.read.page.entities.TextChapter
@@ -43,6 +44,26 @@ object ReadBook : CoroutineScope by MainScope() {
     private val readRecord = ReadRecord()
     var readStartTime: Long = System.currentTimeMillis()
 
+    /* 跳转进度前进度记录 */
+    var lastBookPress: BookProgress? = null
+
+    /* web端阅读进度记录 */
+    var webBookProgress: BookProgress? = null
+
+    //暂时保存跳转前进度
+    fun saveCurrentBookProcess() {
+        if (lastBookPress != null) return //避免进度条连续跳转不能覆盖最初的进度记录
+        lastBookPress = book?.let { BookProgress(it) }
+    }
+
+    //恢复跳转前进度
+    fun restoreLastBookProcess() {
+        lastBookPress?.let {
+            setProgress(it)
+            lastBookPress = null
+        }
+    }
+
     fun resetData(book: Book) {
         ReadBook.book = book
         readRecord.bookName = book.name
@@ -50,11 +71,14 @@ object ReadBook : CoroutineScope by MainScope() {
         chapterSize = appDb.bookChapterDao.getChapterCount(book.bookUrl)
         durChapterIndex = book.durChapterIndex
         durChapterPos = book.durChapterPos
-        isLocalBook = book.origin == BookType.local
+        isLocalBook = book.isLocal
         clearTextChapter()
         callBack?.upMenuView()
         callBack?.upPageAnim()
         upWebBook(book)
+        lastBookPress = null
+        webBookProgress = null
+        TextFile.txtBuffer = null
         synchronized(this) {
             loadingChapters.clear()
         }
@@ -73,7 +97,7 @@ object ReadBook : CoroutineScope by MainScope() {
     }
 
     fun upWebBook(book: Book) {
-        if (book.origin == BookType.local) {
+        if (book.isLocal) {
             bookSource = null
         } else {
             appDb.bookSourceDao.getBookSource(book.origin)?.let {
@@ -172,7 +196,7 @@ object ReadBook : CoroutineScope by MainScope() {
         toLast: Boolean = true
     ): Boolean {
         if (durChapterIndex > 0) {
-            durChapterPos = if (toLast) prevTextChapter?.lastReadLength ?: 0 else 0
+            durChapterPos = if (toLast) prevTextChapter?.lastReadLength ?: Int.MAX_VALUE else 0
             durChapterIndex--
             nextTextChapter = curTextChapter
             curTextChapter = prevTextChapter
@@ -249,7 +273,9 @@ object ReadBook : CoroutineScope by MainScope() {
     }
 
     /**
-     * 加载章节内容
+     * 加载当前章节和前后一章内容
+     * @param resetPageOffset 滚动阅读是否重置滚动位置
+     * @param success 当前章节加载完成回调
      */
     fun loadContent(resetPageOffset: Boolean, success: (() -> Unit)? = null) {
         loadContent(durChapterIndex, resetPageOffset = resetPageOffset) {
@@ -259,6 +285,13 @@ object ReadBook : CoroutineScope by MainScope() {
         loadContent(durChapterIndex - 1, resetPageOffset = resetPageOffset)
     }
 
+    /**
+     * 加载章节内容
+     * @param index 章节序号
+     * @param upContent 是否更新视图
+     * @param resetPageOffset 滚动阅读是否重置滚动位置
+     * @param success 加载完成回调
+     */
     fun loadContent(
         index: Int,
         upContent: Boolean = true,
@@ -283,6 +316,9 @@ object ReadBook : CoroutineScope by MainScope() {
         }
     }
 
+    /**
+     * 下载正文
+     */
     private fun download(index: Int) {
         if (index < 0) return
         if (index > chapterSize - 1) {
@@ -290,7 +326,7 @@ object ReadBook : CoroutineScope by MainScope() {
             return
         }
         book?.let { book ->
-            if (book.isLocalBook()) return
+            if (book.isLocal) return
             if (addLoading(index)) {
                 Coroutine.async {
                     appDb.bookChapterDao.getChapter(book.bookUrl, index)?.let { chapter ->
@@ -307,6 +343,9 @@ object ReadBook : CoroutineScope by MainScope() {
         }
     }
 
+    /**
+     * 下载正文
+     */
     private fun download(
         scope: CoroutineScope,
         chapter: BookChapter,
@@ -318,7 +357,7 @@ object ReadBook : CoroutineScope by MainScope() {
         if (book != null && bookSource != null) {
             CacheBook.getOrCreate(bookSource, book).download(scope, chapter)
         } else if (book != null) {
-            val msg = if (book.isLocalBook()) "无内容" else "没有书源"
+            val msg = if (book.isLocal) "无内容" else "没有书源"
             contentLoadFinish(
                 book, chapter, "加载正文失败\n$msg", resetPageOffset = resetPageOffset
             ) {
@@ -443,6 +482,9 @@ object ReadBook : CoroutineScope by MainScope() {
      * 预下载
      */
     private fun preDownload() {
+        if (AppConfig.preDownloadNum < 2) {
+            return
+        }
         Coroutine.async {
             //预下载
             val maxChapterIndex = durChapterIndex + AppConfig.preDownloadNum
@@ -474,6 +516,8 @@ object ReadBook : CoroutineScope by MainScope() {
         fun contentLoadFinish()
 
         fun upPageAnim()
+
+        fun notifyBookChanged()
     }
 
 }

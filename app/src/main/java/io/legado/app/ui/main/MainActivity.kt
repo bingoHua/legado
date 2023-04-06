@@ -6,7 +6,9 @@ import android.os.Bundle
 import android.text.format.DateUtils
 import android.view.KeyEvent
 import android.view.MenuItem
+import android.view.MotionEvent
 import android.view.ViewGroup
+import android.widget.EditText
 import androidx.activity.viewModels
 import androidx.core.view.postDelayed
 import androidx.fragment.app.Fragment
@@ -22,7 +24,7 @@ import io.legado.app.constant.EventBus
 import io.legado.app.constant.PreferKey
 import io.legado.app.databinding.ActivityMainBinding
 import io.legado.app.help.AppWebDav
-import io.legado.app.help.BookHelp
+import io.legado.app.help.book.BookHelp
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.LocalConfig
 import io.legado.app.help.coroutine.Coroutine
@@ -38,14 +40,13 @@ import io.legado.app.ui.main.explore.ExploreFragment
 import io.legado.app.ui.main.my.MyFragment
 import io.legado.app.ui.main.rss.RssFragment
 import io.legado.app.ui.widget.dialog.TextDialog
-import io.legado.app.utils.observeEvent
-import io.legado.app.utils.setEdgeEffectColor
-import io.legado.app.utils.showDialogFragment
-import io.legado.app.utils.toastOnUi
+import io.legado.app.utils.*
 import io.legado.app.utils.viewbindingdelegate.viewBinding
 import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.coroutines.resume
+import kotlin.coroutines.suspendCoroutine
 
 /**
  * 主界面
@@ -83,21 +84,38 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
         }
     }
 
-    override fun onPostCreate(savedInstanceState: Bundle?) {
-        super.onPostCreate(savedInstanceState)
-        upVersion()
-        privacyPolicy()
-        //自动更新书籍
-        val isAutoRefreshedBook = savedInstanceState?.getBoolean("isAutoRefreshedBook") ?: false
-        if (AppConfig.autoRefreshBook && !isAutoRefreshedBook) {
-            binding.viewPagerMain.postDelayed(1000) {
-                viewModel.upAllBookToc()
+    override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+        if (ev.action == MotionEvent.ACTION_DOWN) {
+            currentFocus?.let {
+                if (it is EditText) {
+                    it.clearFocus()
+                    it.hideSoftInput()
+                }
             }
         }
-        binding.viewPagerMain.postDelayed(3000) {
-            viewModel.postLoad()
+        return super.dispatchTouchEvent(ev)
+    }
+
+    override fun onPostCreate(savedInstanceState: Bundle?) {
+        super.onPostCreate(savedInstanceState)
+        launch {
+            //隐私协议
+            if (!privacyPolicy()) return@launch
+            //版本更新
+            upVersion()
+            //备份同步
+            backupSync()
+            //自动更新书籍
+            val isAutoRefreshedBook = savedInstanceState?.getBoolean("isAutoRefreshedBook") ?: false
+            if (AppConfig.autoRefreshBook && !isAutoRefreshedBook) {
+                binding.viewPagerMain.postDelayed(1000) {
+                    viewModel.upAllBookToc()
+                }
+            }
+            binding.viewPagerMain.postDelayed(3000) {
+                viewModel.postLoad()
+            }
         }
-        syncAlert()
     }
 
     override fun onNavigationItemSelected(item: MenuItem): Boolean = binding.run {
@@ -133,50 +151,74 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
         }
     }
 
-    private fun upVersion() {
-        if (LocalConfig.versionCode != appInfo.versionCode) {
-            LocalConfig.versionCode = appInfo.versionCode
-            if (LocalConfig.isFirstOpenApp) {
-                val help = String(assets.open("help/appHelp.md").readBytes())
-                showDialogFragment(TextDialog(help, TextDialog.Mode.MD))
-            } else if (!BuildConfig.DEBUG) {
-                val log = String(assets.open("updateLog.md").readBytes())
-                showDialogFragment(TextDialog(log, TextDialog.Mode.MD))
-            }
-            viewModel.upVersion()
-        }
-    }
-
-    /**
-     * 同步提示
-     */
-    private fun syncAlert() = launch {
-        val lastBackupFile = withContext(IO) { AppWebDav.lastBackUp().getOrNull() }
-            ?: return@launch
-        if (lastBackupFile.lastModify - LocalConfig.lastBackup > DateUtils.MINUTE_IN_MILLIS) {
-            LocalConfig.lastBackup = lastBackupFile.lastModify
-            alert("恢复", "webDav书源比本地新,是否恢复") {
-                cancelButton()
-                okButton {
-                    viewModel.restoreWebDav(lastBackupFile.displayName)
-                }
-            }
-        }
-    }
-
     /**
      * 用户隐私与协议
      */
-    private fun privacyPolicy() {
-        if (LocalConfig.privacyPolicyOk) return
+    private suspend fun privacyPolicy(): Boolean = suspendCoroutine { block ->
+        if (LocalConfig.privacyPolicyOk) {
+            block.resume(true)
+            return@suspendCoroutine
+        }
         val privacyPolicy = String(assets.open("privacyPolicy.md").readBytes())
-        alert("用户隐私与协议", privacyPolicy) {
-            noButton()
-            yesButton {
-                LocalConfig.privacyPolicyOk = true
-            }
-            onCancelled {
+        alert(getString(R.string.privacy_policy), privacyPolicy) {
+            noButton {
                 finish()
+                block.resume(false)
+            }
+            positiveButton(R.string.agree) {
+                LocalConfig.privacyPolicyOk = true
+                block.resume(true)
+            }
+            negativeButton(R.string.refuse) {
+                finish()
+                block.resume(false)
+            }
+        }
+    }
+
+    /**
+     * 版本更新日志
+     */
+    private suspend fun upVersion() = suspendCoroutine { block ->
+        if (LocalConfig.versionCode == appInfo.versionCode) {
+            block.resume(Unit)
+            return@suspendCoroutine
+        }
+        LocalConfig.versionCode = appInfo.versionCode
+        if (LocalConfig.isFirstOpenApp) {
+            val help = String(assets.open("help/appHelp.md").readBytes())
+            val dialog = TextDialog(getString(R.string.help), help, TextDialog.Mode.MD)
+            dialog.setOnDismissListener {
+                block.resume(Unit)
+            }
+            showDialogFragment(dialog)
+        } else if (!BuildConfig.DEBUG) {
+            val log = String(assets.open("updateLog.md").readBytes())
+            val dialog = TextDialog(getString(R.string.update_log), log, TextDialog.Mode.MD)
+            dialog.setOnDismissListener {
+                block.resume(Unit)
+            }
+            showDialogFragment(dialog)
+        } else {
+            block.resume(Unit)
+        }
+    }
+
+    /**
+     * 备份同步
+     */
+    private fun backupSync() {
+        launch {
+            val lastBackupFile =
+                withContext(IO) { AppWebDav.lastBackUp().getOrNull() } ?: return@launch
+            if (lastBackupFile.lastModify - LocalConfig.lastBackup > DateUtils.MINUTE_IN_MILLIS) {
+                LocalConfig.lastBackup = lastBackupFile.lastModify
+                alert(R.string.restore, R.string.webdav_after_local_restore_confirm) {
+                    cancelButton()
+                    okButton {
+                        viewModel.restoreWebDav(lastBackupFile.displayName)
+                    }
+                }
             }
         }
     }

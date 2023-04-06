@@ -107,12 +107,12 @@ java.getVerificationCode(imageUrl)
 java.longToast(msg: Any?)
 java.toast(msg: Any?)
 ```
-* 从网络(由java.cacheFile实现)、本地导入JavaScript脚本
+* 从网络(由java.cacheFile实现)、本地读取JavaScript文件，导入上下文请手动`eval(String(...))`
 ```
-{{java.importScript(url)}}
+java.importScript(url)
 //相对路径支持android/data/{package}/cache
-{{java.importScript(relativePath)}}
-{{java.importScript(absolutePath)}}
+java.importScript(relativePath)
+java.importScript(absolutePath)
 ```
 * 缓存网络文件
 ```
@@ -124,23 +124,56 @@ eval(String(java.cacheFile(url)))
 删除缓存文件
 cache.delete(java.md5Encode16(url))
 ```
-* 获取网络zip文件里面的数据
+* 获取网络压缩文件里面指定路径的数据 *可替换Zip Rar 7Z
 ```
-java.getZipStringContent(url: String, path: String)
+java.get*StringContent(url: String, path: String): String
+
+java.get*StringContent(url: String, path: String, charsetName: String): String
+
+java.get*ByteArrayContent(url: String, path: String): ByteArray?
+
 ```
 * base64
 > flags参数可省略，默认Base64.NO_WRAP，查看[flags参数说明](https://blog.csdn.net/zcmain/article/details/97051870)
 ```
-java.base64Decode(str: String, flags: Int)
+java.base64Decode(str: String)
+java.base64Decode(str: String, charset: String)
+java.base64DecodeToByteArray(str: String, flags: Int)
 java.base64Encode(str: String, flags: Int)
+```
+* ByteArray
+```
+Str转Bytes
+java.strToBytes(str: String)
+java.strToBytes(str: String, charset: String)
+Bytes转Str
+java.bytesToStr(bytes: ByteArray)
+java.bytesToStr(bytes: ByteArray, charset: String)
+```
+* Hex
+```
+HexString 解码为字节数组
+java.hexDecodeToByteArray(hex: String)
+hexString 解码为utf8String
+java.hexDecodeToString(hex: String)
+utf8 编码为hexString
+java.hexEncodeToString(utf8: String)
+```
+* 标识id
+```
+java.randomUUID()
+java.androidId()
 ```
 * 文件
 >  所有对于文件的读写删操作都是相对路径,只能操作阅读缓存/android/data/{package}/cache/内的文件
 ```
-//文件下载,content为十六进制字符串,url用于生成文件名，返回文件路径
-downloadFile(content: String, url: String): String
+//文件下载 url用于生成文件名，返回文件路径
+downloadFile(url: String): String
 //文件解压,zipPath为压缩文件路径，返回解压路径
+unArchiveFile(zipPath: String): String
 unzipFile(zipPath: String): String
+unrarFile(zipPath: String): String
+un7zFile(zipPath: String): String
 //文件夹内所有文件读取
 getTxtInFolder(unzipPath: String): String
 //读取文本文件
@@ -149,61 +182,83 @@ readTxtFile(path: String): String
 deleteFile(path: String) 
 ```
 ****
-> [常见加密解密算法介绍](https://www.yijiyong.com/algorithm/encryption/01-intro.html)
+> 提供在JavaScript环境中快捷调用crypto算法的函数，由[hutool-crypto](https://www.hutool.cn/docs/#/crypto/概述)实现  
 
-> [相关概念](https://blog.csdn.net/OrangeJack/article/details/82913804)
+> 其他没有添加的算法可在JavaScript中使用`JavaImporter`[调用](https://m.jb51.net/article/92138.htm)Java，例子可参考`朗读引擎-阿里云语音`  
 
-> [Android支持的transformation](https://developer.android.google.cn/reference/kotlin/javax/crypto/Cipher?hl=en)
-
-> 其他加密方式 可在js中[调用](https://m.jb51.net/article/92138.htm)[hutool-crypto](https://www.hutool.cn/docs/#/)
-
-* AES
-> transformation默认实现AES/ECB/PKCS5Padding
+> 注意：如果输入的参数不是Utf8String 可先调用`java.hexDecodeToByteArray java.base64DecodeToByteArray`转成ByteArray
+* 对称加密
+> 输入参数key iv 支持ByteArray|**Utf8String**
 ```
-java.aesDecodeToString(str: String, key: String, transformation: String, iv: String)
-
-java.aesBase64DecodeToString(str: String, key: String, transformation: String, iv: String)
-
-java.aesEncodeToString(str: String, key: String, transformation: String, iv: String)
-
-java.aesEncodeToBase64String(str: String, key: String, transformation: String, iv: String)
+// 创建Cipher
+java.createSymmetricCrypto(transformation, key, iv)
 ```
-* DES
-> transformation默认实现DES/ECB/PKCS5Padding
+>解密加密参数 data支持ByteArray|Base64String|HexString|InputStream
 ```
-java.desDecodeToString(str: String, key: String, transformation: String, iv: String)
-
-java.desBase64DecodeToString(str: String, key: String, transformation: String, iv: String)
-
-java.desEncodeToString(str: String, key: String, transformation: String, iv: String)
-
-java.desEncodeToBase64String(str: String, key: String, transformation: String, iv: String)
+//解密为ByteArray String
+cipher.decrypt(data)
+cipher.decryptStr(data)
+//加密为ByteArray Base64字符 HEX字符
+cipher.encrypt(data)
+cipher.encryptBase64(data)
+cipher.encryptHex(data)
 ```
-* 3DES
-> tansformation默认实现DESede/ECB/PKCS5Padding
+* 非对称加密
+> 输入参数 key支持ByteArray|**Utf8String**
 ```
-java.tripleDESEncodeBase64Str(data: String,key: String,mode: String,padding: String,iv: String): String?
+//创建cipher
+java.createAsymmetricCrypto(transformation)
+//设置密钥
+.setPublicKey(key)
+.setPrivateKey(key)
 
-java.tripleDESDecodeStr(data: String,key: String,mode: String,padding: String,iv: String): String?
+```
+> 解密加密参数 data支持ByteArray|Base64String|HexString|InputStream  
+```
+//解密为ByteArray String
+cipher.decrypt(data,  usePublicKey: Boolean? = true
+)
+cipher.decryptStr(data, usePublicKey: Boolean? = true
+)
+//加密为ByteArray Base64字符 HEX字符
+cipher.encrypt(data,  usePublicKey: Boolean? = true
+)
+cipher.encryptBase64(data,  usePublicKey: Boolean? = true
+)
+cipher.encryptHex(data,  usePublicKey: Boolean? = true
+)
+```
+* 签名
+> 输入参数 key 支持ByteArray|**Utf8String**
+```
+//创建Sign
+java.createSign(algorithm)
+//设置密钥
+.setPublicKey(key)
+.setPrivateKey(key)
+```
+> 签名参数 data支持ByteArray|inputStream|String
+```
+//签名输出 ByteArray HexString
+sign.sign(data)
+sign.signHex(data)
 ```
 * 摘要
-> MD5 SHA-1 SHA-224 SHA-256 SHA-384 SHA-512
 ```
 java.digestHex(data: String, algorithm: String,): String?
 
 java.digestBase64Str(data: String, algorithm: String,): String?
 ```
-* HMac(部分算法暂不支持)
-> DESMAC DESMAC/CFB8 DESedeMAC DESedeMAC/CFB8 DESedeMAC64 DESwithISO9797 HmacMD5 HmacSHA* ISO9797ALG3MAC PBEwithSHA*
-```
-java.HMacHex(data: String, algorithm: String, key: String): String
-
-java.HMacBase64(data: String, algorithm: String, key: String): String
-```
 * md5
 ```
 java.md5Encode(str)
 java.md5Encode16(str)
+```
+* HMac
+```
+java.HMacHex(data: String, algorithm: String, key: String): String
+
+java.HMacBase64(data: String, algorithm: String, key: String): String
 ```
 
 ## book对象的可用属性和方法
@@ -292,7 +347,7 @@ cookie.getCookie(url)
 获取cookie某一键值
 cookie.getKey(url,key)
 删除cookie
-cookie.removeCookie(key)
+cookie.removeCookie(url)
 ```
 
 ## cache对象的部分可用函数

@@ -13,8 +13,8 @@ import io.legado.app.constant.PreferKey
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookChapter
-import io.legado.app.help.BookHelp
-import io.legado.app.help.ContentProcessor
+import io.legado.app.help.book.BookHelp
+import io.legado.app.help.book.ContentProcessor
 import io.legado.app.help.config.AppConfig
 import io.legado.app.model.ReadAloud
 import io.legado.app.model.ReadBook
@@ -128,7 +128,7 @@ class CacheAudioService2 : BaseService() {
                                     )
                                 }
 
-                                splitContents.forEach { _ ->
+                                splitContents.textList.forEach { _ ->
                                     totalParagraphCount++
                                 }
                             }
@@ -162,7 +162,7 @@ class CacheAudioService2 : BaseService() {
                                             chapterContent
                                         )
                                     }
-                                splitContents.forEach { paragraph ->
+                                splitContents.textList.forEach { paragraph ->
                                     LogUtils.d(TAG, "startDownload.$paragraph")
                                     val displayTitle = runBlocking {
                                         bookChapter.getDisplayTitle(
@@ -216,7 +216,8 @@ class CacheAudioService2 : BaseService() {
     /**
      * 更新通知
      */
-    private fun upNotification() {
+    override
+    fun upNotification() {
         notificationBuilder.setContentText(notificationContent)
         val notification = notificationBuilder.build()
         startForeground(AppConst.notificationIdDownload, notification)

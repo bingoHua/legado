@@ -99,6 +99,7 @@ class Coroutine<T>(
         return this@Coroutine
     }
 
+    // 如果协程被取消，有可能会不执行
     fun onFinally(
         context: CoroutineContext? = null,
         block: suspend CoroutineScope.() -> Unit
@@ -145,7 +146,7 @@ class Coroutine<T>(
         context: CoroutineContext,
         block: suspend CoroutineScope.() -> T
     ): Job {
-        return (scope + Dispatchers.Main).launch(start = startOption) {
+        return (scope.plus(Dispatchers.Main)).launch(start = startOption) {
             try {
                 start?.let { dispatchVoidCallback(this, it) }
                 ensureActive()

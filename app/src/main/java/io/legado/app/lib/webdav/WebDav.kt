@@ -1,13 +1,17 @@
 package io.legado.app.lib.webdav
 
 import android.annotation.SuppressLint
+import android.net.Uri
 import io.legado.app.constant.AppLog
 import io.legado.app.exception.NoStackTraceException
 import io.legado.app.help.http.newCallResponse
 import io.legado.app.help.http.okHttpClient
 import io.legado.app.help.http.text
-import io.legado.app.utils.NetworkUtils
-import io.legado.app.utils.printOnDebug
+import io.legado.app.model.analyzeRule.AnalyzeUrl
+import io.legado.app.model.analyzeRule.CustomUrl
+import io.legado.app.utils.*
+import kotlinx.coroutines.Dispatchers.IO
+import kotlinx.coroutines.withContext
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.asRequestBody
@@ -15,6 +19,7 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import org.intellij.lang.annotations.Language
 import org.jsoup.Jsoup
+import org.jsoup.parser.Parser
 import java.io.File
 import java.io.FileOutputStream
 import java.io.InputStream
@@ -27,8 +32,17 @@ import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 
 @Suppress("unused", "MemberVisibilityCanBePrivate")
-open class WebDav(val path: String, val authorization: Authorization) {
+open class WebDav(
+    val path: String,
+    val authorization: Authorization
+) {
     companion object {
+
+        fun fromPath(path: String): WebDav {
+            val id = AnalyzeUrl(path).serverID
+            val authorization = Authorization(id)
+            return WebDav(path, authorization)
+        }
 
         @SuppressLint("DateTimeFormatter")
         private val dateTimeFormatter = DateTimeFormatter.RFC_1123_DATE_TIME
@@ -58,14 +72,17 @@ open class WebDav(val path: String, val authorization: Authorization) {
             </propfind>"""
     }
 
-    private val url: URL = URL(path)
+
+    private val url: URL = URL(CustomUrl(path).getUrl())
     private val httpUrl: String? by lazy {
-        val raw = url.toString().replace("davs://", "https://").replace("dav://", "http://")
+        val raw = url.toString()
+            .replace("davs://", "https://")
+            .replace("dav://", "http://")
         return@lazy kotlin.runCatching {
             URLEncoder.encode(raw, "UTF-8")
-                .replace("\\+".toRegex(), "%20")
-                .replace("%3A".toRegex(), ":")
-                .replace("%2F".toRegex(), "/")
+                .replace("+", "%20")
+                .replace("%3A", ":")
+                .replace("%2F", "/")
         }.getOrNull()
     }
     private val webDavClient by lazy {
@@ -90,12 +107,11 @@ open class WebDav(val path: String, val authorization: Authorization) {
     /**
      * 获取当前url文件信息
      */
+    @Throws(WebDavException::class)
     suspend fun getWebDavFile(): WebDavFile? {
-        return kotlin.runCatching {
-            propFindResponse(depth = 0)?.let {
-                return parseBody(it).firstOrNull()
-            }
-        }.getOrNull()
+        return propFindResponse(depth = 0)?.let {
+            parseBody(it).firstOrNull()
+        }
     }
 
     /**
@@ -147,54 +163,56 @@ open class WebDav(val path: String, val authorization: Authorization) {
      */
     private fun parseBody(s: String): List<WebDavFile> {
         val list = ArrayList<WebDavFile>()
-        val document = Jsoup.parse(s)
-        val elements = document.getElementsByTag("d:response")
-        httpUrl?.let { urlStr ->
-            val baseUrl = NetworkUtils.getBaseUrl(urlStr)
-            for (element in elements) {
-                //依然是优化支持 caddy 自建的 WebDav ，其目录后缀都为“/”, 所以删除“/”的判定，不然无法获取该目录项
-                var href = URLDecoder.decode(element.getElementsByTag("d:href")[0].text(), "UTF-8")
-                if (href.endsWith("/")) {
-                    href = href.removeSuffix("/")
+        val document = kotlin.runCatching {
+            Jsoup.parse(s, Parser.xmlParser())
+        }.getOrElse {
+            Jsoup.parse(s)
+        }
+        val ns = document.findNSPrefix("DAV:")
+        val elements = document.findNS("response", ns)
+        val urlStr = httpUrl ?: return list
+        val baseUrl = NetworkUtils.getBaseUrl(urlStr)
+        for (element in elements) {
+            //依然是优化支持 caddy 自建的 WebDav ，其目录后缀都为“/”, 所以删除“/”的判定，不然无法获取该目录项
+            val href = URLDecoder.decode(element.findNS("href", ns)[0].text(), "UTF-8")
+                .removeSuffix("/")
+            val fileName = href.substringAfterLast("/")
+            val webDavFile: WebDav
+            try {
+                val urlName = href.ifEmpty {
+                    url.file.replace("/", "")
                 }
-                val fileName = href.substring(href.lastIndexOf("/") + 1)
-                val webDavFile: WebDav
-                try {
-                    val urlName = href.ifEmpty {
-                        url.file.replace("/", "")
-                    }
-                    val contentType = element
-                        .getElementsByTag("d:getcontenttype")
-                        .firstOrNull()?.text().orEmpty()
-                    val resourceType = element
-                        .getElementsByTag("d:resourcetype")
-                        .firstOrNull()?.html()?.trim().orEmpty()
-                    val size = kotlin.runCatching {
-                        element.getElementsByTag("d:getcontentlength")
-                            .firstOrNull()?.text()?.toLong() ?: 0
-                    }.getOrDefault(0)
-                    val lastModify: Long = kotlin.runCatching {
-                        element.getElementsByTag("d:getlastmodified")
-                            .firstOrNull()?.text()?.let {
-                                LocalDateTime.parse(it, dateTimeFormatter)
-                                    .toInstant(ZoneOffset.of("+8")).toEpochMilli()
-                            }
-                    }.getOrNull() ?: 0
-                    val fullURL = NetworkUtils.getAbsoluteURL(baseUrl, href)
-                    webDavFile = WebDavFile(
-                        fullURL,
-                        authorization,
-                        displayName = fileName,
-                        urlName = urlName,
-                        size = size,
-                        contentType = contentType,
-                        resourceType = resourceType,
-                        lastModify = lastModify
-                    )
-                    list.add(webDavFile)
-                } catch (e: MalformedURLException) {
-                    e.printOnDebug()
-                }
+                val contentType = element
+                    .findNS("getcontenttype", ns)
+                    .firstOrNull()?.text().orEmpty()
+                val resourceType = element
+                    .findNS("resourcetype", ns)
+                    .firstOrNull()?.html()?.trim().orEmpty()
+                val size = kotlin.runCatching {
+                    element.findNS("getcontentlength", ns)
+                        .firstOrNull()?.text()?.toLong() ?: 0
+                }.getOrDefault(0)
+                val lastModify: Long = kotlin.runCatching {
+                    element.findNS("getlastmodified", ns)
+                        .firstOrNull()?.text()?.let {
+                            LocalDateTime.parse(it, dateTimeFormatter)
+                                .toInstant(ZoneOffset.of("+8")).toEpochMilli()
+                        }
+                }.getOrNull() ?: 0
+                val fullURL = NetworkUtils.getAbsoluteURL(baseUrl, href)
+                webDavFile = WebDavFile(
+                    fullURL,
+                    authorization,
+                    displayName = fileName,
+                    urlName = urlName,
+                    size = size,
+                    contentType = contentType,
+                    resourceType = resourceType,
+                    lastModify = lastModify
+                )
+                list.add(webDavFile)
+            } catch (e: MalformedURLException) {
+                e.printOnDebug()
             }
         }
         return list
@@ -274,16 +292,18 @@ open class WebDav(val path: String, val authorization: Authorization) {
         contentType: String = "application/octet-stream"
     ) {
         kotlin.runCatching {
-            val file = File(localPath)
-            if (!file.exists()) throw WebDavException("文件不存在")
-            // 务必注意RequestBody不要嵌套，不然上传时内容可能会被追加多余的文件信息
-            val fileBody = file.asRequestBody(contentType.toMediaType())
-            val url = httpUrl ?: throw WebDavException("url不能为空")
-            webDavClient.newCallResponse {
-                url(url)
-                put(fileBody)
-            }.let {
-                checkResult(it)
+            withContext(IO) {
+                val file = File(localPath)
+                if (!file.exists()) throw WebDavException("文件不存在")
+                // 务必注意RequestBody不要嵌套，不然上传时内容可能会被追加多余的文件信息
+                val fileBody = file.asRequestBody(contentType.toMediaType())
+                val url = httpUrl ?: throw WebDavException("url不能为空")
+                webDavClient.newCallResponse {
+                    url(url)
+                    put(fileBody)
+                }.let {
+                    checkResult(it)
+                }
             }
         }.onFailure {
             AppLog.put("WebDav上传失败\n${it.localizedMessage}", it)
@@ -295,13 +315,35 @@ open class WebDav(val path: String, val authorization: Authorization) {
     suspend fun upload(byteArray: ByteArray, contentType: String) {
         // 务必注意RequestBody不要嵌套，不然上传时内容可能会被追加多余的文件信息
         kotlin.runCatching {
-            val fileBody = byteArray.toRequestBody(contentType.toMediaType())
-            val url = httpUrl ?: throw NoStackTraceException("url不能为空")
-            webDavClient.newCallResponse {
-                url(url)
-                put(fileBody)
-            }.let {
-                checkResult(it)
+            withContext(IO) {
+                val fileBody = byteArray.toRequestBody(contentType.toMediaType())
+                val url = httpUrl ?: throw NoStackTraceException("url不能为空")
+                webDavClient.newCallResponse {
+                    url(url)
+                    put(fileBody)
+                }.let {
+                    checkResult(it)
+                }
+            }
+        }.onFailure {
+            AppLog.put("WebDav上传失败\n${it.localizedMessage}", it)
+            throw WebDavException("WebDav上传失败\n${it.localizedMessage}")
+        }
+    }
+
+    @Throws(WebDavException::class)
+    suspend fun upload(uri: Uri, contentType: String) {
+        // 务必注意RequestBody不要嵌套，不然上传时内容可能会被追加多余的文件信息
+        kotlin.runCatching {
+            withContext(IO) {
+                val fileBody = uri.toRequestBody(contentType.toMediaType())
+                val url = httpUrl ?: throw NoStackTraceException("url不能为空")
+                webDavClient.newCallResponse {
+                    url(url)
+                    put(fileBody)
+                }.let {
+                    checkResult(it)
+                }
             }
         }.onFailure {
             AppLog.put("WebDav上传失败\n${it.localizedMessage}", it)
@@ -343,7 +385,19 @@ open class WebDav(val path: String, val authorization: Authorization) {
      */
     private fun checkResult(response: Response) {
         if (!response.isSuccessful) {
-            throw WebDavException("${url}\n${response.code}:${response.message}")
+            val body = response.body?.string()
+            if (response.message.isNotBlank() || body.isNullOrBlank()) {
+                throw WebDavException("${url}\n${response.code}:${response.message}")
+            }
+            val document = Jsoup.parse(body)
+            val exception = document.getElementsByTag("s:exception").firstOrNull()?.text()
+            val message = document.getElementsByTag("s:message").firstOrNull()?.text()
+            if (exception == "ObjectNotFound") {
+                throw ObjectNotFoundException(
+                    message ?: "$path doesn't exist. code:${response.code}"
+                )
+            }
+            throw WebDavException(message ?: "未知错误 code:${response.code}")
         }
     }
 

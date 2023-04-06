@@ -3,8 +3,6 @@ package io.legado.app.help.http
 import io.legado.app.constant.AppConst
 import io.legado.app.help.CacheManager
 import io.legado.app.help.config.AppConfig
-import io.legado.app.help.http.cronet.CronetInterceptor
-import io.legado.app.help.http.cronet.CronetLoader
 import io.legado.app.utils.NetworkUtils
 import okhttp3.*
 import java.net.InetSocketAddress
@@ -62,14 +60,20 @@ val okHttpClient: OkHttpClient by lazy {
             val builder = request.newBuilder()
             if (request.header(AppConst.UA_NAME) == null) {
                 builder.addHeader(AppConst.UA_NAME, AppConfig.userAgent)
+            } else if (request.header(AppConst.UA_NAME) == "null") {
+                builder.removeHeader(AppConst.UA_NAME)
             }
             builder.addHeader("Keep-Alive", "300")
             builder.addHeader("Connection", "Keep-Alive")
             builder.addHeader("Cache-Control", "no-cache")
             chain.proceed(builder.build())
         })
-    if (!AppConfig.isGooglePlay && AppConfig.isCronet && CronetLoader.install()) {
-        builder.addInterceptor(CronetInterceptor(cookieJar = cookieJar))
+    if (!AppConst.isPlayChannel && AppConfig.isCronet) {
+        if (Cronet.loader?.install() == true) {
+            Cronet.interceptor?.let {
+                builder.addInterceptor(it)
+            }
+        }
     }
     builder.build()
 }
@@ -96,7 +100,7 @@ fun getProxyClient(proxy: String? = null): OkHttpClient {
         username = group.groupValues[4].split("@")[1]
         password = group.groupValues[4].split("@")[2]
     }
-    if (type != "direct" && host != "") {
+    if (host != "") {
         val builder = okHttpClient.newBuilder()
         if (type == "http") {
             builder.proxy(Proxy(Proxy.Type.HTTP, InetSocketAddress(host, port)))

@@ -9,11 +9,15 @@ import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import io.legado.app.R
-import io.legado.app.constant.*
+import io.legado.app.constant.AppConst
+import io.legado.app.constant.AppLog
+import io.legado.app.constant.EventBus
+import io.legado.app.constant.PreferKey
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookGroup
 import io.legado.app.databinding.FragmentBookshelf1Binding
+import io.legado.app.help.book.isAudio
 import io.legado.app.help.config.AppConfig
 import io.legado.app.lib.theme.accentColor
 import io.legado.app.lib.theme.primaryColor
@@ -110,11 +114,13 @@ class BookshelfFragment2 : BaseBookshelfFragment(R.layout.fragment_bookshelf1),
     private fun initBooksData() {
         if (groupId == -100L) {
             binding.titleBar.title = getString(R.string.bookshelf)
+            binding.refreshLayout.isEnabled = true
         } else {
-            bookGroups.forEach {
-                if (groupId == it.groupId) {
-                    binding.titleBar.title = "${getString(R.string.bookshelf)}(${it.groupName})"
-                }
+            bookGroups.firstOrNull {
+                groupId == it.groupId
+            }?.let {
+                binding.titleBar.title = "${getString(R.string.bookshelf)}(${it.groupName})"
+                binding.refreshLayout.isEnabled = it.enableRefresh
             }
         }
         booksFlowJob?.cancel()
@@ -126,9 +132,10 @@ class BookshelfFragment2 : BaseBookshelfFragment(R.layout.fragment_bookshelf1),
                 AppConst.bookGroupAudioId -> appDb.bookDao.flowAudio()
                 AppConst.bookGroupNetNoneId -> appDb.bookDao.flowNetNoGroup()
                 AppConst.bookGroupLocalNoneId -> appDb.bookDao.flowLocalNoGroup()
+                AppConst.bookGroupErrorId -> appDb.bookDao.flowUpdateError()
                 else -> appDb.bookDao.flowByGroup(groupId)
             }.conflate().map { list ->
-                when (getPrefInt(PreferKey.bookshelfSort)) {
+                when (AppConfig.getBookSortByGroupId(groupId)) {
                     1 -> list.sortedByDescending {
                         it.latestChapterTime
                     }
@@ -181,8 +188,8 @@ class BookshelfFragment2 : BaseBookshelfFragment(R.layout.fragment_bookshelf1),
 
     override fun onItemClick(position: Int) {
         when (val item = getItem(position)) {
-            is Book -> when (item.type) {
-                BookType.audio ->
+            is Book -> when {
+                item.isAudio ->
                     startActivity<AudioPlayActivity> {
                         putExtra("bookUrl", item.bookUrl)
                     }

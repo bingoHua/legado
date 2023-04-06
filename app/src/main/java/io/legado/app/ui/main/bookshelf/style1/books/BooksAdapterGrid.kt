@@ -4,9 +4,9 @@ import android.content.Context
 import android.os.Bundle
 import android.view.ViewGroup
 import io.legado.app.base.adapter.ItemViewHolder
-import io.legado.app.constant.BookType
 import io.legado.app.data.entities.Book
 import io.legado.app.databinding.ItemBookshelfGridBinding
+import io.legado.app.help.book.isLocal
 import io.legado.app.help.config.AppConfig
 import io.legado.app.utils.invisible
 import splitties.views.onLongClick
@@ -41,11 +41,11 @@ class BooksAdapterGrid(context: Context, private val callBack: CallBack) :
     }
 
     private fun upRefresh(binding: ItemBookshelfGridBinding, item: Book) {
-        if (item.origin != BookType.local && callBack.isUpdate(item.bookUrl)) {
+        if (!item.isLocal && callBack.isUpdate(item.bookUrl)) {
             binding.bvUnread.invisible()
-            binding.rlLoading.show()
+            binding.rlLoading.visible()
         } else {
-            binding.rlLoading.hide()
+            binding.rlLoading.inVisible()
             if (AppConfig.showUnread) {
                 binding.bvUnread.setBadgeCount(item.getUnreadChapterNum())
                 binding.bvUnread.setHighlight(item.lastCheckCount > 0)

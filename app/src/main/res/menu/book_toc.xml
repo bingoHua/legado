@@ -10,6 +10,23 @@
         app:actionViewClass="androidx.appcompat.widget.SearchView"
         app:showAsAction="always" />
 
+    <group
+        android:id="@+id/menu_group_text"
+        android:visible="false">
+
+        <item
+            android:id="@+id/menu_toc_regex"
+            android:title="@string/txt_toc_rule"
+            app:showAsAction="never" />
+
+        <item
+            android:id="@+id/menu_split_long_chapter"
+            android:title="@string/split_long_chapter"
+            android:checkable="true"
+            app:showAsAction="never" />
+
+    </group>
+
     <item
         android:id="@+id/menu_reverse_toc"
         android:title="@string/reverse_toc"

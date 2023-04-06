@@ -3,6 +3,8 @@ package io.legado.app.ui.book.searchContent
 import android.annotation.SuppressLint
 import android.content.Intent
 import android.os.Bundle
+import android.view.MotionEvent
+import android.widget.EditText
 import androidx.activity.viewModels
 import androidx.appcompat.widget.SearchView
 import io.legado.app.R
@@ -13,8 +15,10 @@ import io.legado.app.data.appDb
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookChapter
 import io.legado.app.databinding.ActivitySearchContentBinding
-import io.legado.app.help.BookHelp
 import io.legado.app.help.IntentData
+import io.legado.app.help.book.BookHelp
+import io.legado.app.help.book.ContentProcessor
+import io.legado.app.help.book.isLocal
 import io.legado.app.lib.theme.bottomBackground
 import io.legado.app.lib.theme.getPrimaryTextColor
 import io.legado.app.lib.theme.primaryTextColor
@@ -50,11 +54,11 @@ class SearchContentActivity :
         binding.tvCurrentSearchInfo.setTextColor(btc)
         binding.ivSearchContentTop.setColorFilter(btc)
         binding.ivSearchContentBottom.setColorFilter(btc)
-        initSearchView()
+        val searchResultList = IntentData.get<List<SearchResult>>("searchResultList")
+        val noSearchResult = searchResultList == null
+        initSearchView(!noSearchResult)
         initRecyclerView()
         initView()
-        val searchResultList = IntentData.get<List<SearchResult>>("searchResultList")
-        val submit = searchResultList == null
         intent.getStringExtra("bookUrl")?.let { bookUrl ->
             viewModel.initBook(bookUrl) {
                 searchResultList?.let {
@@ -64,25 +68,37 @@ class SearchContentActivity :
                     val position = intent.getIntExtra("searchResultIndex", 0)
                     binding.recyclerView.scrollToPosition(position)
                 }
-                initBook(submit)
+                initBook(noSearchResult)
             }
         }
     }
 
-    private fun initSearchView() {
+    override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+        if (ev.action == MotionEvent.ACTION_DOWN) {
+            currentFocus?.let {
+                if (it is EditText) {
+                    it.clearFocus()
+                    it.hideSoftInput()
+                }
+            }
+        }
+        return super.dispatchTouchEvent(ev)
+    }
+
+    private fun initSearchView(clearFocus: Boolean) {
         searchView.applyTint(primaryTextColor)
         searchView.onActionViewExpanded()
         searchView.isSubmitButtonEnabled = true
         searchView.queryHint = getString(R.string.search)
-        searchView.clearFocus()
+        if (clearFocus) searchView.clearFocus()
         searchView.setOnQueryTextListener(object : SearchView.OnQueryTextListener {
             override fun onQueryTextSubmit(query: String): Boolean {
-                startContentSearch(query)
+                startContentSearch(query.trim())
                 searchView.clearFocus()
                 return false
             }
 
-            override fun onQueryTextChange(newText: String?): Boolean {
+            override fun onQueryTextChange(newText: String): Boolean {
                 return false
             }
         })
@@ -131,9 +147,9 @@ class SearchContentActivity :
     }
 
     override fun observeLiveBus() {
-        observeEvent<BookChapter>(EventBus.SAVE_CONTENT) { chapter ->
+        observeEvent<Pair<Book, BookChapter>>(EventBus.SAVE_CONTENT) { (book, chapter) ->
             viewModel.book?.bookUrl?.let { bookUrl ->
-                if (chapter.bookUrl == bookUrl) {
+                if (book.bookUrl == bookUrl) {
                     viewModel.cacheChapterNames.add(chapter.getFileName())
                     adapter.notifyItemChanged(chapter.index, true)
                 }
@@ -144,58 +160,59 @@ class SearchContentActivity :
     @SuppressLint("SetTextI18n")
     fun startContentSearch(query: String) {
         // 按章节搜索内容
-        if (query.isNotBlank()) {
-            searchJob?.cancel()
-            adapter.clearItems()
-            viewModel.searchResultList.clear()
-            viewModel.searchResultCounts = 0
-            viewModel.lastQuery = query
-            searchJob = launch {
-                kotlin.runCatching {
-                    withContext(IO) {
-                        appDb.bookChapterDao.getChapterList(viewModel.bookUrl)
-                    }.forEach { bookChapter ->
-                        ensureActive()
-                        binding.refreshProgressBar.isAutoLoading = true
-                        binding.fbStop.visible()
-                        val searchResults = withContext(IO) {
-                            if (isLocalBook || viewModel.cacheChapterNames.contains(bookChapter.getFileName())) {
-                                viewModel.searchChapter(query, bookChapter)
-                            } else {
-                                null
-                            }
-                        }
-                        binding.tvCurrentSearchInfo.text =
-                            this@SearchContentActivity.getString(R.string.search_content_size) + ": ${viewModel.searchResultCounts}"
-                        ensureActive()
-                        if (searchResults != null && searchResults.isNotEmpty()) {
-                            viewModel.searchResultList.addAll(searchResults)
-                            binding.refreshProgressBar.isAutoLoading = false
+        if (query.isBlank()) return
+        searchJob?.cancel()
+        adapter.clearItems()
+        viewModel.searchResultList.clear()
+        viewModel.searchResultCounts = 0
+        viewModel.lastQuery = query
+        binding.refreshProgressBar.isAutoLoading = true
+        binding.fbStop.visible()
+        ContentProcessor.enableRemoveSameTitle = false
+        searchJob = launch(IO) {
+            kotlin.runCatching {
+                appDb.bookChapterDao.getChapterList(viewModel.bookUrl).forEach { bookChapter ->
+                    ensureActive()
+                    val searchResults = if (isLocalBook
+                        || viewModel.cacheChapterNames.contains(bookChapter.getFileName())
+                    ) {
+                        viewModel.searchChapter(query, bookChapter)
+                    } else {
+                        return@forEach
+                    }
+                    ensureActive()
+                    if (searchResults.isNotEmpty()) {
+                        viewModel.searchResultList.addAll(searchResults)
+                        binding.tvCurrentSearchInfo.post {
+                            binding.tvCurrentSearchInfo.text =
+                                this@SearchContentActivity.getString(R.string.search_content_size) + ": ${viewModel.searchResultCounts}"
                             adapter.addItems(searchResults)
                         }
                     }
-                    binding.refreshProgressBar.isAutoLoading = false
-                    if (viewModel.searchResultCounts == 0) {
-                        val noSearchResult =
-                            SearchResult(resultText = getString(R.string.search_content_empty))
+                }
+                if (viewModel.searchResultCounts == 0) {
+                    val noSearchResult =
+                        SearchResult(resultText = getString(R.string.search_content_empty))
+                    binding.tvCurrentSearchInfo.post {
                         adapter.addItem(noSearchResult)
                     }
-                }.onFailure {
-                    binding.fbStop.invisible()
-                    binding.refreshProgressBar.isAutoLoading = false
-                    AppLog.put("全文搜索出错\n${it.localizedMessage}", it)
-                }.onSuccess {
-                    binding.fbStop.invisible()
-                    binding.refreshProgressBar.isAutoLoading = false
                 }
+            }.onFailure {
+                AppLog.put("全文搜索出错\n${it.localizedMessage}", it)
+            }
+            ContentProcessor.enableRemoveSameTitle = true
+            binding.tvCurrentSearchInfo.post {
+                binding.fbStop.invisible()
+                binding.refreshProgressBar.isAutoLoading = false
             }
         }
     }
 
-    val isLocalBook: Boolean
-        get() = viewModel.book?.isLocalBook() == true
+    private val isLocalBook: Boolean
+        get() = viewModel.book?.isLocal == true
 
     override fun openSearchResult(searchResult: SearchResult, index: Int) {
+        searchJob?.cancel()
         postEvent(EventBus.SEARCH_RESULT, viewModel.searchResultList as List<SearchResult>)
         val searchData = Intent()
         val key = System.currentTimeMillis()

@@ -11,12 +11,11 @@ import io.legado.app.data.appDb
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookSource
 import io.legado.app.help.AppWebDav
-import io.legado.app.help.BookHelp
 import io.legado.app.help.DefaultData
+import io.legado.app.help.book.*
 import io.legado.app.help.config.AppConfig
-import io.legado.app.help.config.LocalConfig
 import io.legado.app.model.CacheBook
-import io.legado.app.model.analyzeRule.AnalyzeRule
+import io.legado.app.model.ReadBook
 import io.legado.app.model.webBook.WebBook
 import io.legado.app.service.CacheBookService
 import io.legado.app.utils.postEvent
@@ -59,7 +58,7 @@ class MainViewModel(application: Application) : BaseViewModel(application) {
     fun upToc(books: List<Book>) {
         execute(context = upTocPool) {
             books.filter {
-                it.origin != BookType.local && it.canUpdate
+                !it.isLocal && it.canUpdate
             }.let {
                 addToWaitUp(it)
             }
@@ -111,33 +110,47 @@ class MainViewModel(application: Application) : BaseViewModel(application) {
         }
         val source = appDb.bookSourceDao.getBookSource(book.origin)
         if (source == null) {
+            if (!book.isUpError) {
+                book.addType(BookType.updateError)
+                appDb.bookDao.update(book)
+            }
             waitUpTocBooks.remove(book.bookUrl)
             return
         }
         waitUpTocBooks.remove(bookUrl)
         upTocAdd(bookUrl)
         execute(context = upTocPool) {
-            val oldBook = book.copy()
-            val preUpdateJs = source.ruleToc?.preUpdateJs
-            if (!preUpdateJs.isNullOrBlank()) {
-                AnalyzeRule(book, source).evalJS(preUpdateJs)
+            kotlin.runCatching {
+                val oldBook = book.copy()
+                WebBook.runPreUpdateJs(source, book)
+                if (book.tocUrl.isBlank()) {
+                    WebBook.getBookInfoAwait(source, book)
+                }
+                val toc = WebBook.getChapterListAwait(source, book).getOrThrow()
+                book.sync(oldBook)
+                book.removeType(BookType.updateError)
+                if (book.bookUrl == bookUrl) {
+                    appDb.bookDao.update(book)
+                } else {
+                    upTocAdd(book.bookUrl)
+                    appDb.bookDao.insert(book)
+                    BookHelp.updateCacheFolder(oldBook, book)
+                }
+                appDb.bookChapterDao.delByBook(bookUrl)
+                appDb.bookChapterDao.insert(*toc.toTypedArray())
+                if (book.isSameNameAuthor(ReadBook)) {
+                    ReadBook.book = book
+                    ReadBook.chapterSize = book.totalChapterNum
+                }
+                addDownload(source, book)
+            }.onFailure {
+                AppLog.put("${book.name} 更新目录失败\n${it.localizedMessage}", it)
+                //这里可能因为时间太长书籍信息已经更改,所以重新获取
+                appDb.bookDao.getBook(book.bookUrl)?.let { book ->
+                    book.addType(BookType.updateError)
+                    appDb.bookDao.update(book)
+                }
             }
-            if (book.tocUrl.isBlank()) {
-                WebBook.getBookInfoAwait(source, book)
-            }
-            val toc = WebBook.getChapterListAwait(source, book).getOrThrow()
-            if (book.bookUrl == bookUrl) {
-                appDb.bookDao.update(book)
-            } else {
-                upTocAdd(book.bookUrl)
-                appDb.bookDao.insert(book)
-                BookHelp.updateCacheFolder(oldBook, book)
-            }
-            appDb.bookChapterDao.delByBook(bookUrl)
-            appDb.bookChapterDao.insert(*toc.toTypedArray())
-            addDownload(source, book)
-        }.onError(upTocPool) {
-            AppLog.put("${book.name} 更新目录失败\n${it.localizedMessage}", it)
         }.onCancel(upTocPool) {
             upTocCancel(bookUrl)
             upTocCancel(book.bookUrl)
@@ -165,19 +178,25 @@ class MainViewModel(application: Application) : BaseViewModel(application) {
         waitUpTocBooks.remove(bookUrl)
         onUpTocBooks.remove(bookUrl)
         postEvent(EventBus.UP_BOOKSHELF, bookUrl)
+        if (waitUpTocBooks.isEmpty()
+            && onUpTocBooks.isEmpty()
+            && cacheBookJob == null
+            && !CacheBookService.isRun
+        ) {
+            //所有目录更新完再开始缓存章节
+            cacheBook()
+        }
     }
 
     @Synchronized
     private fun addDownload(source: BookSource, book: Book) {
+        if (AppConfig.preDownloadNum == 0) return
         val endIndex = min(
             book.totalChapterNum - 1,
             book.durChapterIndex.plus(AppConfig.preDownloadNum)
         )
         val cacheBook = CacheBook.getOrCreate(source, book)
         cacheBook.addDownload(book.durChapterIndex, endIndex)
-        if (cacheBookJob == null && !CacheBookService.isRun) {
-            cacheBook()
-        }
     }
 
     /**
@@ -195,7 +214,11 @@ class MainViewModel(application: Application) : BaseViewModel(application) {
                 CacheBook.cacheBookMap.forEach {
                     val cacheBookModel = it.value
                     while (cacheBookModel.waitCount > 0) {
-                        if (CacheBook.onDownloadCount < threadCount) {
+                        //有目录更新是不缓存,优先更新目录,现在更多网站限制并发
+                        if (waitUpTocBooks.isEmpty()
+                            && onUpTocBooks.isEmpty()
+                            && CacheBook.onDownloadCount < threadCount
+                        ) {
                             cacheBookModel.download(this, upTocPool)
                         } else {
                             delay(100)
@@ -222,17 +245,4 @@ class MainViewModel(application: Application) : BaseViewModel(application) {
         }
     }
 
-    fun upVersion() {
-        execute {
-            if (LocalConfig.needUpHttpTTS) {
-                DefaultData.importDefaultHttpTTS()
-            }
-            if (LocalConfig.needUpTxtTocRule) {
-                DefaultData.importDefaultTocRules()
-            }
-            if (LocalConfig.needUpRssSources) {
-                DefaultData.importDefaultRssSources()
-            }
-        }
-    }
 }

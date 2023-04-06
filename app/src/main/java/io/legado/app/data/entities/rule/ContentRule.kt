@@ -1,8 +1,13 @@
 package io.legado.app.data.entities.rule
 
 import android.os.Parcelable
+import com.google.gson.JsonDeserializer
+import io.legado.app.utils.INITIAL_GSON
 import kotlinx.parcelize.Parcelize
 
+/**
+ * 正文处理规则
+ */
 @Parcelize
 data class ContentRule(
     var content: String? = null,
@@ -13,4 +18,23 @@ data class ContentRule(
     var imageStyle: String? = null,   //默认大小居中,FULL最大宽度
     var imageDecode: String? = null, //图片bytes二次解密js, 返回解密后的bytes
     var payAction: String? = null,    //购买操作,js或者包含{{js}}的url
-) : Parcelable
+) : Parcelable {
+
+
+    companion object {
+
+        val jsonDeserializer = JsonDeserializer<ContentRule?> { json, _, _ ->
+            when {
+                json.isJsonObject -> INITIAL_GSON.fromJson(json, ContentRule::class.java)
+                json.isJsonPrimitive -> INITIAL_GSON.fromJson(
+                    json.asString,
+                    ContentRule::class.java
+                )
+                else -> null
+            }
+        }
+
+    }
+
+
+}

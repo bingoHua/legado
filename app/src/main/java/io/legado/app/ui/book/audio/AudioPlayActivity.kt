@@ -5,11 +5,11 @@ import android.app.Activity
 import android.icu.text.SimpleDateFormat
 import android.os.Build
 import android.os.Bundle
+import android.view.Gravity
 import android.view.Menu
 import android.view.MenuItem
 import android.widget.SeekBar
 import androidx.activity.viewModels
-import androidx.compose.runtime.mutableStateOf
 import io.legado.app.R
 import io.legado.app.base.VMBaseActivity
 import io.legado.app.constant.BookType
@@ -21,6 +21,8 @@ import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookChapter
 import io.legado.app.data.entities.BookSource
 import io.legado.app.databinding.ActivityAudioPlayBinding
+import io.legado.app.help.book.isAudio
+import io.legado.app.help.book.removeType
 import io.legado.app.help.config.AppConfig
 import io.legado.app.lib.dialogs.alert
 import io.legado.app.model.AudioPlay
@@ -32,7 +34,6 @@ import io.legado.app.ui.book.read.ReadBookActivity
 import io.legado.app.ui.book.source.edit.BookSourceEditActivity
 import io.legado.app.ui.book.toc.TocActivityResult
 import io.legado.app.ui.login.SourceLoginActivity
-import io.legado.app.ui.theme.AppTheme
 import io.legado.app.ui.widget.seekbar.SeekBarChangeListener
 import io.legado.app.utils.*
 import io.legado.app.utils.viewbindingdelegate.viewBinding
@@ -45,15 +46,16 @@ import java.util.*
 /**
  * 音频播放
  */
+@SuppressLint("ObsoleteSdkInt")
 class AudioPlayActivity :
     VMBaseActivity<ActivityAudioPlayBinding, AudioPlayViewModel>(toolBarTheme = Theme.Dark),
     ChangeBookSourceDialog.CallBack {
 
     override val binding by viewBinding(ActivityAudioPlayBinding::inflate)
     override val viewModel by viewModels<AudioPlayViewModel>()
-    private var menu: Menu? = null
+    private val timerSliderPopup by lazy { TimerSliderPopup(this) }
     private var adjustProgress = false
-    private val timerViewState = mutableStateOf(false)
+
     private val progressTimeFormat by lazy {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             SimpleDateFormat("mm:ss", Locale.getDefault())
@@ -78,7 +80,7 @@ class AudioPlayActivity :
         }
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
-        binding.titleBar.transparent()
+        binding.titleBar.setBackgroundResource(R.color.transparent)
         AudioPlay.titleData.observe(this) {
             binding.titleBar.title = it
         }
@@ -94,10 +96,10 @@ class AudioPlayActivity :
         return super.onCompatCreateOptionsMenu(menu)
     }
 
-    override fun onPrepareOptionsMenu(menu: Menu): Boolean {
-        this.menu = menu
-        upMenu()
-        return super.onPrepareOptionsMenu(menu)
+    override fun onMenuOpened(featureId: Int, menu: Menu): Boolean {
+        menu.findItem(R.id.menu_login)?.isVisible = !AudioPlay.bookSource?.loginUrl.isNullOrBlank()
+        menu.findItem(R.id.menu_wake_lock)?.isChecked = AppConfig.audioPlayUseWakeLock
+        return super.onMenuOpened(featureId, menu)
     }
 
     override fun onCompatOptionsItemSelected(item: MenuItem): Boolean {
@@ -111,6 +113,7 @@ class AudioPlayActivity :
                     putExtra("key", it.bookSourceUrl)
                 }
             }
+            R.id.menu_wake_lock -> AppConfig.audioPlayUseWakeLock = !AppConfig.audioPlayUseWakeLock
             R.id.menu_copy_audio_url -> sendToClip(AudioPlayService.url)
             R.id.menu_edit_source -> AudioPlay.bookSource?.let {
                 sourceEditResult.launch {
@@ -165,31 +168,12 @@ class AudioPlayActivity :
             AudioPlay.adjustSpeed(this@AudioPlayActivity, -0.1f)
         }
         binding.ivTimer.setOnClickListener {
-            if (AudioPlayService.isRun) {
-                timerViewState.value = true
-            } else {
-                toastOnUi(R.string.cannot_timed_non_playback)
-            }
-        }
-        binding.composeView.setContent {
-            AppTheme {
-                TimerDialog(
-                    state = timerViewState,
-                    binding.ivTimer
-                )
-            }
-        }
-    }
-
-    private fun upMenu() {
-        menu?.let { menu ->
-            menu.findItem(R.id.menu_login)?.isVisible =
-                !AudioPlay.bookSource?.loginUrl.isNullOrBlank()
+            timerSliderPopup.showAsDropDown(it, 0, (-100).dpToPx(), Gravity.TOP)
         }
     }
 
     private fun upCover(path: String?) {
-        BookCover.load(this, path)
+        BookCover.load(this, path, sourceOrigin = AudioPlay.bookSource?.bookSourceUrl)
             .into(binding.ivCover)
         BookCover.loadBlur(this, path)
             .into(binding.ivBg)
@@ -207,13 +191,15 @@ class AudioPlayActivity :
         get() = AudioPlay.book
 
     override fun changeTo(source: BookSource, book: Book, toc: List<BookChapter>) {
-        if (book.type == BookType.audio) {
+        if (book.isAudio) {
             viewModel.changeTo(source, book, toc)
         } else {
             AudioPlay.stop(this)
             launch {
                 withContext(IO) {
-                    AudioPlay.book?.changeTo(book, toc)
+                    AudioPlay.book?.migrateTo(book, toc)
+                    book.removeType(BookType.updateError)
+                    AudioPlay.book?.delete()
                     appDb.bookDao.insert(book)
                 }
                 startActivity<ReadBookActivity> {
@@ -230,7 +216,7 @@ class AudioPlayActivity :
                 if (!AppConfig.showAddToShelfAlert) {
                     viewModel.removeFromBookshelf { super.finish() }
                 } else {
-                    alert(title = getString(R.string.add_to_shelf)) {
+                    alert(title = getString(R.string.add_to_bookshelf)) {
                         setMessage(getString(R.string.check_add_bookshelf, it.name))
                         okButton {
                             AudioPlay.inBookshelf = true
@@ -269,6 +255,10 @@ class AudioPlayActivity :
         }
         observeEventSticky<String>(EventBus.AUDIO_SUB_TITLE) {
             binding.tvSubTitle.text = it
+            AudioPlay.book?.let { book ->
+                binding.ivSkipPrevious.isEnabled = book.durChapterIndex > 0
+                binding.ivSkipNext.isEnabled = book.durChapterIndex < book.totalChapterNum - 1
+            }
         }
         observeEventSticky<Int>(EventBus.AUDIO_SIZE) {
             binding.playerProgress.max = it

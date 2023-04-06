@@ -1,10 +1,12 @@
 package io.legado.app.ui.book.read
 
 import android.app.Application
+import android.content.DialogInterface
 import android.os.Bundle
 import android.view.View
 import android.view.ViewGroup
 import androidx.fragment.app.viewModels
+import androidx.lifecycle.MutableLiveData
 import io.legado.app.R
 import io.legado.app.base.BaseDialogFragment
 import io.legado.app.base.BaseViewModel
@@ -12,8 +14,10 @@ import io.legado.app.data.appDb
 import io.legado.app.data.entities.BookChapter
 import io.legado.app.databinding.DialogContentEditBinding
 import io.legado.app.databinding.DialogEditTextBinding
-import io.legado.app.help.BookHelp
-import io.legado.app.help.ContentProcessor
+import io.legado.app.help.book.BookHelp
+import io.legado.app.help.book.ContentProcessor
+import io.legado.app.help.book.isLocal
+import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.theme.primaryColor
 import io.legado.app.model.ReadBook
@@ -52,6 +56,13 @@ class ContentEditDialog : BaseDialogFragment(R.layout.dialog_content_edit) {
                 editTitle(chapter)
             }
         }
+        viewModel.loadStateLiveData.observe(viewLifecycleOwner) {
+            if (it) {
+                binding.rlLoading.visible()
+            } else {
+                binding.rlLoading.gone()
+            }
+        }
         viewModel.initContent {
             binding.contentView.setText(it)
             binding.contentView.post {
@@ -69,17 +80,8 @@ class ContentEditDialog : BaseDialogFragment(R.layout.dialog_content_edit) {
         binding.toolBar.menu.applyTint(requireContext())
         binding.toolBar.setOnMenuItemClickListener {
             when (it.itemId) {
-                R.id.menu_save -> launch {
-                    binding.contentView.text?.toString()?.let { content ->
-                        withContext(IO) {
-                            val book = ReadBook.book ?: return@withContext
-                            val chapter = appDb.bookChapterDao
-                                .getChapter(book.bookUrl, ReadBook.durChapterIndex)
-                                ?: return@withContext
-                            BookHelp.saveText(book, chapter, content)
-                        }
-                    }
-                    ReadBook.loadContent(ReadBook.durChapterIndex, resetPageOffset = false)
+                R.id.menu_save -> {
+                    save()
                     dismiss()
                 }
                 R.id.menu_reset -> viewModel.initContent(true) { content ->
@@ -112,8 +114,25 @@ class ContentEditDialog : BaseDialogFragment(R.layout.dialog_content_edit) {
         }
     }
 
-    class ContentEditViewModel(application: Application) : BaseViewModel(application) {
+    override fun onCancel(dialog: DialogInterface) {
+        super.onCancel(dialog)
+        save()
+    }
 
+    private fun save() {
+        val content = binding.contentView.text?.toString() ?: return
+        Coroutine.async {
+            val book = ReadBook.book ?: return@async
+            val chapter = appDb.bookChapterDao
+                .getChapter(book.bookUrl, ReadBook.durChapterIndex)
+                ?: return@async
+            BookHelp.saveText(book, chapter, content)
+            ReadBook.loadContent(ReadBook.durChapterIndex, resetPageOffset = false)
+        }
+    }
+
+    class ContentEditViewModel(application: Application) : BaseViewModel(application) {
+        val loadStateLiveData = MutableLiveData<Boolean>()
         var content: String? = null
 
         fun initContent(reset: Boolean = false, success: (String) -> Unit) {
@@ -125,7 +144,7 @@ class ContentEditDialog : BaseDialogFragment(R.layout.dialog_content_edit) {
                 if (reset) {
                     content = null
                     BookHelp.delContent(book, chapter)
-                    if (!book.isLocalBook()) ReadBook.bookSource?.let { bookSource ->
+                    if (!book.isLocal) ReadBook.bookSource?.let { bookSource ->
                         WebBook.getContentAwait(bookSource, book, chapter)
                     }
                 }
@@ -133,11 +152,15 @@ class ContentEditDialog : BaseDialogFragment(R.layout.dialog_content_edit) {
                     val contentProcessor = ContentProcessor.get(book.name, book.origin)
                     val content = BookHelp.getContent(book, chapter) ?: return@let null
                     contentProcessor.getContent(book, chapter, content, includeTitle = false)
-                        .joinToString("\n")
+                        .toString()
                 }
+            }.onStart {
+                loadStateLiveData.postValue(true)
             }.onSuccess {
                 content = it
                 success.invoke(it ?: "")
+            }.onFinally {
+                loadStateLiveData.postValue(false)
             }
         }
 
