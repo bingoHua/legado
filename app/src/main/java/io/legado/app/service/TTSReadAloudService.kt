@@ -11,6 +11,7 @@ import io.legado.app.exception.NoStackTraceException
 import io.legado.app.help.MediaHelp
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.coroutine.Coroutine
+import io.legado.app.help.http.text
 import io.legado.app.lib.dialogs.SelectItem
 import io.legado.app.model.ReadAloud
 import io.legado.app.model.ReadBook
@@ -107,7 +108,9 @@ class TTSReadAloudService : BaseReadAloudService(), TextToSpeech.OnInitListener 
                     continue
                 }
                 result = tts.runCatching {
-                    speak(text, TextToSpeech.QUEUE_ADD, null, AppConst.APP_TAG + i)
+                    val foxModel = HttpUtils().request(text).body?.text()?.toApifoxModel()
+                    val tempText = foxModel?.choices?.getOrNull(0)?.message?.content
+                    speak(tempText ?: text, TextToSpeech.QUEUE_ADD, null, AppConst.APP_TAG + i)
                 }.getOrElse {
                     AppLog.put("tts出错\n${it.localizedMessage}", it, true)
                     TextToSpeech.ERROR
