@@ -14,6 +14,7 @@ import android.media.AudioManager
 import android.net.wifi.WifiManager
 import android.os.Bundle
 import android.os.PowerManager
+import android.support.v4.media.MediaMetadataCompat
 import android.support.v4.media.session.MediaSessionCompat
 import android.support.v4.media.session.PlaybackStateCompat
 import android.telephony.PhoneStateListener
@@ -452,10 +453,39 @@ abstract class BaseReadAloudService : BaseService(),
      */
     @SuppressLint("UnspecifiedImmutableFlag")
     private fun initMediaSession() {
+        val mediaMetadata = MediaMetadataCompat.Builder()
+            .putBitmap(MediaMetadataCompat.METADATA_KEY_ART, cover)
+            .putText(MediaMetadataCompat.METADATA_KEY_TITLE, ReadBook.curTextChapter?.title ?: "null")
+            .putText(MediaMetadataCompat.METADATA_KEY_ARTIST, ReadBook.book?.name ?: "null")
+            .putText(MediaMetadataCompat.METADATA_KEY_ALBUM, ReadBook.book?.author ?: "null")
+            .build()
+        mediaSessionCompat.setMetadata(mediaMetadata)
         mediaSessionCompat.setCallback(object : MediaSessionCompat.Callback() {
             override fun onMediaButtonEvent(mediaButtonEvent: Intent): Boolean {
                 return MediaButtonReceiver.handleIntent(this@BaseReadAloudService, mediaButtonEvent)
             }
+
+            override fun onSkipToPrevious() {
+                prevP()
+            }
+
+            override fun onSkipToNext() {
+                nextP()
+            }
+
+
+            override fun onPause() {
+                pauseReadAloud()
+            }
+
+            override fun onStop() {
+                ReadAloud.stop(this@BaseReadAloudService)
+            }
+
+            override fun onPlay() {
+                resumeReadAloud()
+            }
+
         })
         mediaSessionCompat.setMediaButtonReceiver(
             broadcastPendingIntent<MediaButtonReceiver>(Intent.ACTION_MEDIA_BUTTON)
