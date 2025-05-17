@@ -7,16 +7,22 @@ import androidx.activity.viewModels
 import androidx.lifecycle.lifecycleScope
 import io.legado.app.R
 import io.legado.app.base.VMBaseActivity
+import io.legado.app.constant.AppLog
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.Bookmark
 import io.legado.app.databinding.ActivityAllBookmarkBinding
 import io.legado.app.ui.file.HandleFileContract
+import io.legado.app.utils.applyNavigationBarPadding
 import io.legado.app.utils.showDialogFragment
 import io.legado.app.utils.viewbindingdelegate.viewBinding
 import kotlinx.coroutines.Dispatchers.IO
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.launch
 
+/**
+ * 所有书签
+ */
 class AllBookmarkActivity : VMBaseActivity<ActivityAllBookmarkBinding, AllBookmarkViewModel>(),
     BookmarkAdapter.Callback {
 
@@ -37,7 +43,9 @@ class AllBookmarkActivity : VMBaseActivity<ActivityAllBookmarkBinding, AllBookma
     override fun onActivityCreated(savedInstanceState: Bundle?) {
         initView()
         lifecycleScope.launch {
-            appDb.bookmarkDao.flowAll().flowOn(IO).collect {
+            appDb.bookmarkDao.flowAll().catch {
+                AppLog.put("所有书签界面获取数据失败\n${it.localizedMessage}", it)
+            }.flowOn(IO).collect {
                 adapter.setItems(it)
             }
         }
@@ -46,6 +54,7 @@ class AllBookmarkActivity : VMBaseActivity<ActivityAllBookmarkBinding, AllBookma
     private fun initView() {
         binding.recyclerView.addItemDecoration(BookmarkDecoration(adapter))
         binding.recyclerView.adapter = adapter
+        binding.recyclerView.applyNavigationBarPadding()
     }
 
     override fun onCompatCreateOptionsMenu(menu: Menu): Boolean {

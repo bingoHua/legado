@@ -8,14 +8,16 @@ import android.view.View
 import androidx.appcompat.widget.SearchView
 import androidx.core.view.isGone
 import androidx.fragment.app.viewModels
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import io.legado.app.R
 import io.legado.app.base.VMBaseFragment
 import io.legado.app.constant.AppLog
+import io.legado.app.data.AppDatabase
 import io.legado.app.data.appDb
-import io.legado.app.data.entities.BookSource
+import io.legado.app.data.entities.BookSourcePart
 import io.legado.app.databinding.FragmentExploreBinding
 import io.legado.app.help.config.AppConfig
 import io.legado.app.lib.dialogs.alert
@@ -27,17 +29,18 @@ import io.legado.app.ui.book.search.SearchScope
 import io.legado.app.ui.book.source.edit.BookSourceEditActivity
 import io.legado.app.ui.main.MainFragmentInterface
 import io.legado.app.utils.applyTint
-import io.legado.app.utils.cnCompare
+import io.legado.app.utils.flowWithLifecycleAndDatabaseChange
 import io.legado.app.utils.setEdgeEffectColor
 import io.legado.app.utils.startActivity
+import io.legado.app.utils.transaction
 import io.legado.app.utils.viewbindingdelegate.viewBinding
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.conflate
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.launch
 
@@ -67,14 +70,13 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
     private val groups = linkedSetOf<String>()
     private var exploreFlowJob: Job? = null
     private var groupsMenu: SubMenu? = null
-    private var searchKey: String? = null
 
     override fun onFragmentCreated(view: View, savedInstanceState: Bundle?) {
         setSupportToolbar(binding.titleBar.toolbar)
         initSearchView()
         initRecyclerView()
         initGroupData()
-        upExploreData(once = true)
+        upExploreData()
     }
 
     override fun onCompatCreateOptionsMenu(menu: Menu) {
@@ -87,17 +89,12 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
     override fun onPause() {
         super.onPause()
         searchView.clearFocus()
-        exploreFlowJob?.cancel()
     }
 
     private fun initSearchView() {
         searchView.applyTint(primaryTextColor)
-        searchView.onActionViewExpanded()
         searchView.isSubmitButtonEnabled = true
         searchView.queryHint = getString(R.string.screen_find)
-        searchView.post {
-            searchView.clearFocus()
-        }
         searchView.setOnQueryTextListener(object : SearchView.OnQueryTextListener {
             override fun onQueryTextSubmit(query: String?): Boolean {
                 return false
@@ -126,19 +123,27 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
     }
 
     private fun initGroupData() {
-        lifecycleScope.launch {
-            appDb.bookSourceDao.flowExploreGroups().conflate().collect {
-                groups.clear()
-                groups.addAll(it)
-                upGroupsMenu()
-            }
+        viewLifecycleOwner.lifecycleScope.launch {
+            appDb.bookSourceDao.flowExploreGroups()
+                .flowWithLifecycleAndDatabaseChange(
+                    viewLifecycleOwner.lifecycle,
+                    Lifecycle.State.RESUMED,
+                    AppDatabase.BOOK_SOURCE_TABLE_NAME
+                )
+                .conflate()
+                .distinctUntilChanged()
+                .collect {
+                    groups.clear()
+                    groups.addAll(it)
+                    upGroupsMenu()
+                    delay(500)
+                }
         }
     }
 
-    private fun upExploreData(searchKey: String? = null, once: Boolean = false) {
-        this.searchKey = searchKey
+    private fun upExploreData(searchKey: String? = null) {
         exploreFlowJob?.cancel()
-        exploreFlowJob = lifecycleScope.launch {
+        exploreFlowJob = viewLifecycleOwner.lifecycleScope.launch {
             when {
                 searchKey.isNullOrBlank() -> {
                     appDb.bookSourceDao.flowExplore()
@@ -152,28 +157,29 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
                 else -> {
                     appDb.bookSourceDao.flowExplore(searchKey)
                 }
-            }.catch {
+            }.flowWithLifecycleAndDatabaseChange(
+                viewLifecycleOwner.lifecycle,
+                Lifecycle.State.RESUMED,
+                AppDatabase.BOOK_SOURCE_TABLE_NAME
+            ).catch {
                 AppLog.put("发现界面更新数据出错", it)
             }.conflate().flowOn(IO).collect {
                 binding.tvEmptyMsg.isGone = it.isNotEmpty() || searchView.query.isNotEmpty()
                 adapter.setItems(it, diffItemCallBack)
-                if (once) cancel()
                 delay(500)
             }
         }
     }
 
-    private fun upGroupsMenu() = groupsMenu?.let { subMenu ->
+    private fun upGroupsMenu() = groupsMenu?.transaction { subMenu ->
         subMenu.removeGroup(R.id.menu_group_text)
-        groups.sortedWith { o1, o2 ->
-            o1.cnCompare(o2)
-        }.forEach {
+        groups.forEach {
             subMenu.add(R.id.menu_group_text, Menu.NONE, Menu.NONE, it)
         }
     }
 
     override val scope: CoroutineScope
-        get() = lifecycleScope
+        get() = viewLifecycleOwner.lifecycleScope
 
     override fun onCompatOptionsItemSelected(item: MenuItem) {
         super.onCompatOptionsItemSelected(item)
@@ -201,11 +207,11 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
         }
     }
 
-    override fun toTop(source: BookSource) {
+    override fun toTop(source: BookSourcePart) {
         viewModel.topSource(source)
     }
 
-    override fun deleteSource(source: BookSource) {
+    override fun deleteSource(source: BookSourcePart) {
         alert(R.string.draw) {
             setMessage(getString(R.string.sure_del) + "\n" + source.bookSourceName)
             noButton()
@@ -215,7 +221,7 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
         }
     }
 
-    override fun searchBook(bookSource: BookSource) {
+    override fun searchBook(bookSource: BookSourcePart) {
         startActivity<SearchActivity> {
             putExtra("searchScope", SearchScope(bookSource).toString())
         }
@@ -229,11 +235,6 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
                 binding.rvFind.smoothScrollToPosition(0)
             }
         }
-    }
-
-    override fun onResume() {
-        super.onResume()
-        upExploreData(searchKey)
     }
 
 }

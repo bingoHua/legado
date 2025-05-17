@@ -5,9 +5,11 @@ import android.util.AttributeSet
 import android.view.LayoutInflater
 import android.view.ViewGroup
 import android.widget.FrameLayout
+import androidx.annotation.ColorRes
 import io.legado.app.R
 import io.legado.app.databinding.ViewLoadMoreBinding
 import io.legado.app.lib.dialogs.alert
+import io.legado.app.utils.getCompatColor
 import io.legado.app.utils.invisible
 import io.legado.app.utils.visible
 
@@ -70,12 +72,21 @@ class LoadMoreView(context: Context, attrs: AttributeSet? = null) : FrameLayout(
         binding.tvText.visible()
     }
 
-    fun error(msg: String) {
+    fun error(msg: String?, text: String = "") {
         stopLoad()
         hasMore = false
-        errorMsg = msg
-        binding.tvText.text = context.getString(R.string.error_load_msg, "点击查看详情")
+        errorMsg = msg ?: ""
+        binding.tvText.text =
+            text.ifEmpty { context.getString(R.string.error_load_msg, "点击查看详情") }
         binding.tvText.visible()
+    }
+
+    fun setLoadingColor(@ColorRes color: Int) {
+        binding.rotateLoading.loadingColor = context.getCompatColor(color)
+    }
+
+    fun setLoadingTextColor(@ColorRes color: Int) {
+        binding.tvText.setTextColor(context.getCompatColor(color))
     }
 
     private fun showErrorDialog(): Boolean {

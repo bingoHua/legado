@@ -15,7 +15,6 @@ import io.legado.app.help.config.AppConfig
 import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.permission.Permissions
 import io.legado.app.lib.permission.PermissionsCompat
-import io.legado.app.ui.book.read.ReadBookActivity
 import io.legado.app.ui.file.HandleFileContract
 import io.legado.app.utils.FileUtils
 import io.legado.app.utils.buildMainHandler
@@ -26,6 +25,7 @@ import io.legado.app.utils.isContentScheme
 import io.legado.app.utils.readUri
 import io.legado.app.utils.showDialogFragment
 import io.legado.app.utils.startActivity
+import io.legado.app.utils.startActivityForBook
 import io.legado.app.utils.toastOnUi
 import io.legado.app.utils.viewbindingdelegate.viewBinding
 import kotlinx.coroutines.Dispatchers.IO
@@ -72,29 +72,13 @@ class FileAssociationActivity :
         }
         viewModel.successLive.observe(this) {
             when (it.first) {
-                "bookSource" -> showDialogFragment(
-                    ImportBookSourceDialog(it.second, true)
-                )
-
-                "rssSource" -> showDialogFragment(
-                    ImportRssSourceDialog(it.second, true)
-                )
-
-                "replaceRule" -> showDialogFragment(
-                    ImportReplaceRuleDialog(it.second, true)
-                )
-
-                "httpTts" -> showDialogFragment(
-                    ImportHttpTtsDialog(it.second, true)
-                )
-
-                "theme" -> showDialogFragment(
-                    ImportThemeDialog(it.second, true)
-                )
-
-                "txtRule" -> showDialogFragment(
-                    ImportTxtTocRuleDialog(it.second, true)
-                )
+                "bookSource" -> showDialogFragment(ImportBookSourceDialog(it.second, true))
+                "rssSource" -> showDialogFragment(ImportRssSourceDialog(it.second, true))
+                "replaceRule" -> showDialogFragment(ImportReplaceRuleDialog(it.second, true))
+                "httpTts" -> showDialogFragment(ImportHttpTtsDialog(it.second, true))
+                "theme" -> showDialogFragment(ImportThemeDialog(it.second, true))
+                "txtRule" -> showDialogFragment(ImportTxtTocRuleDialog(it.second, true))
+                "dictRule" -> showDialogFragment(ImportDictRuleDialog(it.second, true))
             }
         }
         viewModel.errorLive.observe(this) {
@@ -106,9 +90,7 @@ class FileAssociationActivity :
         }
         viewModel.openBookLiveData.observe(this) {
             binding.rotateLoading.gone()
-            startActivity<ReadBookActivity> {
-                putExtra("bookUrl", it)
-            }
+            startActivityForBook(it)
             finish()
         }
         viewModel.notSupportedLiveData.observe(this) { data ->
@@ -173,7 +155,9 @@ class FileAssociationActivity :
                         val treeDoc =
                             DocumentFile.fromTreeUri(this@FileAssociationActivity, treeUri)
                         if (!treeDoc!!.checkWrite()) {
-                            throw InvalidBooksDirException("请重新设置书籍保存位置\nPermission Denial")
+                            throw InvalidBooksDirException(
+                                "请重新设置书籍保存位置\nPermission Denial"
+                            )
                         }
                         readUri(uri) { fileDoc, inputStream ->
                             val name = fileDoc.name
@@ -181,7 +165,9 @@ class FileAssociationActivity :
                             if (doc == null || fileDoc.lastModified > doc.lastModified()) {
                                 if (doc == null) {
                                     doc = treeDoc.createFile(FileUtils.getMimeType(name), name)
-                                        ?: throw InvalidBooksDirException("请重新设置书籍保存位置\nPermission Denial")
+                                        ?: throw InvalidBooksDirException(
+                                            "请重新设置书籍保存位置\nPermission Denial"
+                                        )
                                 }
                                 contentResolver.openOutputStream(doc.uri)!!.use { oStream ->
                                     inputStream.copyTo(oStream)
@@ -193,7 +179,9 @@ class FileAssociationActivity :
                     } else {
                         val treeFile = File(treeUri.path ?: treeUri.toString())
                         if (!treeFile.checkWrite()) {
-                            throw InvalidBooksDirException("请重新设置书籍保存位置\nPermission Denial")
+                            throw InvalidBooksDirException(
+                                "请重新设置书籍保存位置\nPermission Denial"
+                            )
                         }
                         readUri(uri) { fileDoc, inputStream ->
                             val name = fileDoc.name

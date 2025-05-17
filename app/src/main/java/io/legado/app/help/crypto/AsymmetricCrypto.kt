@@ -1,10 +1,13 @@
 package io.legado.app.help.crypto
 
+import androidx.annotation.Keep
 import cn.hutool.crypto.KeyUtil
 import cn.hutool.crypto.asymmetric.KeyType
+import io.legado.app.utils.EncoderUtils
 import java.io.InputStream
 import cn.hutool.crypto.asymmetric.AsymmetricCrypto as HutoolAsymmetricCrypto
 
+@Keep
 @Suppress("unused")
 class AsymmetricCrypto(algorithm: String) : HutoolAsymmetricCrypto(algorithm) {
 
@@ -77,12 +80,7 @@ class AsymmetricCrypto(algorithm: String) : HutoolAsymmetricCrypto(algorithm) {
 
     @JvmOverloads
     fun encryptBase64(data: Any, usePublicKey: Boolean? = true): String {
-        return when (data) {
-            is ByteArray -> encryptBase64(data, getKeyType(usePublicKey))
-            is String -> encryptBase64(data, getKeyType(usePublicKey))
-            is InputStream -> encryptBase64(data, getKeyType(usePublicKey))
-            else -> throw IllegalArgumentException("Unexpected input type")
-        }
+        return EncoderUtils.base64Encode(encrypt(data, usePublicKey))
     }
 
 }

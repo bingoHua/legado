@@ -10,17 +10,14 @@ import io.legado.app.api.controller.RssSourceController
 import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.service.WebService
 import io.legado.app.utils.GSON
+import io.legado.app.utils.LogUtils
+import io.legado.app.utils.stackTraceStr
 import io.legado.app.web.utils.AssetsWeb
 import kotlinx.coroutines.runBlocking
 import okio.Pipe
 import okio.buffer
-import java.io.BufferedWriter
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
-import java.io.OutputStreamWriter
-import kotlin.collections.HashMap
-import kotlin.collections.List
-import kotlin.collections.set
 
 class HttpServer(port: Int) : NanoHTTPD(port) {
     private val assetsWeb = AssetsWeb("web")
@@ -31,6 +28,11 @@ class HttpServer(port: Int) : NanoHTTPD(port) {
         val ct = ContentType(session.headers["content-type"]).tryUTF8()
         session.headers["content-type"] = ct.contentTypeHeader
         var uri = session.uri
+
+        val startAt = System.currentTimeMillis()
+        LogUtils.d(TAG) {
+            "${session.method.name} - $uri - ${session.queryParameterString} - Start($startAt)"
+        }
 
         try {
             when (session.method) {
@@ -56,7 +58,7 @@ class HttpServer(port: Int) : NanoHTTPD(port) {
                             "/saveBook" -> BookController.saveBook(postData)
                             "/deleteBook" -> BookController.deleteBook(postData)
                             "/saveBookProgress" -> BookController.saveBookProgress(postData)
-                            "/addLocalBook" -> BookController.addLocalBook(session.parameters)
+                            "/addLocalBook" -> BookController.addLocalBook(session.parameters, files)
                             "/saveReadConfig" -> BookController.saveWebReadConfig(postData)
                             "/saveRssSource" -> RssSourceController.saveSource(postData)
                             "/saveRssSources" -> RssSourceController.saveSources(postData)
@@ -115,10 +117,8 @@ class HttpServer(port: Int) : NanoHTTPD(port) {
                 if (data is List<*> && data.size > 3000) {
                     val pipe = Pipe(16 * 1024)
                     Coroutine.async {
-                        pipe.sink.buffer().outputStream().use { out ->
-                            BufferedWriter(OutputStreamWriter(out, "UTF-8")).use {
-                                GSON.toJson(returnData, it)
-                            }
+                        pipe.sink.buffer().outputStream().bufferedWriter(Charsets.UTF_8).use {
+                            GSON.toJson(returnData, it)
                         }
                     }
                     newChunkedResponse(
@@ -132,11 +132,21 @@ class HttpServer(port: Int) : NanoHTTPD(port) {
             }
             response.addHeader("Access-Control-Allow-Methods", "GET, POST")
             response.addHeader("Access-Control-Allow-Origin", session.headers["origin"])
+            LogUtils.d(TAG) {
+                "${session.method.name} - $uri - ${session.queryParameterString} - End($startAt)"
+            }
             return response
         } catch (e: Exception) {
+            LogUtils.d(TAG) {
+                "${session.method.name} - $uri - ${session.queryParameterString} - Error End($startAt)\n$e\n${e.stackTraceStr}"
+            }
             return newFixedLengthResponse(e.message)
         }
 
+    }
+
+    companion object {
+        private const val TAG = "HttpServer"
     }
 
 }

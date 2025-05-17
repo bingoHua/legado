@@ -2,6 +2,7 @@ package io.legado.app.help.http
 
 import android.annotation.SuppressLint
 import android.net.http.SslError
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.util.AndroidRuntimeException
@@ -16,8 +17,13 @@ import io.legado.app.exception.NoStackTraceException
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.utils.runOnUI
+import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.Runnable
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withTimeout
+import okhttp3.Protocol
+import okhttp3.Request
+import okhttp3.Response
 import org.apache.commons.text.StringEscapeUtils
 import splitties.init.appCtx
 import java.lang.ref.WeakReference
@@ -36,34 +42,38 @@ class BackstageWebView(
     private val sourceRegex: String? = null,
     private val overrideUrlRegex: String? = null,
     private val javaScript: String? = null,
+    private val delayTime: Long = 0,
 ) {
 
     private val mHandler = Handler(Looper.getMainLooper())
     private var callback: Callback? = null
     private var mWebView: WebView? = null
 
-    suspend fun getStrResponse(): StrResponse = suspendCancellableCoroutine { block ->
-        block.invokeOnCancellation {
-            runOnUI {
-                destroy()
+    suspend fun getStrResponse(): StrResponse = withTimeout(60000L) {
+        suspendCancellableCoroutine { block ->
+            block.invokeOnCancellation {
+                runOnUI {
+                    destroy()
+                }
             }
-        }
-        callback = object : Callback() {
-            override fun onResult(response: StrResponse) {
-                if (!block.isCompleted)
-                    block.resume(response)
-            }
+            callback = object : Callback() {
+                override fun onResult(response: StrResponse) {
+                    if (!block.isCompleted) {
+                        block.resume(response)
+                    }
+                }
 
-            override fun onError(error: Throwable) {
-                if (!block.isCompleted)
-                    block.resumeWithException(error)
+                override fun onError(error: Throwable) {
+                    if (!block.isCompleted)
+                        block.resumeWithException(error)
+                }
             }
-        }
-        runOnUI {
-            try {
-                load()
-            } catch (error: Throwable) {
-                block.resumeWithException(error)
+            runOnUI {
+                try {
+                    load()
+                } catch (error: Throwable) {
+                    block.resumeWithException(error)
+                }
             }
         }
     }
@@ -128,14 +138,29 @@ class BackstageWebView(
 
     private fun setCookie(url: String) {
         tag?.let {
-            val cookie = CookieManager.getInstance().getCookie(url)
-            CookieStore.setCookie(it, cookie)
+            Coroutine.async(executeContext = IO) {
+                val cookie = CookieManager.getInstance().getCookie(url)
+                CookieStore.setCookie(it, cookie)
+            }
         }
     }
 
     private inner class HtmlWebViewClient : WebViewClient() {
 
-        var runnable: EvalJsRunnable? = null
+        private var runnable: EvalJsRunnable? = null
+        private var isRedirect = false
+
+        override fun shouldOverrideUrlLoading(
+            view: WebView,
+            request: WebResourceRequest
+        ): Boolean {
+            isRedirect = isRedirect || if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                request.isRedirect
+            } else {
+                request.url.toString() != view.url
+            }
+            return super.shouldOverrideUrlLoading(view, request)
+        }
 
         override fun onPageFinished(view: WebView, url: String) {
             setCookie(url)
@@ -143,7 +168,7 @@ class BackstageWebView(
                 runnable = EvalJsRunnable(view, url, getJs())
             }
             mHandler.removeCallbacks(runnable!!)
-            mHandler.postDelayed(runnable!!, 1000)
+            mHandler.postDelayed(runnable!!, 1000 + delayTime)
         }
 
         @SuppressLint("WebViewClientOnReceivedSslError")
@@ -173,7 +198,7 @@ class BackstageWebView(
                     val content = StringEscapeUtils.unescapeJson(result)
                         .replace(quoteRegex, "")
                     try {
-                        val response = StrResponse(url, content)
+                        val response = buildStrResponse(content)
                         callback?.onResult(response)
                     } catch (e: Exception) {
                         callback?.onError(e)
@@ -192,6 +217,27 @@ class BackstageWebView(
                 }
                 retry++
                 mHandler.postDelayed(this@EvalJsRunnable, 1000)
+            }
+
+            private fun buildStrResponse(content: String): StrResponse {
+                if (!isRedirect) {
+                    return StrResponse(url, content)
+                }
+                val originUrl = this@BackstageWebView.url ?: url
+                val originResponse = Response.Builder()
+                    .code(302)
+                    .request(Request.Builder().url(originUrl).build())
+                    .protocol(Protocol.HTTP_1_1)
+                    .message("Found")
+                    .build()
+                val response = Response.Builder()
+                    .code(200)
+                    .request(Request.Builder().url(url).build())
+                    .protocol(Protocol.HTTP_1_1)
+                    .message("OK")
+                    .priorResponse(originResponse)
+                    .build()
+                return StrResponse(response, content)
             }
         }
 
@@ -251,7 +297,7 @@ class BackstageWebView(
             setCookie(url)
             if (!javaScript.isNullOrEmpty()) {
                 val runnable = LoadJsRunnable(webView, javaScript)
-                mHandler.postDelayed(runnable, 1000L)
+                mHandler.postDelayed(runnable, 1000L + delayTime)
             }
         }
 

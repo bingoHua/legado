@@ -4,11 +4,16 @@ import android.annotation.SuppressLint
 import android.content.DialogInterface
 import android.content.SharedPreferences
 import android.os.Bundle
-import android.view.*
+import android.view.Gravity
+import android.view.LayoutInflater
+import android.view.View
+import android.view.ViewConfiguration
+import android.view.ViewGroup
+import android.view.WindowManager
 import android.widget.LinearLayout
-import androidx.fragment.app.DialogFragment
 import androidx.preference.Preference
 import io.legado.app.R
+import io.legado.app.base.BasePrefDialogFragment
 import io.legado.app.constant.EventBus
 import io.legado.app.constant.PreferKey
 import io.legado.app.help.config.AppConfig
@@ -20,12 +25,14 @@ import io.legado.app.model.ReadBook
 import io.legado.app.ui.book.read.ReadBookActivity
 import io.legado.app.ui.book.read.page.provider.ChapterProvider
 import io.legado.app.ui.widget.number.NumberPickerDialog
+import io.legado.app.utils.canvasrecorder.CanvasRecorderFactory
 import io.legado.app.utils.dpToPx
 import io.legado.app.utils.getPrefBoolean
 import io.legado.app.utils.postEvent
+import io.legado.app.utils.removePref
 import io.legado.app.utils.setEdgeEffectColor
 
-class MoreConfigDialog : DialogFragment() {
+class MoreConfigDialog : BasePrefDialogFragment() {
     private val readPreferTag = "readPreferenceFragment"
 
     override fun onStart() {
@@ -78,6 +85,10 @@ class MoreConfigDialog : DialogFragment() {
         override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
             addPreferencesFromResource(R.xml.pref_config_read)
             upPreferenceSummary(PreferKey.pageTouchSlop, slopSquare.toString())
+            if (!CanvasRecorderFactory.isSupport) {
+                removePref(PreferKey.optimizeRender)
+                preferenceScreen.removePreferenceRecursively(PreferKey.optimizeRender)
+            }
         }
 
         override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
@@ -107,41 +118,56 @@ class MoreConfigDialog : DialogFragment() {
                 PreferKey.readBodyToLh -> activity?.recreate()
                 PreferKey.hideStatusBar -> {
                     ReadBookConfig.hideStatusBar = getPrefBoolean(PreferKey.hideStatusBar)
-                    postEvent(EventBus.UP_CONFIG, true)
+                    postEvent(EventBus.UP_CONFIG, arrayListOf(0, 2))
                 }
+
                 PreferKey.hideNavigationBar -> {
                     ReadBookConfig.hideNavigationBar = getPrefBoolean(PreferKey.hideNavigationBar)
-                    postEvent(EventBus.UP_CONFIG, true)
+                    postEvent(EventBus.UP_CONFIG, arrayListOf(0, 2))
                 }
+
                 PreferKey.keepLight -> postEvent(key, true)
                 PreferKey.textSelectAble -> postEvent(key, getPrefBoolean(key))
                 PreferKey.screenOrientation -> {
                     (activity as? ReadBookActivity)?.setOrientation()
                 }
+
                 PreferKey.textFullJustify,
                 PreferKey.textBottomJustify,
                 PreferKey.useZhLayout -> {
-                    postEvent(EventBus.UP_CONFIG, true)
+                    postEvent(EventBus.UP_CONFIG, arrayListOf(5))
                 }
+
                 PreferKey.showBrightnessView -> {
                     postEvent(PreferKey.showBrightnessView, "")
                 }
+
                 PreferKey.expandTextMenu -> {
                     (activity as? ReadBookActivity)?.textActionMenu?.upMenu()
                 }
+
                 PreferKey.doublePageHorizontal -> {
                     ChapterProvider.upLayout()
                     ReadBook.loadContent(false)
                 }
+
                 PreferKey.showReadTitleAddition,
                 PreferKey.readBarStyleFollowPage -> {
                     postEvent(EventBus.UPDATE_READ_ACTION_BAR, true)
                 }
+
                 PreferKey.progressBarBehavior -> {
                     postEvent(EventBus.UP_SEEK_BAR, true)
                 }
+
                 PreferKey.noAnimScrollPage -> {
                     ReadBook.callBack?.upPageAnim()
+                }
+
+                PreferKey.optimizeRender -> {
+                    ChapterProvider.upStyle()
+                    ReadBook.callBack?.upPageAnim(true)
+                    ReadBook.loadContent(false)
                 }
             }
         }
@@ -152,6 +178,7 @@ class MoreConfigDialog : DialogFragment() {
                 "clickRegionalConfig" -> {
                     (activity as? ReadBookActivity)?.showClickRegionalConfig()
                 }
+
                 PreferKey.pageTouchSlop -> {
                     NumberPickerDialog(requireContext())
                         .setTitle(getString(R.string.page_touch_slop_dialog_title))
@@ -160,7 +187,7 @@ class MoreConfigDialog : DialogFragment() {
                         .setValue(AppConfig.pageTouchSlop)
                         .show {
                             AppConfig.pageTouchSlop = it
-                            postEvent(EventBus.UP_CONFIG, false)
+                            postEvent(EventBus.UP_CONFIG, arrayListOf(4))
                         }
                 }
             }

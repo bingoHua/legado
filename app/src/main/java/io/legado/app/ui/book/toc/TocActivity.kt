@@ -7,7 +7,6 @@ import android.os.Bundle
 import android.view.Menu
 import android.view.MenuItem
 import android.view.MotionEvent
-import android.widget.EditText
 import androidx.activity.viewModels
 import androidx.appcompat.widget.SearchView
 import androidx.fragment.app.Fragment
@@ -26,8 +25,13 @@ import io.legado.app.ui.about.AppLogDialog
 import io.legado.app.ui.book.toc.rule.TxtTocRuleDialog
 import io.legado.app.ui.file.HandleFileContract
 import io.legado.app.ui.widget.dialog.WaitDialog
-import io.legado.app.utils.*
+import io.legado.app.utils.applyTint
+import io.legado.app.utils.gone
+import io.legado.app.utils.hideSoftInput
+import io.legado.app.utils.shouldHideSoftInput
+import io.legado.app.utils.showDialogFragment
 import io.legado.app.utils.viewbindingdelegate.viewBinding
+import io.legado.app.utils.visible
 
 /**
  * 目录
@@ -69,17 +73,12 @@ class TocActivity : VMBaseActivity<ActivityChapterListBinding, TocViewModel>(),
     override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
         if (ev.action == MotionEvent.ACTION_DOWN) {
             currentFocus?.let {
-                if (it is EditText) {
+                if (it.shouldHideSoftInput(ev)) {
                     it.hideSoftInput()
                 }
             }
         }
-        return try {
-            super.dispatchTouchEvent(ev)
-        } catch (e: IllegalArgumentException) {
-            e.printStackTrace()
-            false
-        }
+        return super.dispatchTouchEvent(ev)
     }
 
     override fun onCompatCreateOptionsMenu(menu: Menu): Boolean {
@@ -132,6 +131,8 @@ class TocActivity : VMBaseActivity<ActivityChapterListBinding, TocViewModel>(),
         }
         menu.findItem(R.id.menu_use_replace)?.isChecked =
             AppConfig.tocUiUseReplace
+        menu.findItem(R.id.menu_load_word_count)?.isChecked =
+            AppConfig.tocCountWords
         menu.findItem(R.id.menu_split_long_chapter)?.isChecked =
             viewModel.bookData.value?.getSplitLongChapter() == true
         return super.onMenuOpened(featureId, menu)
@@ -165,6 +166,11 @@ class TocActivity : VMBaseActivity<ActivityChapterListBinding, TocViewModel>(),
                 viewModel.chapterListCallBack?.upChapterList(searchView?.query?.toString())
             }
 
+            R.id.menu_load_word_count -> {
+                AppConfig.tocCountWords = !item.isChecked
+                viewModel.upChapterListAdapter()
+            }
+
             R.id.menu_export_bookmark -> exportDir.launch {
                 requestCode = 1
             }
@@ -191,10 +197,7 @@ class TocActivity : VMBaseActivity<ActivityChapterListBinding, TocViewModel>(),
             waitDialog.dismiss()
             ReadBook.book?.let { readBook ->
                 if (readBook == book) {
-                    ReadBook.book = book
-                    ReadBook.chapterSize = book.totalChapterNum
                     ReadBook.upMsg(null)
-                    ReadBook.loadContent(resetPageOffset = true)
                 }
             }
         }

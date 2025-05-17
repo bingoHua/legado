@@ -14,14 +14,17 @@ import androidx.annotation.ColorInt
 import androidx.annotation.StyleRes
 import androidx.appcompat.widget.Toolbar
 import androidx.core.graphics.alpha
+import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.children
 import com.google.android.material.appbar.AppBarLayout
 import io.legado.app.R
+import io.legado.app.help.config.AppConfig
 import io.legado.app.lib.theme.elevation
 import io.legado.app.lib.theme.primaryColor
 import io.legado.app.utils.activity
-import io.legado.app.utils.navigationBarHeight
-import io.legado.app.utils.statusBarHeight
+import io.legado.app.utils.setOnApplyWindowInsetsListenerCompat
+import splitties.views.bottomPadding
+import splitties.views.topPadding
 
 @Suppress("unused", "MemberVisibilityCanBePrivate")
 class TitleBar @JvmOverloads constructor(
@@ -36,13 +39,17 @@ class TitleBar @JvmOverloads constructor(
     var title: CharSequence?
         get() = toolbar.title
         set(title) {
-            toolbar.title = title
+            if (toolbar.title != title) {
+                toolbar.title = title
+            }
         }
 
     var subtitle: CharSequence?
         get() = toolbar.subtitle
         set(subtitle) {
-            toolbar.subtitle = subtitle
+            if (toolbar.subtitle != subtitle) {
+                toolbar.subtitle = subtitle
+            }
         }
 
     private val displayHomeAsUp: Boolean
@@ -149,15 +156,32 @@ class TitleBar @JvmOverloads constructor(
         }
 
         if (!isInEditMode) {
-            if (fitStatusBar) {
-                setPadding(paddingLeft, context.statusBarHeight, paddingRight, paddingBottom)
+//            if (fitStatusBar) {
+//                setPadding(paddingLeft, context.statusBarHeight, paddingRight, paddingBottom)
+//            }
+//
+//            if (fitNavigationBar) {
+//                setPadding(paddingLeft, paddingTop, paddingRight, context.navigationBarHeight)
+//            }
+
+            if (fitStatusBar || fitNavigationBar) {
+                setOnApplyWindowInsetsListenerCompat { _, windowInsets ->
+                    val insets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars())
+                    if (fitStatusBar) {
+                        topPadding = insets.top
+                    }
+                    if (fitNavigationBar) {
+                        bottomPadding = insets.bottom
+                    }
+                    windowInsets
+                }
             }
 
-            if (fitNavigationBar) {
-                setPadding(paddingLeft, paddingTop, paddingRight, context.navigationBarHeight)
+            if (AppConfig.isEInkMode) {
+                setBackgroundResource(R.drawable.bg_eink_border_bottom)
+            } else {
+                setBackgroundColor(context.primaryColor)
             }
-
-            setBackgroundColor(context.primaryColor)
 
             stateListAnimator = null
             elevation = context.elevation
@@ -198,7 +222,7 @@ class TitleBar @JvmOverloads constructor(
         toolbar.setSubtitleTextAppearance(context, resId)
     }
 
-    fun setTextColor(@ColorInt color: Int){
+    fun setTextColor(@ColorInt color: Int) {
         setTitleTextColor(color)
         setSubTitleTextColor(color)
     }
@@ -232,8 +256,10 @@ class TitleBar @JvmOverloads constructor(
     }
 
     fun onMultiWindowModeChanged(isInMultiWindowMode: Boolean, fullScreen: Boolean) {
-        val topPadding = if (!isInMultiWindowMode && fullScreen) context.statusBarHeight else 0
-        setPadding(paddingLeft, topPadding, paddingRight, paddingBottom)
+//        if (fitStatusBar) {
+//            val topPadding = if (!isInMultiWindowMode && fullScreen) context.statusBarHeight else 0
+//            setPadding(paddingLeft, topPadding, paddingRight, paddingBottom)
+//        }
     }
 
     private fun attachToActivity() {

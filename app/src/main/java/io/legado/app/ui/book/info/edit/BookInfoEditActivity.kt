@@ -1,28 +1,40 @@
 package io.legado.app.ui.book.info.edit
 
-import android.app.Activity
 import android.net.Uri
 import android.os.Bundle
 import android.view.Menu
 import android.view.MenuItem
 import androidx.activity.viewModels
+import androidx.core.view.WindowInsetsCompat
 import io.legado.app.R
 import io.legado.app.base.VMBaseActivity
 import io.legado.app.constant.BookType
 import io.legado.app.data.entities.Book
 import io.legado.app.databinding.ActivityBookInfoEditBinding
 import io.legado.app.help.book.BookHelp
+import io.legado.app.help.book.addType
 import io.legado.app.help.book.isAudio
 import io.legado.app.help.book.isImage
 import io.legado.app.help.book.isLocal
+import io.legado.app.help.book.removeType
 import io.legado.app.ui.book.changecover.ChangeCoverDialog
-import io.legado.app.utils.*
+import io.legado.app.utils.FileUtils
+import io.legado.app.utils.MD5Utils
+import io.legado.app.utils.SelectImageContract
+import io.legado.app.utils.externalFiles
+import io.legado.app.utils.inputStream
+import io.legado.app.utils.launch
+import io.legado.app.utils.readUri
+import io.legado.app.utils.setOnApplyWindowInsetsListenerCompat
+import io.legado.app.utils.showDialogFragment
+import io.legado.app.utils.toastOnUi
 import io.legado.app.utils.viewbindingdelegate.viewBinding
 import splitties.init.appCtx
+import splitties.views.bottomPadding
 import java.io.FileOutputStream
 
 class BookInfoEditActivity :
-    VMBaseActivity<ActivityBookInfoEditBinding, BookInfoEditViewModel>(fullScreen = false),
+    VMBaseActivity<ActivityBookInfoEditBinding, BookInfoEditViewModel>(),
     ChangeCoverDialog.CallBack {
 
     private val selectCover = registerForActivityResult(SelectImageContract()) {
@@ -41,6 +53,7 @@ class BookInfoEditActivity :
                 viewModel.loadBook(it)
             }
         }
+        initView()
         initEvent()
     }
 
@@ -54,6 +67,15 @@ class BookInfoEditActivity :
             R.id.menu_save -> saveData()
         }
         return super.onCompatOptionsItemSelected(item)
+    }
+
+    private fun initView() {
+        binding.root.setOnApplyWindowInsetsListenerCompat { view, windowInsets ->
+            val typeMask = WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.ime()
+            val insets = windowInsets.getInsets(typeMask)
+            view.bottomPadding = insets.bottom
+            windowInsets
+        }
     }
 
     private fun initEvent() = binding.run {
@@ -89,8 +111,8 @@ class BookInfoEditActivity :
     }
 
     private fun upCover() {
-        viewModel.book.let {
-            binding.ivCover.load(it?.getDisplayCover(), it?.name, it?.author)
+        viewModel.book?.let {
+            binding.ivCover.load(it.getDisplayCover(), it.name, it.author, false, it.origin)
         }
     }
 
@@ -100,17 +122,20 @@ class BookInfoEditActivity :
         book.name = tieBookName.text?.toString() ?: ""
         book.author = tieBookAuthor.text?.toString() ?: ""
         val local = if (book.isLocal) BookType.local else 0
-        book.type = when (spType.selectedItemPosition) {
+        val bookType = when (spType.selectedItemPosition) {
             2 -> BookType.image or local
             1 -> BookType.audio or local
             else -> BookType.text or local
         }
+        book.removeType(BookType.local, BookType.image, BookType.audio, BookType.text)
+        book.addType(bookType)
         val customCoverUrl = tieCoverUrl.text?.toString()
         book.customCoverUrl = if (customCoverUrl == book.coverUrl) null else customCoverUrl
-        book.customIntro = tieBookIntro.text?.toString()
+        val customIntro = tieBookIntro.text?.toString()
+        book.customIntro = if (customIntro == book.intro) null else customIntro
         BookHelp.updateCacheFolder(oldBook, book)
         viewModel.saveBook(book) {
-            setResult(Activity.RESULT_OK)
+            setResult(RESULT_OK)
             finish()
         }
     }

@@ -1,6 +1,7 @@
 <resources>
     <!--App-->
     <string name="app_name">阅读</string>
+    <string name="app_name_a">阅读·A</string>
     <string name="receiving_shared_label">阅读·搜索</string>
     <string name="tip_perm_request_storage">阅读需要访问存储卡权限，请前往“设置”—“应用权限”，打开所需权限</string>
 
@@ -23,11 +24,17 @@
     <string name="dialog_setting">去设置</string>
     <string name="tip_cannot_jump_setting_page">无法跳转至设置界面</string>
 
+    <string name="manual_input">手动输入</string>
+    <string name="enter_directory_path">请输入目录路径</string>
+    <string name="invalid_directory">目录路径无效</string>
+    <string name="empty_directory_input">目录路径不能为空</string>
+
     <string name="dynamic_click_retry">点击重试</string>
     <string name="dynamic_loading">正在加载</string>
     <string name="draw">提醒</string>
     <string name="edit">编辑</string>
     <string name="delete">删除</string>
+    <string name="delete_select_group">删除当前分组</string>
     <string name="delete_all">删除所有</string>
     <string name="replace">替换</string>
     <string name="replace_purify">替换净化</string>
@@ -93,7 +100,7 @@
         \u3000\u3000这是一款使用 Kotlin 全新开发的开源的阅读软件，欢迎您的加入。
     </string>
     <string name="app_share_description">
-        阅读 3.0 下载地址：\nhttps://www.coolapk.com/apk/256030
+        阅读 3.0 下载地址：\nhttps://github.com/gedoor/legado/releases
     </string>
     <string name="version_name">版本 %s</string>
     <string name="pt_background_verification">后台校验书源</string>
@@ -194,7 +201,7 @@
     <string name="replace_rule">替换规则</string>
     <string name="replace_to">替换为</string>
     <string name="img_cover">封面</string>
-    <string name="book">书</string>
+   <string name="book">书</string>
     <string name="volume_key_page">音量键翻页</string>
     <string name="mouse_wheel_page">鼠标滚轮翻页</string>
     <string name="click_turn_page">点击翻页</string>
@@ -732,6 +739,8 @@
     <string name="import_old_summary">选择旧版备份文件夹</string>
     <string name="enabled">已启用</string>
     <string name="disabled">已禁用</string>
+    <string name="enabled_explore">已启用发现</string>
+    <string name="disabled_explore">已禁用发现</string>
     <string name="starting_download">正在启动下载</string>
     <string name="already_in_download">该书已在下载列表</string>
     <string name="click_to_open">点击打开</string>
@@ -768,6 +777,7 @@
     <string name="donate_summary">您的支持是我更新的动力</string>
     <string name="about_summary">公众号【开源阅读软件】</string>
     <string name="read_record">阅读记录</string>
+    <string name="del_read_record">删除阅读记录</string>
     <string name="read_record_summary">阅读时间记录</string>
     <string name="local_tts">本地 TTS</string>
     <string name="thread_count">线程数</string>
@@ -811,14 +821,18 @@
     <string name="rule_subscription">规则订阅</string>
     <string name="rule_sub_empty_msg">添加大佬们提供的规则导入地址\n添加后点击可导入规则</string>
     <string name="get_book_progress">拉取云端进度</string>
+    <string name="cover_book_progress">覆盖云端进度</string>
     <string name="current_progress_exceeds_cloud">当前进度超过云端进度，是否同步？</string>
     <string name="sync_book_progress_t">同步阅读进度</string>
     <string name="sync_book_progress_s">进入退出阅读界面时同步阅读进度</string>
+    <string name="sync_book_progress_plus_t">同步增强</string>
+    <string name="sync_book_progress_plus_s">重新进入页面（息屏、后台返回等）或者网络变为可用时同步云端进度</string>
     <string name="create_bookmark_error">创建书签失败</string>
     <string name="single_url">单 URL</string>
     <string name="export_bookshelf">导出书单</string>
     <string name="import_bookshelf">导入书单</string>
     <string name="pre_download">预下载</string>
+    <string name="pre_download_m">预下载%s页</string>
     <string name="pre_download_s">预先下载 %s 章正文</string>
     <string name="is_enabled">是否启用</string>
     <string name="background_image">背景图片</string>
@@ -909,6 +923,7 @@
     <string name="double_page_horizontal">平板/横屏双页</string>
     <string name="open_in_browser">浏览器打开</string>
     <string name="copy_url">拷贝 URL</string>
+    <string name="full_screen">全屏</string>
     <string name="open_fun">打开方式</string>
     <string name="use_browser_open">是否使用外部浏览器打开？</string>
     <string name="see">查看</string>
@@ -997,6 +1012,8 @@
     <string name="add_remote_book">远程书籍</string>
     <string name="bitmap_cache_size_summary">当前最大缓存 %1$s MB</string>
     <string name="bitmap_cache_size">图片绘制缓存</string>
+    <string name="image_retain_number_summary">保留已读章节数量 %s</string>
+    <string name="image_retain_number">漫画保留数量</string>
     <string name="export_pics_file">TXT 导出图片</string>
     <!-- string end -->
     <string name="error_decode_bitmap">图片解码失败</string>
@@ -1039,7 +1056,7 @@
     <string name="cover_decode_js">封面解密（coverDecodeJs）</string>
     <string name="net_no_group">网络未分组</string>
     <string name="local_no_group">本地未分组</string>
-    <string name="parallel_export_book">多线程导出TXT</string>
+    <string name="parallel_export_book">多线程导出</string>
     <string name="progress_bar_behavior">进度条行为</string>
     <string name="source_edit_text_max_line">源编辑框最大行数</string>
     <string name="source_edit_max_line_summary">%s,设置行数小于屏幕可显示的最大行数可以更方便的滑动到其他的字段进行编辑</string>
@@ -1121,16 +1138,20 @@
     <string name="exit_app">退出软件</string>
     <string name="result_analyzed">解析示例</string>
     <string name="bookshelf_px_4">综合排序</string>
+    <string name="bookshelf_px_5">按作者</string>
     <string name="effective_replaces">起效的替换</string>
     <string name="export_book">导出书籍</string>
     <string name="export_book_notification_content">正在导出(%1$s),还有%2$d本待导出</string>
     <string name="export_md">导出(MD)</string>
     <string name="change_source_delay">换源间隔</string>
+    <string name="change_source_progress">结果 %1$d, 当前进度 %2$d / %3$d: %4$s</string>
     <string name="open_book_info_by_click_title">点击书名打开详情</string>
     <string name="export_wait">等待导出</string>
+    <string name="sync_book_progress_success">进度同步成功</string>
     <string name="default_home_page">默认主页</string>
     <string name="show_bookshelf_fast_scroller">显示快速滚动条</string>
     <string name="export_all_use_book_source">导出所有书的书源</string>
+    <string name="cloud_progress_exceeds_current">云端进度超过当前进度，是否同步？</string>
     <string name="keep_enable">保留启用状态</string>
     <string name="preview_image_by_click">点击预览图片</string>
     <string name="screen_portrait_reversed">反向竖屏</string>
@@ -1140,4 +1161,60 @@
     <string name="adjust_chapter_index">调整章节位置</string>
     <string name="clear_webview_data_success">清除成功，3秒后自动重启应用</string>
     <string name="key_page_on_long_press">按键长按翻页</string>
+    <string name="save_log">保存日志</string>
+    <string name="create_heap_dump">创建堆转储</string>
+    <string name="record_heap_dump_s">当应用发生OOM崩溃时保存堆转储</string>
+    <string name="record_heap_dump_t">记录堆转储</string>
+    <string name="font_weight_text">中/粗/细</string>
+    <string name="keep_swipe_tip">继续滑动以加载下一章…</string>
+    <string name="enable_optimize_render">启用绘制优化</string>
+    <string name="ignore_battery_permission_rationale">阅读需要请求后台权限以保持服务正常运行</string>
+    <string name="simulated_reading">模拟追读</string>
+    <string name="switch_on">开关</string>
+    <string name="start_from">开始日期</string>
+    <string name="daily_chapters">日更章数</string>
+    <string name="start_chapter">起始章节</string>
+    <string name="update_to_variant_title">检查更新查找版本</string>
+    <string name="update_to_variant_summary">检查更新时查找其他签名版本</string>
+    <string name="default_version">当前</string>
+    <string name="official_version">正式版</string>
+    <string name="beta_release_version">测试版</string>
+    <string name="beta_releaseA_version">共存版</string>
+    <string name="stream_read_aloud_audio">流式播放音频</string>
+    <string name="stream_read_aloud_audio_summary">即边下边播，网络不好时播放会断断续续，仅TTS源有效</string>
+    <string name="pause_read_aloud_while_phone_calls_title">来电期间暂停朗读</string>
+    <string name="pause_read_aloud_while_phone_calls_summary">在通话期间暂停朗读，需要读取手机状态权限</string>
+    <string name="read_aloud_read_phone_state_permission_rationale">阅读需要读取手机状态实现来电期间暂停朗读功能</string>
+    <string name="read_aloud_by_media_button_title">耳机按键启动朗读</string>
+    <string name="read_aloud_by_media_button_summary">通过耳机按键来启动朗读</string>
+    <string name="show_same_source">显示重复书源</string>
+    <string name="theme_config">主题配置</string>
+    <string name="show_manga_ui">漫画浏览</string>
+    <string name="disable_manga_scale">禁用漫画缩放</string>
+    <string name="disable_manga_click_scroll">禁用点击翻页</string>
+    <string name="enable_auto_page_scroll">开启自动翻页</string>
+    <string name="manga_auto_page_speed">翻页速度 %s</string>
+    <string name="enable_auto_scroll">开启滚动</string>
+    <string name="manga_footer_config">页脚配置</string>
+    <string name="setting_manga_auto_page_speed">设置自动翻页速度</string>
+    <string name="book_reader_info_bar">页数. %1$d/%2$d  章节. %3$d/%4$d -> %5$s%%</string>
+    <string name="menu_download_after">下载之后章节</string>
+    <string name="menu_download_all">下载全部章节</string>
+    <string name="manga_header_chapter">《章节和文案》隐藏</string>
+    <string name="manga_check_chapter_label">《章节.》文案</string>
+    <string name="manga_check_chapter">章节</string>
+    <string name="manga_check_chapter_name">章节名称</string>
+    <string name="manga_header_page">《页数和文案》隐藏</string>
+    <string name="manga_check_page_label">《页数.》文案</string>
+    <string name="manga_check_page_number">页数</string>
+    <string name="manga_header_progress">《总进度和文案》隐藏</string>
+    <string name="manga_check_progress_label">《总进度.》文案</string>
+    <string name="manga_check_progress">总进度</string>
+    <string name="manga_header_footer">页脚</string>
+    <string name="manga_radio_left">靠左</string>
+    <string name="manga_radio_center">居中</string>
+    <string name="enable_manga_horizontal_scroll">水平滚动</string>
+    <string name="manga_color_filter">滤镜</string>
+    <string name="hide_manga_title">隐藏漫画列表标题</string>
+    <string name="refresh_explore">刷新发现</string>
 </resources>

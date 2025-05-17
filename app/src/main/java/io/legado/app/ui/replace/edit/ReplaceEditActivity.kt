@@ -7,24 +7,26 @@ import android.view.Menu
 import android.view.MenuItem
 import android.widget.EditText
 import androidx.activity.viewModels
+import androidx.core.view.ViewCompat
 import androidx.lifecycle.lifecycleScope
 import io.legado.app.R
 import io.legado.app.base.VMBaseActivity
 import io.legado.app.data.entities.ReplaceRule
 import io.legado.app.databinding.ActivityReplaceEditBinding
 import io.legado.app.lib.dialogs.SelectItem
-import io.legado.app.ui.widget.dialog.TextDialog
 import io.legado.app.ui.widget.keyboard.KeyboardToolPop
 import io.legado.app.utils.GSON
+import io.legado.app.utils.imeHeight
 import io.legado.app.utils.sendToClip
-import io.legado.app.utils.showDialogFragment
+import io.legado.app.utils.setOnApplyWindowInsetsListenerCompat
+import io.legado.app.utils.showHelp
 import io.legado.app.utils.viewbindingdelegate.viewBinding
 
 /**
  * 编辑替换规则
  */
 class ReplaceEditActivity :
-    VMBaseActivity<ActivityReplaceEditBinding, ReplaceEditViewModel>(false),
+    VMBaseActivity<ActivityReplaceEditBinding, ReplaceEditViewModel>(),
     KeyboardToolPop.CallBack {
 
     companion object {
@@ -55,11 +57,9 @@ class ReplaceEditActivity :
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
         softKeyboardTool.attachToWindow(window)
+        initView()
         viewModel.initData(intent) {
             upReplaceView(it)
-        }
-        binding.ivHelp.setOnClickListener {
-            showHelp("regexHelp")
         }
     }
 
@@ -74,6 +74,7 @@ class ReplaceEditActivity :
                 setResult(RESULT_OK)
                 finish()
             }
+
             R.id.menu_copy_rule -> sendToClip(GSON.toJson(getReplaceRule()))
             R.id.menu_paste_rule -> viewModel.pasteRule {
                 upReplaceView(it)
@@ -85,6 +86,16 @@ class ReplaceEditActivity :
     override fun onDestroy() {
         super.onDestroy()
         softKeyboardTool.dismiss()
+    }
+
+    private fun initView() {
+        binding.ivHelp.setOnClickListener {
+            showHelp("regexHelp")
+        }
+        binding.root.setOnApplyWindowInsetsListenerCompat { _, windowInsets ->
+            softKeyboardTool.initialPadding = windowInsets.imeHeight
+            windowInsets
+        }
     }
 
     private fun upReplaceView(replaceRule: ReplaceRule) = binding.run {
@@ -142,13 +153,6 @@ class ReplaceEditActivity :
                 edit.replace(start, end, text)
             }
         }
-    }
-
-    @Suppress("SameParameterValue")
-    private fun showHelp(fileName: String) {
-        //显示目录help下的帮助文档
-        val mdText = String(assets.open("help/${fileName}.md").readBytes())
-        showDialogFragment(TextDialog(getString(R.string.help), mdText, TextDialog.Mode.MD))
     }
 
 }

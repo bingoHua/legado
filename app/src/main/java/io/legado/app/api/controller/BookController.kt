@@ -1,6 +1,9 @@
 package io.legado.app.api.controller
 
+import android.graphics.Bitmap
+import android.graphics.drawable.Drawable
 import androidx.core.graphics.drawable.toBitmap
+import com.bumptech.glide.Glide
 import io.legado.app.api.ReturnData
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.Book
@@ -26,12 +29,16 @@ import io.legado.app.utils.stackTraceStr
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import splitties.init.appCtx
+import java.io.File
+import java.util.WeakHashMap
+import java.util.concurrent.TimeUnit
 
 object BookController {
 
     private lateinit var book: Book
     private var bookSource: BookSource? = null
     private var bookUrl: String = ""
+    private val defaultCoverCache by lazy { WeakHashMap<Drawable, Bitmap>() }
 
     /**
      * 书架所有书籍
@@ -48,6 +55,7 @@ object BookController {
                     2 -> books.sortedWith { o1, o2 ->
                         o1.name.cnCompare(o2.name)
                     }
+
                     3 -> books.sortedBy { it.order }
                     else -> books.sortedByDescending { it.durChapterTime }
                 }
@@ -61,11 +69,27 @@ object BookController {
     fun getCover(parameters: Map<String, List<String>>): ReturnData {
         val returnData = ReturnData()
         val coverPath = parameters["path"]?.firstOrNull()
-        val ftBitmap = ImageLoader.loadBitmap(appCtx, coverPath).submit()
+        val ftBitmap = ImageLoader.loadBitmap(appCtx, coverPath)
+            .override(84, 112)
+            .centerCrop()
+            .submit()
         return try {
-            returnData.setData(ftBitmap.get())
+            returnData.setData(ftBitmap.get(3, TimeUnit.SECONDS))
         } catch (e: Exception) {
-            returnData.setData(BookCover.defaultDrawable.toBitmap())
+            try {
+                val defaultBitmap = defaultCoverCache.getOrPut(BookCover.defaultDrawable) {
+                    Glide.with(appCtx)
+                        .asBitmap()
+                        .load(BookCover.defaultDrawable.toBitmap())
+                        .override(84, 112)
+                        .centerCrop()
+                        .submit()
+                        .get()
+                }
+                returnData.setData(defaultBitmap)
+            } catch (e: Exception) {
+                returnData.setErrorMsg(e.localizedMessage ?: "getCover error")
+            }
         }
     }
 
@@ -87,7 +111,7 @@ object BookController {
         this.bookUrl = bookUrl
         val bitmap = runBlocking {
             ImageProvider.cacheImage(book, src, bookSource)
-            ImageProvider.getImage(book, src, width)!!
+            ImageProvider.getImage(book, src, width)
         }
         return returnData.setData(bitmap)
     }
@@ -176,7 +200,7 @@ object BookController {
         if (content != null) {
             val contentProcessor = ContentProcessor.get(book.name, book.origin)
             content = runBlocking {
-                contentProcessor.getContent(book, chapter, content!!, includeTitle = false)
+                contentProcessor.getContent(book, chapter, content, includeTitle = false)
                     .toString()
             }
             return returnData.setData(content)
@@ -256,14 +280,18 @@ object BookController {
     /**
      * 添加本地书籍
      */
-    fun addLocalBook(parameters: Map<String, List<String>>): ReturnData {
+    fun addLocalBook(
+        parameters: Map<String, List<String>>,
+        files: Map<String, String>
+    ): ReturnData {
         val returnData = ReturnData()
         val fileName = parameters["fileName"]?.firstOrNull()
             ?: return returnData.setErrorMsg("fileName 不能为空")
-        val fileData = parameters["fileData"]?.firstOrNull()
+        val fileData = files["fileData"]
             ?: return returnData.setErrorMsg("fileData 不能为空")
         kotlin.runCatching {
-            LocalBook.importFileOnLine(fileData, fileName)
+            val uri = LocalBook.saveBookFile(File(fileData).inputStream(), fileName)
+            LocalBook.importFile(uri)
         }.onFailure {
             return when (it) {
                 is SecurityException -> returnData.setErrorMsg("需重新设置书籍保存位置!")

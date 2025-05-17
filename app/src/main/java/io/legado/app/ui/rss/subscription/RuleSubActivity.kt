@@ -8,6 +8,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.ItemTouchHelper
 import io.legado.app.R
 import io.legado.app.base.BaseActivity
+import io.legado.app.constant.AppLog
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.RuleSub
 import io.legado.app.databinding.ActivityRuleSubBinding
@@ -17,11 +18,14 @@ import io.legado.app.ui.association.ImportBookSourceDialog
 import io.legado.app.ui.association.ImportReplaceRuleDialog
 import io.legado.app.ui.association.ImportRssSourceDialog
 import io.legado.app.ui.widget.recycler.ItemTouchCallback
+import io.legado.app.utils.applyNavigationBarPadding
 import io.legado.app.utils.showDialogFragment
 import io.legado.app.utils.toastOnUi
 import io.legado.app.utils.viewbindingdelegate.viewBinding
 import kotlinx.coroutines.Dispatchers.IO
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.conflate
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -56,6 +60,7 @@ class RuleSubActivity : BaseActivity<ActivityRuleSubBinding>(),
 
     private fun initView() {
         binding.recyclerView.adapter = adapter
+        binding.recyclerView.applyNavigationBarPadding()
         val itemTouchCallback = ItemTouchCallback(adapter)
         itemTouchCallback.isCanDrag = true
         ItemTouchHelper(itemTouchCallback).attachToRecyclerView(binding.recyclerView)
@@ -63,7 +68,9 @@ class RuleSubActivity : BaseActivity<ActivityRuleSubBinding>(),
 
     private fun initData() {
         lifecycleScope.launch {
-            appDb.ruleSubDao.flowAll().conflate().collect {
+            appDb.ruleSubDao.flowAll().catch {
+                AppLog.put("规则订阅界面获取数据失败\n${it.localizedMessage}", it)
+            }.flowOn(IO).conflate().collect {
                 binding.tvEmptyMsg.isGone = it.isNotEmpty()
                 adapter.setItems(it)
             }

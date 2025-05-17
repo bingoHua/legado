@@ -16,12 +16,22 @@ import io.legado.app.lib.webdav.WebDav
 import io.legado.app.lib.webdav.WebDavException
 import io.legado.app.lib.webdav.WebDavFile
 import io.legado.app.model.remote.RemoteBookWebDav
-import io.legado.app.utils.*
+import io.legado.app.utils.AlphanumComparator
+import io.legado.app.utils.FileUtils
+import io.legado.app.utils.GSON
+import io.legado.app.utils.NetworkUtils
+import io.legado.app.utils.UrlUtil
 import io.legado.app.utils.compress.ZipUtils
+import io.legado.app.utils.fromJsonObject
+import io.legado.app.utils.getPrefString
+import io.legado.app.utils.isJson
+import io.legado.app.utils.removePref
+import io.legado.app.utils.toastOnUi
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.runBlocking
 import splitties.init.appCtx
 import java.io.File
-import java.util.*
+import kotlin.coroutines.coroutineContext
 
 /**
  * webDav初始化会访问网络,不要放到主线程
@@ -66,14 +76,14 @@ object AppWebDav {
             defaultBookWebDav = null
             val account = appCtx.getPrefString(PreferKey.webDavAccount)
             val password = appCtx.getPrefString(PreferKey.webDavPassword)
-            if (!account.isNullOrBlank() && !password.isNullOrBlank()) {
+            if (!account.isNullOrEmpty() && !password.isNullOrEmpty()) {
                 val mAuthorization = Authorization(account, password)
                 checkAuthorization(mAuthorization)
                 WebDav(rootWebDavUrl, mAuthorization).makeAsDir()
                 WebDav(bookProgressUrl, mAuthorization).makeAsDir()
                 WebDav(exportsWebDavUrl, mAuthorization).makeAsDir()
                 WebDav(bgWebDavUrl, mAuthorization).makeAsDir()
-                val rootBooksUrl = "${rootWebDavUrl}books"
+                val rootBooksUrl = "${rootWebDavUrl}books/"
                 defaultBookWebDav = RemoteBookWebDav(rootBooksUrl, mAuthorization)
                 authorization = mAuthorization
             }
@@ -114,7 +124,7 @@ object AppWebDav {
             webDav.downloadTo(Backup.zipFilePath, true)
             FileUtils.delete(Backup.backupPath)
             ZipUtils.unZipToPath(File(Backup.zipFilePath), Backup.backupPath)
-            Restore.restore(Backup.backupPath)
+            Restore.restoreLocked(Backup.backupPath)
         }
     }
 
@@ -133,7 +143,7 @@ object AppWebDav {
                 WebDav(rootWebDavUrl, it).listFiles().reversed().forEach { webDavFile ->
                     if (webDavFile.displayName.startsWith("backup")) {
                         if (lastBackupFile == null
-                            || webDavFile.lastModify > lastBackupFile!!.lastModify
+                            || webDavFile.lastModify > lastBackupFile.lastModify
                         ) {
                             lastBackupFile = webDavFile
                         }
@@ -209,9 +219,8 @@ object AppWebDav {
                 WebDav(putUrl, it).upload(byteArray, "text/plain")
             }
         } catch (e: Exception) {
-            val msg = "WebDav导出\n${e.localizedMessage}"
-            AppLog.put(msg, e)
-            appCtx.toastOnUi(msg)
+            coroutineContext.ensureActive()
+            AppLog.put("WebDav导出失败\n${e.localizedMessage}", e, true)
         }
     }
 
@@ -224,9 +233,8 @@ object AppWebDav {
                 WebDav(putUrl, it).upload(uri, "text/plain")
             }
         } catch (e: Exception) {
-            val msg = "WebDav导出\n${e.localizedMessage}"
-            AppLog.put(msg, e)
-            appCtx.toastOnUi(msg)
+            coroutineContext.ensureActive()
+            AppLog.put("WebDav导出失败\n${e.localizedMessage}", e, true)
         }
     }
 
@@ -241,6 +249,7 @@ object AppWebDav {
             WebDav(url, authorization).upload(json.toByteArray(), "application/json")
             book.syncTime = System.currentTimeMillis()
         } catch (e: Exception) {
+            coroutineContext.ensureActive()
             AppLog.put("上传进度失败\n${e.localizedMessage}", e)
         }
     }
@@ -255,6 +264,7 @@ object AppWebDav {
             WebDav(url, authorization).upload(json.toByteArray(), "application/json")
             onSuccess?.invoke()
         } catch (e: Exception) {
+            coroutineContext.ensureActive()
             AppLog.put("上传进度失败\n${e.localizedMessage}", e)
         }
     }
@@ -281,6 +291,7 @@ object AppWebDav {
                     }
                 }
             }.onFailure {
+                coroutineContext.ensureActive()
                 AppLog.put("获取书籍进度失败\n${it.localizedMessage}", it)
             }
         }

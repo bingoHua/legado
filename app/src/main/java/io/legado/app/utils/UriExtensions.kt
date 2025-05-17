@@ -47,10 +47,7 @@ fun AppCompatActivity.readUri(
             }
         } else {
             PermissionsCompat.Builder()
-                .addPermissions(
-                    Permissions.READ_EXTERNAL_STORAGE,
-                    Permissions.WRITE_EXTERNAL_STORAGE
-                )
+                .addPermissions(*Permissions.Group.STORAGE)
                 .rationale(R.string.get_storage_per)
                 .onGranted {
                     RealPathUtil.getPath(this, uri)?.let { path ->
@@ -65,7 +62,7 @@ fun AppCompatActivity.readUri(
         }
     } catch (e: Exception) {
         e.printOnDebug()
-        toastOnUi("读取Uri出错\n${e.localizedMessage}")
+        AppLog.put("读取Uri出错\n$e", e, true)
         if (e is SecurityException) {
             throw e
         }
@@ -87,10 +84,7 @@ fun Fragment.readUri(uri: Uri?, success: (fileDoc: FileDoc, inputStream: InputSt
             }
         } else {
             PermissionsCompat.Builder()
-                .addPermissions(
-                    Permissions.READ_EXTERNAL_STORAGE,
-                    Permissions.WRITE_EXTERNAL_STORAGE
-                )
+                .addPermissions(*Permissions.Group.STORAGE)
                 .rationale(R.string.get_storage_per)
                 .onGranted {
                     RealPathUtil.getPath(requireContext(), uri)?.let { path ->
@@ -99,14 +93,13 @@ fun Fragment.readUri(uri: Uri?, success: (fileDoc: FileDoc, inputStream: InputSt
                         FileInputStream(file).use { inputStream ->
                             success.invoke(fileDoc, inputStream)
                         }
-
                     }
                 }
                 .request()
         }
     } catch (e: Exception) {
         e.printOnDebug()
-        toastOnUi("读取Uri出错\n${e.localizedMessage}")
+        AppLog.put("读取Uri出错\n$e", e, true)
     }
 }
 

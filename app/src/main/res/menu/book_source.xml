@@ -92,6 +92,14 @@
                 android:id="@+id/menu_group_null"
                 android:title="@string/no_group" />
 
+            <item
+                android:id="@+id/menu_enabled_explore_group"
+                android:title="@string/enabled_explore" />
+
+            <item
+                android:id="@+id/menu_disabled_explore_group"
+                android:title="@string/disabled_explore" />
+
             <group android:id="@+id/source_group">
 
             </group>
@@ -122,6 +130,12 @@
         android:id="@+id/menu_import_qr"
         android:icon="@drawable/ic_import"
         android:title="@string/import_by_qr_code"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/menu_show_same_source"
+        android:checkable="true"
+        android:title="@string/show_same_source"
         app:showAsAction="never" />
 
     <item

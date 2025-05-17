@@ -10,7 +10,7 @@ import com.google.android.flexbox.FlexboxLayout
 import io.legado.app.R
 import io.legado.app.base.adapter.ItemViewHolder
 import io.legado.app.base.adapter.RecyclerAdapter
-import io.legado.app.data.entities.BookSource
+import io.legado.app.data.entities.BookSourcePart
 import io.legado.app.data.entities.rule.ExploreKind
 import io.legado.app.databinding.ItemFilletTextBinding
 import io.legado.app.databinding.ItemFindBookBinding
@@ -20,12 +20,18 @@ import io.legado.app.help.source.exploreKinds
 import io.legado.app.lib.theme.accentColor
 import io.legado.app.ui.login.SourceLoginActivity
 import io.legado.app.ui.widget.dialog.TextDialog
-import io.legado.app.utils.*
+import io.legado.app.utils.activity
+import io.legado.app.utils.dpToPx
+import io.legado.app.utils.gone
+import io.legado.app.utils.removeLastElement
+import io.legado.app.utils.showDialogFragment
+import io.legado.app.utils.startActivity
+import io.legado.app.utils.visible
 import kotlinx.coroutines.CoroutineScope
 import splitties.views.onLongClick
 
 class ExploreAdapter(context: Context, val callBack: CallBack) :
-    RecyclerAdapter<BookSource, ItemFindBookBinding>(context) {
+    RecyclerAdapter<BookSourcePart, ItemFindBookBinding>(context) {
 
     private val recycler = arrayListOf<View>()
     private var exIndex = -1
@@ -38,7 +44,7 @@ class ExploreAdapter(context: Context, val callBack: CallBack) :
     override fun convert(
         holder: ItemViewHolder,
         binding: ItemFindBookBinding,
-        item: BookSource,
+        item: BookSourcePart,
         payloads: MutableList<Any>
     ) {
         binding.run {
@@ -85,14 +91,7 @@ class ExploreAdapter(context: Context, val callBack: CallBack) :
                 val tv = getFlexboxChild(flexbox)
                 flexbox.addView(tv)
                 tv.text = kind.title
-                val lp = tv.layoutParams as FlexboxLayout.LayoutParams
-                kind.style().let { style ->
-                    lp.flexGrow = style.layout_flexGrow
-                    lp.flexShrink = style.layout_flexShrink
-                    lp.alignSelf = style.alignSelf()
-                    lp.flexBasisPercent = style.layout_flexBasisPercent
-                    lp.isWrapBefore = style.layout_wrapBefore
-                }
+                kind.style().apply(tv)
                 if (kind.url.isNullOrBlank()) {
                     tv.setOnClickListener(null)
                 } else {
@@ -113,9 +112,7 @@ class ExploreAdapter(context: Context, val callBack: CallBack) :
         return if (recycler.isEmpty()) {
             ItemFilletTextBinding.inflate(inflater, flexbox, false).root
         } else {
-            recycler.last().also {
-                recycler.removeLast()
-            } as TextView
+            recycler.removeLastElement() as TextView
         }
     }
 
@@ -159,7 +156,7 @@ class ExploreAdapter(context: Context, val callBack: CallBack) :
         val source = getItem(position) ?: return true
         val popupMenu = PopupMenu(context, view)
         popupMenu.inflate(R.menu.explore_item)
-        popupMenu.menu.findItem(R.id.menu_login).isVisible = !source.loginUrl.isNullOrBlank()
+        popupMenu.menu.findItem(R.id.menu_login).isVisible = source.hasLoginUrl
         popupMenu.setOnMenuItemClickListener {
             when (it.itemId) {
                 R.id.menu_edit -> callBack.editSource(source.bookSourceUrl)
@@ -169,11 +166,13 @@ class ExploreAdapter(context: Context, val callBack: CallBack) :
                     putExtra("type", "bookSource")
                     putExtra("key", source.bookSourceUrl)
                 }
+
                 R.id.menu_refresh -> Coroutine.async(callBack.scope) {
                     source.clearExploreKindsCache()
                 }.onSuccess {
                     notifyItemChanged(position)
                 }
+
                 R.id.menu_del -> callBack.deleteSource(source)
             }
             true
@@ -187,8 +186,8 @@ class ExploreAdapter(context: Context, val callBack: CallBack) :
         fun scrollTo(pos: Int)
         fun openExplore(sourceUrl: String, title: String, exploreUrl: String?)
         fun editSource(sourceUrl: String)
-        fun toTop(source: BookSource)
-        fun deleteSource(source: BookSource)
-        fun searchBook(bookSource: BookSource)
+        fun toTop(source: BookSourcePart)
+        fun deleteSource(source: BookSourcePart)
+        fun searchBook(bookSource: BookSourcePart)
     }
 }

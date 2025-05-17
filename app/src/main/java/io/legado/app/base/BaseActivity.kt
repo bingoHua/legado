@@ -9,8 +9,10 @@ import android.os.Bundle
 import android.util.AttributeSet
 import android.view.Menu
 import android.view.MenuItem
+import android.view.MotionEvent
 import android.view.View
 import android.widget.FrameLayout
+import androidx.activity.addCallback
 import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AppCompatActivity
 import androidx.viewbinding.ViewBinding
@@ -24,7 +26,18 @@ import io.legado.app.lib.theme.ThemeStore
 import io.legado.app.lib.theme.backgroundColor
 import io.legado.app.lib.theme.primaryColor
 import io.legado.app.ui.widget.TitleBar
-import io.legado.app.utils.*
+import io.legado.app.utils.ColorUtils
+import io.legado.app.utils.applyBackgroundTint
+import io.legado.app.utils.applyOpenTint
+import io.legado.app.utils.applyTint
+import io.legado.app.utils.disableAutoFill
+import io.legado.app.utils.fullScreen
+import io.legado.app.utils.hideSoftInput
+import io.legado.app.utils.setLightStatusBar
+import io.legado.app.utils.setNavigationBarColorAuto
+import io.legado.app.utils.setStatusBarColorAuto
+import io.legado.app.utils.toastOnUi
+import io.legado.app.utils.windowSize
 
 
 abstract class BaseActivity<VB : ViewBinding>(
@@ -74,6 +87,9 @@ abstract class BaseActivity<VB : ViewBinding>(
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             findViewById<TitleBar>(R.id.title_bar)
                 ?.onMultiWindowModeChanged(isInMultiWindowMode, fullScreen)
+        }
+        onBackPressedDispatcher.addCallback(this) {
+            finish()
         }
         observeLiveBus()
         onActivityCreated(savedInstanceState)
@@ -126,10 +142,12 @@ abstract class BaseActivity<VB : ViewBinding>(
                 setTheme(R.style.AppTheme_Dark)
                 window.decorView.applyBackgroundTint(backgroundColor)
             }
+
             Theme.Light -> {
                 setTheme(R.style.AppTheme_Light)
                 window.decorView.applyBackgroundTint(backgroundColor)
             }
+
             else -> {
                 if (ColorUtils.isColorLight(primaryColor)) {
                     setTheme(R.style.AppTheme_Light)
@@ -180,6 +198,15 @@ abstract class BaseActivity<VB : ViewBinding>(
     }
 
     open fun observeLiveBus() {
+    }
+
+    override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+        return try {
+            super.dispatchTouchEvent(ev)
+        } catch (e: IllegalArgumentException) {
+            e.printStackTrace()
+            false
+        }
     }
 
     override fun finish() {

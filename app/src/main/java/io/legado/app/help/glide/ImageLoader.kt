@@ -5,11 +5,14 @@ import android.graphics.Bitmap
 import android.graphics.drawable.Drawable
 import android.net.Uri
 import androidx.annotation.DrawableRes
+import androidx.fragment.app.Fragment
+import androidx.lifecycle.Lifecycle
 import com.bumptech.glide.Glide
 import com.bumptech.glide.RequestBuilder
 import io.legado.app.utils.isAbsUrl
 import io.legado.app.utils.isContentScheme
 import io.legado.app.utils.isDataUrl
+import io.legado.app.utils.lifecycle
 import java.io.File
 
 //https://bumptech.github.io/glide/doc/generatedapi.html
@@ -34,16 +37,33 @@ object ImageLoader {
         }
     }
 
-    fun loadBitmap(context: Context, path: String?): RequestBuilder<Bitmap> {
+    fun load(fragment: Fragment, lifecycle: Lifecycle, path: String?): RequestBuilder<Drawable> {
+        val requestManager = Glide.with(fragment).lifecycle(lifecycle)
         return when {
-            path.isNullOrEmpty() -> Glide.with(context).asBitmap().load(path)
-            path.isDataUrl() -> Glide.with(context).asBitmap().load(path)
-            path.isAbsUrl() -> Glide.with(context).asBitmap().load(path)
-            path.isContentScheme() -> Glide.with(context).asBitmap().load(Uri.parse(path))
+            path.isNullOrEmpty() -> requestManager.load(path)
+            path.isDataUrl() -> requestManager.load(path)
+            path.isAbsUrl() -> requestManager.load(path)
+            path.isContentScheme() -> requestManager.load(Uri.parse(path))
+
             else -> kotlin.runCatching {
-                Glide.with(context).asBitmap().load(File(path))
+                requestManager.load(File(path))
             }.getOrElse {
-                Glide.with(context).asBitmap().load(path)
+                requestManager.load(path)
+            }
+        }
+    }
+
+    fun loadBitmap(context: Context, path: String?): RequestBuilder<Bitmap> {
+        val requestManager = Glide.with(context).`as`(Bitmap::class.java)
+        return when {
+            path.isNullOrEmpty() -> requestManager.load(path)
+            path.isDataUrl() -> requestManager.load(path)
+            path.isAbsUrl() -> requestManager.load(path)
+            path.isContentScheme() -> requestManager.load(Uri.parse(path))
+            else -> kotlin.runCatching {
+                requestManager.load(File(path))
+            }.getOrElse {
+                requestManager.load(path)
             }
         }
     }

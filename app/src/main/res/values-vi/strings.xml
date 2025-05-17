@@ -1,6 +1,7 @@
 <resources>
 <!--App-->
     <string name="app_name">Legado</string>
+    <string name="app_name_a">Legado·A</string>
     <string name="receiving_shared_label">Legado·tìm kiếm</string>
     <string name="tip_perm_request_storage">Legado cần quyền truy cập bộ nhớ để tìm và đọc sách. vui lòng vào &amp;quot;Cài đặt ứng dụng&amp;quot; để cho phép &amp;quot;Quyền lưu trữ&amp;quot;.</string>
 
@@ -23,11 +24,17 @@
     <string name="dialog_setting">Đi tới cài đặt</string>
     <string name="tip_cannot_jump_setting_page">Không thể chuyển đến cài đặt.</string>
 
+    <string name="manual_input">Nhập thủ công</string>
+    <string name="enter_directory_path">Nhập đường dẫn thư mục</string>
+    <string name="invalid_directory">Đường dẫn thư mục không hợp lệ</string>
+    <string name="empty_directory_input">Đường dẫn thư mục không được để trống</string>
+
     <string name="dynamic_click_retry">Thử lại</string>
     <string name="dynamic_loading">Đang tải</string>
     <string name="draw">Cảnh báo</string>
     <string name="edit">Sửa đổi</string>
     <string name="delete">Xóa</string>
+    <string name="delete_select_group">Xóa nhóm hiện tại</string>
     <string name="delete_all">Xóa tất cả</string>
     <string name="custom_export_section">Chương xuất tùy chỉnh của epub</string>
     <string name="replace">Thay thế</string>
@@ -90,7 +97,7 @@
     <string name="offline_cache_s">cache (các) chương đã chọn vào bộ lưu trữ</string>
     <string name="change_origin">Thay đổi nguồn gốc</string>
     <string name="about_description">Đây là phần mềm đọc mã nguồn mở mới được phát triển bởi Kotlin, chào mừng bạn tham gia cùng chúng tôi. </string>
-    <string name="app_share_description">\n Liên kết tải xuống Legado (YueDu 3.0):\\n https://play.google.com/store/apps/details?id=io.legado.play.release\n</string>
+    <string name="app_share_description">\n Liên kết tải xuống Legado (YueDu 3.0):\\n https://github.com/gedoor/legado/releases\n</string>
     <string name="version_name">Phiên bản %s</string>
     <string name="pt_background_verification">Xác minh lý lịch</string>
     <string name="ps_background_verification">bạn có thể tự do thao tác khi xác thực nguồn sách</string>
@@ -730,6 +737,8 @@ Còn </string>
     <string name="import_old_summary">Chọn thư mục sao lưu kế thừa</string>
     <string name="enabled">Đã bật</string>
     <string name="disabled">Đã tắt</string>
+    <string name="enabled_explore">Discovery Enabled</string>
+    <string name="disabled_explore">Discovery Disabled</string>
     <string name="starting_download">Bắt đầu tải xuống</string>
     <string name="already_in_download">Cuốn sách này đã có trong danh sách Download</string>
     <string name="click_to_open">Nhấp để mở</string>
@@ -766,6 +775,7 @@ Còn </string>
     <string name="donate_summary">Đóng góp của bạn làm cho ứng dụng này tốt hơn</string>
     <string name="about_summary">Tài khoản chính thức của WeChat [开源阅读软件]</string>
     <string name="read_record">Đọc bản ghi</string>
+    <string name="del_read_record">Xóa lịch sử đọc</string>
     <string name="read_record_summary">Đọc tóm tắt bản ghi</string>
     <string name="local_tts">TTS địa phương</string>
     <string name="thread_count">Số lượng chủ đề</string>
@@ -806,14 +816,18 @@ Còn </string>
     <string name="rule_subscription">Quy tắc đăng ký</string>
     <string name="rule_sub_empty_msg">Thêm địa chỉ nhập quy tắc do các ông chủ cung cấp\\nNhấp để nhập quy tắc sau khi thêm</string>
     <string name="get_book_progress">Kéo tiến độ đám mây</string>
+    <string name="cover_book_progress">Phủ sóng tiến độ trên đám mây</string>
     <string name="current_progress_exceeds_cloud">Tiến độ hiện tại vượt quá tiến độ đám mây. Bạn có muốn đồng bộ hóa?</string>
     <string name="sync_book_progress_t">Tiến độ đọc đồng bộ</string>
     <string name="sync_book_progress_s">Đồng bộ tiến độ đọc khi vào/ra khỏi giao diện đọc</string>
+    <string name="sync_book_progress_plus_t">Cải Tiến Đồng Bộ</string>
+    <string name="sync_book_progress_plus_s">Đồng bộ tiến độ trên đám mây khi quay lại trang (ví dụ: sau khi tắt màn hình, quay trở lại từ nền, v.v.) hoặc khi mạng trở nên khả dụng</string>
     <string name="create_bookmark_error">Không thể tạo dấu trang</string>
     <string name="single_url">URL đơn</string>
     <string name="export_bookshelf">Xuất bookshelf</string>
     <string name="import_bookshelf">Nhập bookshelf</string>
     <string name="pre_download">Tải xuống trước</string>
+    <string name="pre_download_m">预下载%s页</string>
     <string name="pre_download_s">Tải xuống trước %s chương</string>
     <string name="is_enabled">Đã bật</string>
     <string name="background_image">Ảnh nền</string>
@@ -904,6 +918,7 @@ Còn </string>
     <string name="double_page_horizontal">Trang kép dạng máy tính bảng/ngang</string>
     <string name="open_in_browser">mở trong trình duyệt</string>
     <string name="copy_url">sao chép url</string>
+    <string name="full_screen">Toàn màn hình</string>
     <string name="open_fun">mở chức năng</string>
     <string name="use_browser_open">Mở bằng trình duyệt bên ngoài?</string>
     <string name="see">xem</string>
@@ -994,6 +1009,8 @@ Còn </string>
     <string name="add_remote_book">Sách từ xa</string>
     <string name="bitmap_cache_size_summary">Kích thước tối đa của bộ đệm hiện tại %1$s MB</string>
     <string name="bitmap_cache_size">kích thước bộ đệm bitmap</string>
+    <string name="image_retain_number_summary">Giữ số chương đã đọc %s</string>
+    <string name="image_retain_number">Số lượng đặt chỗ manga</string>
     <string name="export_pics_file">Xuất tập tin ảnh</string>
     <!-- string end -->
     <string name="error_decode_bitmap">Không thể giải mã bitmap</string>
@@ -1035,7 +1052,7 @@ Còn </string>
     <string name="cover_decode_js">Giải mã Bìa Js(coverDecodeJs)</string>
     <string name="net_no_group">Đã tách nhóm mạng</string>
     <string name="local_no_group">Đã tách nhóm cục bộ</string>
-    <string name="parallel_export_book">XT xuất đa luồng</string>
+    <string name="parallel_export_book">Xuất đa luồng</string>
     <string name="progress_bar_behavior">Hành vi của thanh tiến trình</string>
     <string name="source_edit_text_max_line">Số hàng tối đa trong hộp chỉnh sửa nguồn</string>
     <string name="source_edit_max_line_summary">%s,Đặt số hàng ít hơn số hàng tối đa có thể hiển thị trên màn hình giúp trượt sang các trường khác để chỉnh sửa dễ dàng hơn.</string>
@@ -1118,16 +1135,20 @@ Còn </string>
      <string name="exit_app">Thoát khỏi phần mềm</string>
     <string name="result_analyzed">Analyzed</string>
     <string name="bookshelf_px_4">Comprehensive</string>
+    <string name="bookshelf_px_5">Sắp xếp theo tác giả</string>
     <string name="effective_replaces">起效的替换</string>
     <string name="export_book">导出书籍</string>
     <string name="export_book_notification_content">正在导出(%1$s),还有%2$d本待导出</string>
     <string name="export_md">导出(MD)</string>
     <string name="change_source_delay">换源间隔</string>
+    <string name="change_source_progress">Kết quả %1$d, tiến trình hiện tại %2$d / %3$d: %4$s</string>
     <string name="open_book_info_by_click_title">点击书名打开详情</string>
     <string name="export_wait">等待导出</string>
+    <string name="sync_book_progress_success">" Đồng bộ hóa tiến trình thành công"</string>
     <string name="default_home_page">默认主页</string>
     <string name="show_bookshelf_fast_scroller">显示快速滚动条</string>
     <string name="export_all_use_book_source">导出所有书的书源</string>
+    <string name="cloud_progress_exceeds_current">The cloud progress exceeds the current progress. Do you want to synchronize?</string>
     <string name="keep_enable">保留启用状态</string>
     <string name="preview_image_by_click">点击预览图片</string>
     <string name="screen_portrait_reversed">反向竖屏</string>
@@ -1137,4 +1158,60 @@ Còn </string>
     <string name="adjust_chapter_index">调整章节位置</string>
     <string name="clear_webview_data_success">清除成功，3秒后自动重启应用</string>
     <string name="key_page_on_long_press">按键长按翻页</string>
+    <string name="save_log">保存日志</string>
+    <string name="create_heap_dump">创建堆转储</string>
+    <string name="record_heap_dump_s">当应用发生OOM崩溃时保存堆转储</string>
+    <string name="record_heap_dump_t">记录堆转储</string>
+    <string name="font_weight_text">中/粗/细</string>
+    <string name="keep_swipe_tip">继续滑动以加载下一章…</string>
+    <string name="enable_optimize_render">启用绘制优化</string>
+    <string name="ignore_battery_permission_rationale">阅读需要请求后台权限以保持服务正常运行</string>
+    <string name="simulated_reading">Đọc giả lập</string>
+    <string name="switch_on">Bật</string>
+    <string name="start_from">Bắt đầu</string>
+    <string name="daily_chapters">Chương/ngày</string>
+    <string name="start_chapter">Chương đầu</string>
+    <string name="update_to_variant_title">检查更新查找版本</string>
+    <string name="update_to_variant_summary">检查更新时查找其他签名版本</string>
+    <string name="default_version">当前</string>
+    <string name="official_version">正式版</string>
+    <string name="beta_release_version">测试版</string>
+    <string name="beta_releaseA_version">共存版</string>
+    <string name="stream_read_aloud_audio">流式播放音频</string>
+    <string name="stream_read_aloud_audio_summary">即边下边播，网络不好时播放会断断续续，仅TTS源有效</string>
+    <string name="pause_read_aloud_while_phone_calls_title">来电期间暂停朗读</string>
+    <string name="pause_read_aloud_while_phone_calls_summary">在通话期间暂停朗读，需要读取手机状态权限</string>
+    <string name="read_aloud_read_phone_state_permission_rationale">阅读需要读取手机状态实现来电期间暂停朗读功能</string>
+    <string name="read_aloud_by_media_button_title">耳机按键启动朗读</string>
+    <string name="read_aloud_by_media_button_summary">通过耳机按键来启动朗读</string>
+    <string name="show_same_source">显示重复书源</string>
+    <string name="theme_config">主题配置</string>
+    <string name="show_manga_ui">漫画浏览</string>
+    <string name="disable_manga_scale">禁用漫画缩放</string>
+    <string name="disable_manga_click_scroll">禁用点击翻页</string>
+    <string name="enable_auto_page_scroll">开启自动翻页</string>
+    <string name="manga_auto_page_speed">翻页速度 %s</string>
+    <string name="enable_auto_scroll">开启滚动</string>
+    <string name="manga_footer_config">页脚配置</string>
+    <string name="setting_manga_auto_page_speed">设置自动翻页速度</string>
+    <string name="book_reader_info_bar">页数. %1$d/%2$d  章节. %3$d/%4$d -> %5$s%%</string>
+    <string name="menu_download_after">Tải xuống chương tiếp theo</string>
+    <string name="menu_download_all">Tải xuống tất cả các chương</string>
+    <string name="manga_header_chapter">《章节和文案》隐藏</string>
+    <string name="manga_check_chapter_label">《章节.》文案</string>
+    <string name="manga_check_chapter">章节</string>
+    <string name="manga_check_chapter_name">章节名称</string>
+    <string name="manga_header_page">《页数和文案》隐藏</string>
+    <string name="manga_check_page_label">《页数.》文案</string>
+    <string name="manga_check_page_number">页数</string>
+    <string name="manga_header_progress">《总进度和文案》隐藏</string>
+    <string name="manga_check_progress_label">《总进度.》文案</string>
+    <string name="manga_check_progress">总进度</string>
+    <string name="manga_header_footer">页脚</string>
+    <string name="manga_radio_left">靠左</string>
+    <string name="manga_radio_center">居中</string>
+    <string name="enable_manga_horizontal_scroll">水平滚动</string>
+    <string name="manga_color_filter">滤镜</string>
+    <string name="hide_manga_title">隐藏漫画列表标题</string>
+    <string name="refresh_explore">刷新发现</string>
 </resources>

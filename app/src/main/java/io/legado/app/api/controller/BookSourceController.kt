@@ -5,7 +5,7 @@ import android.text.TextUtils
 import io.legado.app.api.ReturnData
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.BookSource
-import io.legado.app.help.config.SourceConfig
+import io.legado.app.help.source.SourceHelp
 import io.legado.app.utils.GSON
 import io.legado.app.utils.fromJsonArray
 import io.legado.app.utils.fromJsonObject
@@ -70,10 +70,7 @@ object BookSourceController {
     fun deleteSources(postData: String?): ReturnData {
         kotlin.runCatching {
             GSON.fromJsonArray<BookSource>(postData).getOrThrow().let {
-                it.forEach { source ->
-                    appDb.bookSourceDao.delete(source)
-                    SourceConfig.removeSource(source.bookSourceUrl)
-                }
+                SourceHelp.deleteBookSources(it)
             }
         }.onFailure {
             return ReturnData().setErrorMsg(it.localizedMessage ?: "数据格式错误")

@@ -10,6 +10,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.ItemTouchHelper
 import io.legado.app.R
 import io.legado.app.base.VMBaseActivity
+import io.legado.app.constant.AppLog
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.TxtTocRule
 import io.legado.app.databinding.ActivityTxtTocRuleBinding
@@ -21,13 +22,25 @@ import io.legado.app.ui.association.ImportTxtTocRuleDialog
 import io.legado.app.ui.file.HandleFileContract
 import io.legado.app.ui.qrcode.QrCodeResult
 import io.legado.app.ui.widget.SelectActionBar
-import io.legado.app.ui.widget.dialog.TextDialog
 import io.legado.app.ui.widget.recycler.DragSelectTouchHelper
 import io.legado.app.ui.widget.recycler.ItemTouchCallback
 import io.legado.app.ui.widget.recycler.VerticalDivider
-import io.legado.app.utils.*
+import io.legado.app.utils.ACache
+import io.legado.app.utils.GSON
+import io.legado.app.utils.isAbsUrl
+import io.legado.app.utils.launch
+import io.legado.app.utils.readText
+import io.legado.app.utils.sendToClip
+import io.legado.app.utils.setEdgeEffectColor
+import io.legado.app.utils.showDialogFragment
+import io.legado.app.utils.showHelp
+import io.legado.app.utils.splitNotBlank
+import io.legado.app.utils.toastOnUi
 import io.legado.app.utils.viewbindingdelegate.viewBinding
+import kotlinx.coroutines.Dispatchers.IO
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.conflate
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.launch
 
 class TxtTocRuleActivity : VMBaseActivity<ActivityTxtTocRuleBinding, TxtTocRuleViewModel>(),
@@ -103,9 +116,10 @@ class TxtTocRuleActivity : VMBaseActivity<ActivityTxtTocRuleBinding, TxtTocRuleV
 
     private fun initData() {
         lifecycleScope.launch {
-            appDb.txtTocRuleDao.observeAll().conflate().collect { tocRules ->
+            appDb.txtTocRuleDao.observeAll().catch {
+                AppLog.put("TXT目录规则界面获取数据失败\n${it.localizedMessage}", it)
+            }.flowOn(IO).conflate().collect { tocRules ->
                 adapter.setItems(tocRules, adapter.diffItemCallBack)
-                upCountView()
             }
         }
     }
@@ -125,7 +139,7 @@ class TxtTocRuleActivity : VMBaseActivity<ActivityTxtTocRuleBinding, TxtTocRuleV
             R.id.menu_import_onLine -> showImportDialog()
             R.id.menu_import_qr -> qrCodeResult.launch()
             R.id.menu_import_default -> viewModel.importDefault()
-            R.id.menu_help -> showTxtTocRuleHelp()
+            R.id.menu_help -> showHelp("txtTocRuleHelp")
 
         }
         return super.onCompatOptionsItemSelected(item)
@@ -218,7 +232,7 @@ class TxtTocRuleActivity : VMBaseActivity<ActivityTxtTocRuleBinding, TxtTocRuleV
             okButton {
                 val text = alertBinding.editView.text?.toString()
                 text?.let {
-                    if (!cacheUrls.contains(it)) {
+                    if (it.isAbsUrl() && !cacheUrls.contains(it)) {
                         cacheUrls.add(0, it)
                         aCache.put(importTocRuleKey, cacheUrls.joinToString(","))
                     }
@@ -227,11 +241,6 @@ class TxtTocRuleActivity : VMBaseActivity<ActivityTxtTocRuleBinding, TxtTocRuleV
             }
             cancelButton()
         }
-    }
-
-    private fun showTxtTocRuleHelp() {
-        val text = String(assets.open("help/txtTocRuleHelp.md").readBytes())
-        showDialogFragment(TextDialog(getString(R.string.help), text, TextDialog.Mode.MD))
     }
 
     override fun onMenuItemClick(item: MenuItem): Boolean {

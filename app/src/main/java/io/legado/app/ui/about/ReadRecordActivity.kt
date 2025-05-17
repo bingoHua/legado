@@ -19,13 +19,13 @@ import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.LocalConfig
 import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.theme.primaryTextColor
-import io.legado.app.ui.book.read.ReadBookActivity
 import io.legado.app.ui.book.search.SearchActivity
+import io.legado.app.utils.applyNavigationBarPadding
 import io.legado.app.utils.applyTint
 import io.legado.app.utils.cnCompare
 import io.legado.app.utils.getInt
 import io.legado.app.utils.putInt
-import io.legado.app.utils.startActivity
+import io.legado.app.utils.startActivityForBook
 import io.legado.app.utils.viewbindingdelegate.viewBinding
 import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.launch
@@ -75,16 +75,19 @@ class ReadRecordActivity : BaseActivity<ActivityReadRecordBinding>() {
                 item.isChecked = true
                 initData()
             }
+
             R.id.menu_sort_read_long -> {
                 sortMode = 1
                 item.isChecked = true
                 initData()
             }
+
             R.id.menu_sort_read_time -> {
                 sortMode = 2
                 item.isChecked = true
                 initData()
             }
+
             R.id.menu_enable_record -> {
                 AppConfig.enableReadRecord = !item.isChecked
             }
@@ -105,14 +108,13 @@ class ReadRecordActivity : BaseActivity<ActivityReadRecordBinding>() {
             }
         }
         binding.recyclerView.adapter = adapter
+        binding.recyclerView.applyNavigationBarPadding()
     }
 
     private fun initSearchView() {
         searchView.applyTint(primaryTextColor)
-        searchView.onActionViewExpanded()
         searchView.isSubmitButtonEnabled = true
         searchView.queryHint = getString(R.string.search)
-        searchView.clearFocus()
         searchView.setOnQueryTextListener(object : SearchView.OnQueryTextListener {
             override fun onQueryTextSubmit(query: String): Boolean {
                 searchView.clearFocus()
@@ -165,7 +167,7 @@ class ReadRecordActivity : BaseActivity<ActivityReadRecordBinding>() {
             holder: ItemViewHolder,
             binding: ItemReadRecordBinding,
             item: ReadRecordShow,
-            payloads: MutableList<Any>
+            payloads: MutableList<Any>,
         ) {
             binding.apply {
                 tvBookName.text = item.bookName
@@ -189,9 +191,7 @@ class ReadRecordActivity : BaseActivity<ActivityReadRecordBinding>() {
                         if (book == null) {
                             SearchActivity.start(this@ReadRecordActivity, item.bookName)
                         } else {
-                            startActivity<ReadBookActivity> {
-                                putExtra("bookUrl", book.bookUrl)
-                            }
+                            startActivityForBook(book)
                         }
                     }
                 }

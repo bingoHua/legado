@@ -15,6 +15,7 @@ import io.legado.app.base.adapter.RecyclerAdapter
 import io.legado.app.constant.EventBus
 import io.legado.app.databinding.DialogReadBookStyleBinding
 import io.legado.app.databinding.ItemReadStyleBinding
+import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.ReadBookConfig
 import io.legado.app.lib.dialogs.selector
 import io.legado.app.lib.theme.accentColor
@@ -108,10 +109,10 @@ class ReadStyleDialog : BaseDialogFragment(R.layout.dialog_read_book_style),
     private fun initViewEvent() = binding.run {
         chineseConverter.onChanged {
             ChineseUtils.unLoad(*TransType.entries.toTypedArray())
-            postEvent(EventBus.UP_CONFIG, true)
+            postEvent(EventBus.UP_CONFIG, arrayListOf(5))
         }
         textFontWeightConverter.onChanged {
-            postEvent(EventBus.UP_CONFIG, true)
+            postEvent(EventBus.UP_CONFIG, arrayListOf(8, 9, 6))
         }
         tvTextFont.setOnClickListener {
             showDialogFragment<FontSelectDialog>()
@@ -122,7 +123,7 @@ class ReadStyleDialog : BaseDialogFragment(R.layout.dialog_read_book_style),
                 items = resources.getStringArray(R.array.indent).toList()
             ) { _, index ->
                 ReadBookConfig.paragraphIndent = "　".repeat(index)
-                postEvent(EventBus.UP_CONFIG, true)
+                postEvent(EventBus.UP_CONFIG, arrayListOf(8, 5))
             }
         }
         tvPadding.setOnClickListener {
@@ -133,7 +134,7 @@ class ReadStyleDialog : BaseDialogFragment(R.layout.dialog_read_book_style),
             TipConfigDialog().show(childFragmentManager, "tipConfigDialog")
         }
         rgPageAnim.setOnCheckedChangeListener { _, checkedId ->
-            ReadBook.book?.setPageAnim(null)
+            ReadBook.book?.setPageAnim(-1)
             ReadBookConfig.pageAnim = binding.rgPageAnim.getIndexById(checkedId)
             callBack?.upPageAnim()
             ReadBook.loadContent(false)
@@ -141,40 +142,43 @@ class ReadStyleDialog : BaseDialogFragment(R.layout.dialog_read_book_style),
         cbShareLayout.onCheckedChangeListener = { _, isChecked ->
             ReadBookConfig.shareLayout = isChecked
             upView()
-            postEvent(EventBus.UP_CONFIG, true)
+            postEvent(EventBus.UP_CONFIG, arrayListOf(1, 2, 5))
         }
         dsbTextSize.onChanged = {
             ReadBookConfig.textSize = it + 5
-            postEvent(EventBus.UP_CONFIG, true)
+            postEvent(EventBus.UP_CONFIG, arrayListOf(8, 5))
         }
         dsbTextLetterSpacing.onChanged = {
             ReadBookConfig.letterSpacing = (it - 50) / 100f
-            postEvent(EventBus.UP_CONFIG, true)
+            postEvent(EventBus.UP_CONFIG, arrayListOf(8, 5))
         }
         dsbLineSize.onChanged = {
             ReadBookConfig.lineSpacingExtra = it
-            postEvent(EventBus.UP_CONFIG, true)
+            postEvent(EventBus.UP_CONFIG, arrayListOf(8, 5))
         }
         dsbParagraphSpacing.onChanged = {
             ReadBookConfig.paragraphSpacing = it
-            postEvent(EventBus.UP_CONFIG, true)
+            postEvent(EventBus.UP_CONFIG, arrayListOf(8, 5))
         }
     }
 
-    private fun changeBg(index: Int) {
+    private fun changeBgTextConfig(index: Int) {
         val oldIndex = ReadBookConfig.styleSelect
         if (index != oldIndex) {
             ReadBookConfig.styleSelect = index
             upView()
             styleAdapter.notifyItemChanged(oldIndex)
             styleAdapter.notifyItemChanged(index)
-            postEvent(EventBus.UP_CONFIG, true)
+            postEvent(EventBus.UP_CONFIG, arrayListOf(1, 2, 5))
+            if (AppConfig.readBarStyleFollowPage) {
+                postEvent(EventBus.UPDATE_READ_ACTION_BAR, true)
+            }
         }
     }
 
     private fun showBgTextConfig(index: Int): Boolean {
         dismissAllowingStateLoss()
-        changeBg(index)
+        changeBgTextConfig(index)
         callBack?.showBgTextConfig()
         return true
     }
@@ -198,9 +202,9 @@ class ReadStyleDialog : BaseDialogFragment(R.layout.dialog_read_book_style),
         get() = ReadBookConfig.textFont
 
     override fun selectFont(path: String) {
-        if (path != ReadBookConfig.textFont) {
+        if (path != ReadBookConfig.textFont || path.isEmpty()) {
             ReadBookConfig.textFont = path
-            postEvent(EventBus.UP_CONFIG, true)
+            postEvent(EventBus.UP_CONFIG, arrayListOf(2, 5))
         }
     }
 
@@ -235,7 +239,7 @@ class ReadStyleDialog : BaseDialogFragment(R.layout.dialog_read_book_style),
             binding.apply {
                 ivStyle.setOnClickListener {
                     if (ivStyle.isInView) {
-                        changeBg(holder.layoutPosition)
+                        changeBgTextConfig(holder.layoutPosition)
                     }
                 }
                 ivStyle.onLongClick(ivStyle.isInView) {

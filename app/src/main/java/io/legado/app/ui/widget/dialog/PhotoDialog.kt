@@ -3,6 +3,9 @@ package io.legado.app.ui.widget.dialog
 import android.annotation.SuppressLint
 import android.os.Bundle
 import android.view.View
+import android.view.ViewGroup
+import com.bumptech.glide.load.engine.DiskCacheStrategy
+import com.bumptech.glide.load.resource.bitmap.DownsampleStrategy
 import com.bumptech.glide.request.RequestOptions
 import io.legado.app.R
 import io.legado.app.base.BaseDialogFragment
@@ -32,37 +35,36 @@ class PhotoDialog() : BaseDialogFragment(R.layout.dialog_photo_view) {
 
     override fun onStart() {
         super.onStart()
-        setLayout(1f, 1f)
+        setLayout(1f, ViewGroup.LayoutParams.MATCH_PARENT)
     }
 
     @SuppressLint("CheckResult")
     override fun onFragmentCreated(view: View, savedInstanceState: Bundle?) {
         val arguments = arguments ?: return
-        arguments.getString("src")?.let { src ->
-            ImageProvider.bitmapLruCache.get(src)?.let {
-                binding.photoView.setImageBitmap(it)
-                return
-            }
-            val file = ReadBook.book?.let { book ->
-                BookHelp.getImage(book, src)
-            }
-            if (file?.exists() == true) {
-                ImageLoader.load(requireContext(), file)
-                    .error(R.drawable.image_loading_error)
-                    .into(binding.photoView)
-            } else {
-                ImageLoader.load(requireContext(), src).apply {
-                    arguments.getString("sourceOrigin")?.let { sourceOrigin ->
-                        apply(
-                            RequestOptions().set(
-                                OkHttpModelLoader.sourceOriginOption,
-                                sourceOrigin
-                            )
-                        )
-                    }
-                }.error(BookCover.defaultDrawable)
-                    .into(binding.photoView)
-            }
+        val src = arguments.getString("src") ?: return
+        ImageProvider.get(src)?.let {
+            binding.photoView.setImageBitmap(it)
+            return
+        }
+        val file = ReadBook.book?.let { book ->
+            BookHelp.getImage(book, src)
+        }
+        if (file?.exists() == true) {
+            ImageLoader.load(requireContext(), file)
+                .error(R.drawable.image_loading_error)
+                .dontTransform()
+                .downsample(DownsampleStrategy.NONE)
+                .diskCacheStrategy(DiskCacheStrategy.NONE)
+                .into(binding.photoView)
+        } else {
+            ImageLoader.load(requireContext(), src).apply {
+                arguments.getString("sourceOrigin")?.let { sourceOrigin ->
+                    apply(RequestOptions().set(OkHttpModelLoader.sourceOriginOption, sourceOrigin))
+                }
+            }.error(BookCover.defaultDrawable)
+                .dontTransform()
+                .downsample(DownsampleStrategy.NONE)
+                .into(binding.photoView)
         }
     }
 

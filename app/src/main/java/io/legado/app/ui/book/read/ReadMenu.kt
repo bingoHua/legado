@@ -7,10 +7,7 @@ import android.graphics.Color
 import android.graphics.PorterDuff
 import android.graphics.drawable.GradientDrawable
 import android.util.AttributeSet
-import android.view.Gravity
 import android.view.LayoutInflater
-import android.view.View.OnClickListener
-import android.view.View.OnLongClickListener
 import android.view.WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
 import android.view.animation.Animation
 import android.widget.FrameLayout
@@ -21,19 +18,39 @@ import androidx.core.view.isVisible
 import io.legado.app.R
 import io.legado.app.constant.PreferKey
 import io.legado.app.databinding.ViewReadMenuBinding
-import io.legado.app.help.IntentData
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.LocalConfig
 import io.legado.app.help.config.ReadBookConfig
 import io.legado.app.help.config.ThemeConfig
+import io.legado.app.help.coroutine.Coroutine
+import io.legado.app.help.source.getSourceType
 import io.legado.app.lib.dialogs.alert
-import io.legado.app.lib.theme.*
+import io.legado.app.lib.theme.Selector
+import io.legado.app.lib.theme.accentColor
+import io.legado.app.lib.theme.bottomBackground
+import io.legado.app.lib.theme.buttonDisabledColor
+import io.legado.app.lib.theme.getPrimaryTextColor
+import io.legado.app.lib.theme.primaryColor
+import io.legado.app.lib.theme.primaryTextColor
 import io.legado.app.model.ReadBook
-import io.legado.app.ui.book.info.BookInfoActivity
 import io.legado.app.ui.browser.WebViewActivity
 import io.legado.app.ui.widget.seekbar.SeekBarChangeListener
-import io.legado.app.utils.*
-import splitties.views.*
+import io.legado.app.utils.ColorUtils
+import io.legado.app.utils.ConstraintModify
+import io.legado.app.utils.activity
+import io.legado.app.utils.applyNavigationBarPadding
+import io.legado.app.utils.dpToPx
+import io.legado.app.utils.getPrefBoolean
+import io.legado.app.utils.gone
+import io.legado.app.utils.invisible
+import io.legado.app.utils.loadAnimation
+import io.legado.app.utils.modifyBegin
+import io.legado.app.utils.openUrl
+import io.legado.app.utils.putPrefBoolean
+import io.legado.app.utils.startActivity
+import io.legado.app.utils.visible
+import splitties.views.onClick
+import splitties.views.onLongClick
 
 /**
  * 阅读界面菜单
@@ -46,6 +63,7 @@ class ReadMenu @JvmOverloads constructor(
     private val callBack: CallBack get() = activity as CallBack
     private val binding = ViewReadMenuBinding.inflate(LayoutInflater.from(context), this, true)
     private var confirmSkipToChapter: Boolean = false
+    private var isMenuOutAnimating = false
     private val menuTopIn: Animation by lazy {
         loadAnimation(context, R.anim.anim_readbook_top_in)
     }
@@ -108,24 +126,10 @@ class ReadMenu @JvmOverloads constructor(
 
         @SuppressLint("RtlHardcoded")
         override fun onAnimationEnd(animation: Animation) {
-            val navigationBarHeight =
-                if (ReadBookConfig.hideNavigationBar) {
-                    activity?.navigationBarHeight ?: 0
-                } else {
-                    0
-                }
-            binding.run {
-                vwMenuBg.setOnClickListener { runMenuOut() }
-                root.padding = 0
-                when (activity?.navigationBarGravity) {
-                    Gravity.BOTTOM -> root.bottomPadding = navigationBarHeight
-                    Gravity.LEFT -> root.leftPadding = navigationBarHeight
-                    Gravity.RIGHT -> root.rightPadding = navigationBarHeight
-                }
-            }
+            binding.vwMenuBg.setOnClickListener { runMenuOut() }
             callBack.upSystemUiVisibility()
             if (!LocalConfig.readMenuHelpVersionIsLast) {
-                callBack.showReadMenuHelp()
+                callBack.showHelp()
             }
         }
 
@@ -133,6 +137,7 @@ class ReadMenu @JvmOverloads constructor(
     }
     private val menuOutListener = object : Animation.AnimationListener {
         override fun onAnimationStart(animation: Animation) {
+            isMenuOutAnimating = true
             binding.vwMenuBg.setOnClickListener(null)
         }
 
@@ -141,6 +146,7 @@ class ReadMenu @JvmOverloads constructor(
             binding.titleBar.invisible()
             binding.bottomMenu.invisible()
             canShowMenu = false
+            isMenuOutAnimating = false
             onMenuOutEnd?.invoke()
             callBack.upSystemUiVisibility()
         }
@@ -181,7 +187,12 @@ class ReadMenu @JvmOverloads constructor(
         brightnessBackground.cornerRadius = 5F.dpToPx()
         brightnessBackground.setColor(ColorUtils.adjustAlpha(bgColor, 0.5f))
         llBrightness.background = brightnessBackground
-        llBottomBg.setBackgroundColor(bgColor)
+        if (AppConfig.isEInkMode) {
+            titleBar.setBackgroundResource(R.drawable.bg_eink_border_bottom)
+            llBottomBg.setBackgroundResource(R.drawable.bg_eink_border_top)
+        } else {
+            llBottomBg.setBackgroundColor(bgColor)
+        }
         fabSearch.backgroundTintList = bottomBackgroundList
         fabSearch.setColorFilter(textColor)
         fabAutoPage.backgroundTintList = bottomBackgroundList
@@ -201,7 +212,6 @@ class ReadMenu @JvmOverloads constructor(
         ivSetting.setColorFilter(textColor, PorterDuff.Mode.SRC_IN)
         tvSetting.setTextColor(textColor)
         vwBrightnessPosAdjust.setColorFilter(textColor, PorterDuff.Mode.SRC_IN)
-        vwBg.setOnClickListener(null)
         llBrightness.setOnClickListener(null)
         seekBrightness.post {
             seekBrightness.progress = AppConfig.readBrightness
@@ -212,6 +222,10 @@ class ReadMenu @JvmOverloads constructor(
             titleBarAddition.gone()
         }
         upBrightnessVwPos()
+        /**
+         * 确保视图不被导航栏遮挡
+         */
+        applyNavigationBarPadding()
     }
 
     fun reset() {
@@ -273,6 +287,7 @@ class ReadMenu @JvmOverloads constructor(
     }
 
     fun runMenuIn(anim: Boolean = !AppConfig.isEInkMode) {
+        callBack.onMenuShow()
         this.visible()
         binding.titleBar.visible()
         binding.bottomMenu.visible()
@@ -286,6 +301,10 @@ class ReadMenu @JvmOverloads constructor(
     }
 
     fun runMenuOut(anim: Boolean = !AppConfig.isEInkMode, onMenuOutEnd: (() -> Unit)? = null) {
+        if (isMenuOutAnimating) {
+            return
+        }
+        callBack.onMenuHide()
         this.onMenuOutEnd = onMenuOutEnd
         if (this.isVisible) {
             if (anim) {
@@ -305,12 +324,7 @@ class ReadMenu @JvmOverloads constructor(
     private fun bindEvent() = binding.run {
         vwMenuBg.setOnClickListener { runMenuOut() }
         titleBar.toolbar.setOnClickListener {
-            ReadBook.book?.let {
-                context.startActivity<BookInfoActivity> {
-                    putExtra("name", it.name)
-                    putExtra("author", it.author)
-                }
-            }
+            callBack.openBookInfoActivity()
         }
         val chapterViewClickListener = OnClickListener {
             if (ReadBook.isLocalBook) {
@@ -319,11 +333,16 @@ class ReadMenu @JvmOverloads constructor(
             if (AppConfig.readUrlInBrowser) {
                 context.openUrl(tvChapterUrl.text.toString().substringBefore(",{"))
             } else {
-                context.startActivity<WebViewActivity> {
-                    val url = tvChapterUrl.text.toString()
-                    putExtra("title", tvChapterName.text)
-                    putExtra("url", url)
-                    IntentData.put(url, ReadBook.bookSource?.getHeaderMap(true))
+                Coroutine.async {
+                    context.startActivity<WebViewActivity> {
+                        val url = tvChapterUrl.text.toString()
+                        val bookSource = ReadBook.bookSource
+                        putExtra("title", tvChapterName.text)
+                        putExtra("url", url)
+                        putExtra("sourceOrigin", bookSource?.bookSourceUrl)
+                        putExtra("sourceName", bookSource?.bookSourceName)
+                        putExtra("sourceType", bookSource?.getSourceType())
+                    }
                 }
             }
         }
@@ -382,7 +401,12 @@ class ReadMenu @JvmOverloads constructor(
         //阅读进度
         seekReadPage.setOnSeekBarChangeListener(object : SeekBarChangeListener {
 
+            override fun onStartTrackingTouch(seekBar: SeekBar) {
+                binding.vwMenuBg.setOnClickListener(null)
+            }
+
             override fun onStopTrackingTouch(seekBar: SeekBar) {
+                binding.vwMenuBg.setOnClickListener { runMenuOut() }
                 when (AppConfig.progressBarBehavior) {
                     "page" -> ReadBook.skipToPage(seekBar.progress)
                     "chapter" -> {
@@ -488,7 +512,7 @@ class ReadMenu @JvmOverloads constructor(
             }
             upSeekBar()
             binding.tvPre.isEnabled = ReadBook.durChapterIndex != 0
-            binding.tvNext.isEnabled = ReadBook.durChapterIndex != ReadBook.chapterSize - 1
+            binding.tvNext.isEnabled = ReadBook.durChapterIndex != ReadBook.simulatedChapterSize - 1
         } ?: let {
             binding.tvChapterName.gone()
             binding.tvChapterUrl.gone()
@@ -506,7 +530,7 @@ class ReadMenu @JvmOverloads constructor(
                 }
 
                 "chapter" -> {
-                    max = ReadBook.chapterSize - 1
+                    max = ReadBook.simulatedChapterSize - 1
                     progress = ReadBook.durChapterIndex
                 }
             }
@@ -548,16 +572,19 @@ class ReadMenu @JvmOverloads constructor(
         fun openChapterList()
         fun openSearchActivity(searchWord: String?)
         fun openSourceEditActivity()
+        fun openBookInfoActivity()
         fun showReadStyle()
         fun showMoreSetting()
         fun showReadAloudDialog()
         fun upSystemUiVisibility()
         fun onClickReadAloud()
-        fun showReadMenuHelp()
+        fun showHelp()
         fun showLogin()
         fun payAction()
         fun disableSource()
         fun skipToChapter(index: Int)
+        fun onMenuShow()
+        fun onMenuHide()
     }
 
 }

@@ -5,16 +5,16 @@ import android.content.Context
 import android.util.SparseArray
 import android.view.LayoutInflater
 import android.view.ViewGroup
-import androidx.core.os.postDelayed
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import androidx.viewbinding.ViewBinding
 import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.utils.buildMainHandler
+import io.legado.app.utils.withTimeoutOrNullAsync
 import kotlinx.coroutines.ensureActive
 import splitties.views.onLongClick
-import java.util.*
+import java.util.Collections
 
 /**
  * Created by Invincible on 2017/11/24.
@@ -114,19 +114,22 @@ abstract class RecyclerAdapter<ITEM, VB : ViewBinding>(protected val context: Co
     ) {
         kotlin.runCatching {
             val oldItems = this.items.toList()
+            val itemsSize = items?.size ?: 0
+            val headerCount = getHeaderCount()
+            val footerCount = getFooterCount()
             val callback = object : DiffUtil.Callback() {
                 override fun getOldListSize(): Int {
                     return itemCount
                 }
 
                 override fun getNewListSize(): Int {
-                    return (items?.size ?: 0) + getHeaderCount() + getFooterCount()
+                    return itemsSize + headerCount + footerCount
                 }
 
                 override fun areItemsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean {
-                    val oldItem = oldItems.getOrNull(oldItemPosition - getHeaderCount())
+                    val oldItem = oldItems.getOrNull(oldItemPosition - headerCount)
                         ?: return true
-                    val newItem = items?.getOrNull(newItemPosition - getHeaderCount())
+                    val newItem = items?.getOrNull(newItemPosition - headerCount)
                         ?: return true
                     return itemCallback.areItemsTheSame(oldItem, newItem)
                 }
@@ -135,26 +138,34 @@ abstract class RecyclerAdapter<ITEM, VB : ViewBinding>(protected val context: Co
                     oldItemPosition: Int,
                     newItemPosition: Int
                 ): Boolean {
-                    val oldItem = oldItems.getOrNull(oldItemPosition - getHeaderCount())
+                    val oldItem = oldItems.getOrNull(oldItemPosition - headerCount)
                         ?: return true
-                    val newItem = items?.getOrNull(newItemPosition - getHeaderCount())
+                    val newItem = items?.getOrNull(newItemPosition - headerCount)
                         ?: return true
                     return itemCallback.areContentsTheSame(oldItem, newItem)
                 }
 
                 override fun getChangePayload(oldItemPosition: Int, newItemPosition: Int): Any? {
-                    val oldItem = oldItems.getOrNull(oldItemPosition - getHeaderCount())
+                    val oldItem = oldItems.getOrNull(oldItemPosition - headerCount)
                         ?: return null
-                    val newItem = items?.getOrNull(newItemPosition - getHeaderCount())
+                    val newItem = items?.getOrNull(newItemPosition - headerCount)
                         ?: return null
                     return itemCallback.getChangePayload(oldItem, newItem)
                 }
             }
             diffJob?.cancel()
             diffJob = Coroutine.async {
-                val diffResult = DiffUtil.calculateDiff(callback)
+                val diffResult = if (skipDiff) withTimeoutOrNullAsync(500L) {
+                    DiffUtil.calculateDiff(callback, itemsSize < 2000)
+                } else {
+                    DiffUtil.calculateDiff(callback, itemsSize < 2000)
+                }
                 ensureActive()
                 handler.post {
+                    if (diffResult == null) {
+                        setItems(items)
+                        return@post
+                    }
                     if (this@RecyclerAdapter.items.isNotEmpty()) {
                         this@RecyclerAdapter.items.clear()
                     }
@@ -163,12 +174,6 @@ abstract class RecyclerAdapter<ITEM, VB : ViewBinding>(protected val context: Co
                     }
                     diffResult.dispatchUpdatesTo(this@RecyclerAdapter)
                     onCurrentListChanged()
-                }
-            }
-            if (skipDiff) handler.postDelayed(500) {
-                if (diffJob?.isCompleted == false) {
-                    diffJob?.cancel()
-                    setItems(items)
                 }
             }
         }
@@ -366,28 +371,7 @@ abstract class RecyclerAdapter<ITEM, VB : ViewBinding>(protected val context: Co
         }
 
         else -> {
-            val holder = ItemViewHolder(getViewBinding(parent))
-
-            @Suppress("UNCHECKED_CAST")
-            registerListener(holder, (holder.binding as VB))
-
-            if (itemClickListener != null) {
-                holder.itemView.setOnClickListener {
-                    getItemByLayoutPosition(holder.layoutPosition)?.let {
-                        itemClickListener?.invoke(holder, it)
-                    }
-                }
-            }
-
-            if (itemLongClickListener != null) {
-                holder.itemView.onLongClick {
-                    getItemByLayoutPosition(holder.layoutPosition)?.let {
-                        itemLongClickListener?.invoke(holder, it)
-                    }
-                }
-            }
-
-            holder
+            ItemViewHolder(getViewBinding(parent))
         }
     }
 
@@ -402,8 +386,28 @@ abstract class RecyclerAdapter<ITEM, VB : ViewBinding>(protected val context: Co
         payloads: MutableList<Any>
     ) {
         if (!isHeader(holder.layoutPosition) && !isFooter(holder.layoutPosition)) {
-            getItemByLayoutPosition(holder.layoutPosition)?.let {
-                convert(holder, (holder.binding as VB), it, payloads)
+            registerListener(holder, (holder.binding as VB))
+            registerItemListener(holder)
+            getItemByLayoutPosition(holder.layoutPosition)?.let { item ->
+                convert(holder, holder.binding, item, payloads)
+            }
+        }
+    }
+
+    private fun registerItemListener(holder: ItemViewHolder) {
+        if (itemClickListener != null) {
+            holder.itemView.setOnClickListener {
+                getItemByLayoutPosition(holder.layoutPosition)?.let {
+                    itemClickListener?.invoke(holder, it)
+                }
+            }
+        }
+
+        if (itemLongClickListener != null) {
+            holder.itemView.onLongClick {
+                getItemByLayoutPosition(holder.layoutPosition)?.let {
+                    itemLongClickListener?.invoke(holder, it)
+                }
             }
         }
     }
@@ -471,7 +475,7 @@ abstract class RecyclerAdapter<ITEM, VB : ViewBinding>(protected val context: Co
 
     companion object {
         private const val TYPE_HEADER_VIEW = Int.MIN_VALUE
-        private const val TYPE_FOOTER_VIEW = Int.MAX_VALUE - 999
+        const val TYPE_FOOTER_VIEW = Int.MAX_VALUE - 999
         private val handler by lazy { buildMainHandler() }
     }
 

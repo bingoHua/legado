@@ -3,6 +3,7 @@
 local.properties
 .DS_Store
 /build
+build/
 /captures
 .externalNativeBuild
 /release
@@ -13,4 +14,5 @@ node_modules/
 /app/gradle.properties
 package-lock.json
 .idea/
-
+# Kotlin 2.0
+.kotlin/

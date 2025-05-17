@@ -1,6 +1,10 @@
 package io.legado.app.help.source
 
+import com.script.rhino.runScriptWithContext
+import io.legado.app.constant.BookSourceType
+import io.legado.app.constant.BookType
 import io.legado.app.data.entities.BookSource
+import io.legado.app.data.entities.BookSourcePart
 import io.legado.app.data.entities.rule.ExploreKind
 import io.legado.app.utils.ACache
 import io.legado.app.utils.GSON
@@ -13,7 +17,6 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.util.concurrent.ConcurrentHashMap
-import kotlin.collections.set
 
 /**
  * 采用md5作为key可以在分类修改后自动重新计算,不需要手动刷新
@@ -25,6 +28,14 @@ private val aCache by lazy { ACache.get("explore") }
 
 private fun BookSource.getExploreKindsKey(): String {
     return MD5Utils.md5Encode(bookSourceUrl + exploreUrl)
+}
+
+private fun BookSourcePart.getExploreKindsKey(): String {
+    return getBookSource()!!.getExploreKindsKey()
+}
+
+suspend fun BookSourcePart.exploreKinds(): List<ExploreKind> {
+    return getBookSource()!!.exploreKinds()
 }
 
 suspend fun BookSource.exploreKinds(): List<ExploreKind> {
@@ -51,13 +62,15 @@ suspend fun BookSource.exploreKinds(): List<ExploreKind> {
                         } else {
                             exploreUrl.substring(4, exploreUrl.lastIndexOf("<"))
                         }
-                        ruleStr = evalJS(jsStr).toString().trim()
+                        ruleStr = runScriptWithContext {
+                            evalJS(jsStr).toString().trim()
+                        }
                         aCache.put(exploreKindsKey, ruleStr)
                     }
                 }
                 if (ruleStr.isJsonArray()) {
-                    GSON.fromJsonArray<ExploreKind?>(ruleStr).getOrThrow().let {
-                        kinds.addAll(it.filterNotNull())
+                    GSON.fromJsonArray<ExploreKind>(ruleStr).getOrThrow().let {
+                        kinds.addAll(it)
                     }
                 } else {
                     ruleStr.split("(&&|\n)+".toRegex()).forEach { kindStr ->
@@ -75,20 +88,34 @@ suspend fun BookSource.exploreKinds(): List<ExploreKind> {
     }
 }
 
+suspend fun BookSourcePart.clearExploreKindsCache() {
+    withContext(Dispatchers.IO) {
+        val exploreKindsKey = getExploreKindsKey()
+        aCache.remove(exploreKindsKey)
+        exploreKindsMap.remove(exploreKindsKey)
+    }
+}
+
 suspend fun BookSource.clearExploreKindsCache() {
     withContext(Dispatchers.IO) {
         val exploreKindsKey = getExploreKindsKey()
         aCache.remove(exploreKindsKey)
-        exploreKindsMap.remove(getExploreKindsKey())
+        exploreKindsMap.remove(exploreKindsKey)
     }
 }
 
-fun BookSource.contains(word: String?): Boolean {
-    if (word.isNullOrEmpty()) {
-        return true
+fun BookSource.exploreKindsJson(): String {
+    val exploreKindsKey = getExploreKindsKey()
+    return aCache.getAsString(exploreKindsKey)?.takeIf { it.isJsonArray() }
+        ?: exploreUrl.takeIf { it.isJsonArray() }
+        ?: ""
+}
+
+fun BookSource.getBookType(): Int {
+    return when (bookSourceType) {
+        BookSourceType.file -> BookType.text or BookType.webFile
+        BookSourceType.image -> BookType.image
+        BookSourceType.audio -> BookType.audio
+        else -> BookType.text
     }
-    return bookSourceName.contains(word)
-            || bookSourceUrl.contains(word)
-            || bookSourceGroup?.contains(word) == true
-            || bookSourceComment?.contains(word) == true
 }

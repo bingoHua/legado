@@ -2,7 +2,6 @@ package io.legado.app.ui.config
 
 import android.content.Context
 import android.content.SharedPreferences
-import android.net.Uri
 import android.os.Bundle
 import android.text.InputType
 import android.view.Menu
@@ -10,8 +9,8 @@ import android.view.MenuInflater
 import android.view.MenuItem
 import android.view.View
 import androidx.core.view.MenuProvider
-import androidx.documentfile.provider.DocumentFile
 import androidx.fragment.app.activityViewModels
+import androidx.lifecycle.lifecycleScope
 import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import androidx.preference.Preference
@@ -35,16 +34,25 @@ import io.legado.app.lib.prefs.fragment.PreferenceFragment
 import io.legado.app.lib.theme.primaryColor
 import io.legado.app.ui.about.AppLogDialog
 import io.legado.app.ui.file.HandleFileContract
-import io.legado.app.ui.widget.dialog.TextDialog
 import io.legado.app.ui.widget.dialog.WaitDialog
-import io.legado.app.utils.*
-import kotlinx.coroutines.Dispatchers
+import io.legado.app.utils.FileDoc
+import io.legado.app.utils.applyTint
+import io.legado.app.utils.checkWrite
+import io.legado.app.utils.getPrefString
+import io.legado.app.utils.isContentScheme
+import io.legado.app.utils.launch
+import io.legado.app.utils.setEdgeEffectColor
+import io.legado.app.utils.showDialogFragment
+import io.legado.app.utils.showHelp
+import io.legado.app.utils.toEditable
+import io.legado.app.utils.toastOnUi
+import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.Dispatchers.Main
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import splitties.init.appCtx
-import kotlin.collections.set
 import kotlin.coroutines.coroutineContext
 
 class BackupConfigFragment : PreferenceFragment(),
@@ -69,25 +77,11 @@ class BackupConfigFragment : PreferenceFragment(),
         result.uri?.let { uri ->
             if (uri.isContentScheme()) {
                 AppConfig.backupPath = uri.toString()
-                Coroutine.async {
-                    Backup.backup(appCtx, uri.toString())
-                }.onSuccess {
-                    appCtx.toastOnUi(R.string.backup_success)
-                }.onError {
-                    AppLog.put("备份出错\n${it.localizedMessage}", it)
-                    appCtx.toastOnUi(getString(R.string.backup_fail, it.localizedMessage))
-                }
+                backup(uri.toString())
             } else {
                 uri.path?.let { path ->
                     AppConfig.backupPath = path
-                    Coroutine.async {
-                        Backup.backup(appCtx, path)
-                    }.onSuccess {
-                        appCtx.toastOnUi(R.string.backup_success)
-                    }.onError {
-                        AppLog.put("备份出错\n${it.localizedMessage}", it)
-                        appCtx.toastOnUi(getString(R.string.backup_fail, it.localizedMessage))
-                    }
+                    backup(path)
                 }
             }
         }
@@ -150,7 +144,7 @@ class BackupConfigFragment : PreferenceFragment(),
         listView.setEdgeEffectColor(primaryColor)
         activity?.addMenuProvider(this, viewLifecycleOwner)
         if (!LocalConfig.backupHelpVersionIsLast) {
-            showHelp()
+            showHelp("webDavHelp")
         }
     }
 
@@ -162,18 +156,13 @@ class BackupConfigFragment : PreferenceFragment(),
     override fun onMenuItemSelected(menuItem: MenuItem): Boolean {
         when (menuItem.itemId) {
             R.id.menu_help -> {
-                showHelp()
+                showHelp("webDavHelp")
                 return true
             }
 
             R.id.menu_log -> showDialogFragment<AppLogDialog>()
         }
         return false
-    }
-
-    private fun showHelp() {
-        val text = String(requireContext().assets.open("help/webDavHelp.md").readBytes())
-        showDialogFragment(TextDialog(getString(R.string.help), text, TextDialog.Mode.MD))
     }
 
     override fun onDestroy() {
@@ -203,21 +192,21 @@ class BackupConfigFragment : PreferenceFragment(),
                 if (value.isNullOrBlank()) {
                     preference.summary = getString(R.string.web_dav_url_s)
                 } else {
-                    preference.summary = value.toString()
+                    preference.summary = value
                 }
 
             PreferKey.webDavAccount ->
                 if (value.isNullOrBlank()) {
                     preference.summary = getString(R.string.web_dav_account_s)
                 } else {
-                    preference.summary = value.toString()
+                    preference.summary = value
                 }
 
             PreferKey.webDavPassword ->
-                if (value.isNullOrBlank()) {
+                if (value.isNullOrEmpty()) {
                     preference.summary = getString(R.string.web_dav_pw_s)
                 } else {
-                    preference.summary = "*".repeat(value.toString().length)
+                    preference.summary = "*".repeat(value.length)
                 }
 
             PreferKey.webDavDir -> preference.summary = when (value) {
@@ -272,35 +261,45 @@ class BackupConfigFragment : PreferenceFragment(),
             backupDir.launch()
         } else {
             if (backupPath.isContentScheme()) {
-                val uri = Uri.parse(backupPath)
-                val doc = DocumentFile.fromTreeUri(requireContext(), uri)
-                if (doc?.checkWrite() == true) {
-                    waitDialog.setText("备份中…")
-                    waitDialog.setOnCancelListener {
-                        backupJob?.cancel()
+                lifecycleScope.launch {
+                    val canWrite = withContext(IO) {
+                        FileDoc.fromDir(backupPath).checkWrite()
                     }
-                    waitDialog.show()
-                    Coroutine.async {
-                        backupJob = coroutineContext[Job]
-                        Backup.backup(requireContext(), backupPath)
-                    }.onSuccess {
-                        appCtx.toastOnUi(R.string.backup_success)
-                    }.onError {
-                        AppLog.put("备份出错\n${it.localizedMessage}", it)
-                        appCtx.toastOnUi(
-                            appCtx.getString(
-                                R.string.backup_fail,
-                                it.localizedMessage
-                            )
-                        )
-                    }.onFinally(Main) {
-                        waitDialog.dismiss()
+                    if (canWrite) {
+                        backup(backupPath)
+                    } else {
+                        backupDir.launch()
                     }
-                } else {
-                    backupDir.launch()
                 }
             } else {
                 backupUsePermission(backupPath)
+            }
+        }
+    }
+
+    private fun backup(backupPath: String) {
+        waitDialog.setText("备份中…")
+        waitDialog.setOnCancelListener {
+            backupJob?.cancel()
+        }
+        waitDialog.show()
+        backupJob?.cancel()
+        backupJob = lifecycleScope.launch {
+            try {
+                Backup.backupLocked(requireContext(), backupPath)
+                appCtx.toastOnUi(R.string.backup_success)
+            } catch (e: Throwable) {
+                ensureActive()
+                AppLog.put("备份出错\n${e.localizedMessage}", e)
+                appCtx.toastOnUi(
+                    appCtx.getString(
+                        R.string.backup_fail,
+                        e.localizedMessage
+                    )
+                )
+            } finally {
+                ensureActive()
+                waitDialog.dismiss()
             }
         }
     }
@@ -310,23 +309,7 @@ class BackupConfigFragment : PreferenceFragment(),
             .addPermissions(*Permissions.Group.STORAGE)
             .rationale(R.string.tip_perm_request_storage)
             .onGranted {
-                waitDialog.setText("备份中…")
-                waitDialog.setOnCancelListener {
-                    backupJob?.cancel()
-                }
-                waitDialog.show()
-                Coroutine.async {
-                    backupJob = coroutineContext[Job]
-                    AppConfig.backupPath = path
-                    Backup.backup(requireContext(), path)
-                }.onSuccess {
-                    appCtx.toastOnUi(R.string.backup_success)
-                }.onError {
-                    AppLog.put("备份出错\n${it.localizedMessage}", it)
-                    appCtx.toastOnUi(appCtx.getString(R.string.backup_fail, it.localizedMessage))
-                }.onFinally {
-                    waitDialog.dismiss()
-                }
+                backup(path)
             }
             .request()
     }
@@ -359,9 +342,9 @@ class BackupConfigFragment : PreferenceFragment(),
     }
 
     private suspend fun showRestoreDialog(context: Context) {
-        val names = withContext(Dispatchers.IO) { AppWebDav.getBackupNames() }
+        val names = withContext(IO) { AppWebDav.getBackupNames() }
         if (AppWebDav.isJianGuoYun && names.size > 700) {
-            context.toastOnUi("由于坚果云限制，部分备份可能未显示")
+            context.toastOnUi("由于坚果云限制列出文件数量，部分备份可能未显示，请及时清理旧备份")
         }
         if (names.isNotEmpty()) {
             coroutineContext.ensureActive()

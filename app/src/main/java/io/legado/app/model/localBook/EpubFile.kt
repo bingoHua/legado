@@ -10,21 +10,23 @@ import io.legado.app.data.entities.BookChapter
 import io.legado.app.help.book.BookHelp
 import io.legado.app.utils.FileUtils
 import io.legado.app.utils.HtmlFormatter
+import io.legado.app.utils.encodeURI
 import io.legado.app.utils.isXml
 import io.legado.app.utils.printOnDebug
 import me.ag2s.epublib.domain.EpubBook
 import me.ag2s.epublib.domain.Resource
 import me.ag2s.epublib.domain.TOCReference
 import me.ag2s.epublib.epub.EpubReader
-import me.ag2s.epublib.util.StringUtil
 import me.ag2s.epublib.util.zip.AndroidZipFile
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
+import org.jsoup.parser.Parser
 import org.jsoup.select.Elements
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
 import java.io.InputStream
+import java.net.URI
 import java.net.URLDecoder
 import java.nio.charset.Charset
 
@@ -95,26 +97,7 @@ class EpubFile(var book: Book) {
         }
 
     init {
-        try {
-            epubBook?.let {
-                if (book.coverUrl.isNullOrEmpty()) {
-                    book.coverUrl = LocalBook.getCoverPath(book)
-                }
-                if (!File(book.coverUrl!!).exists()) {
-                    /*部分书籍DRM处理后，封面获取异常，待优化*/
-                    it.coverImage?.inputStream?.use { input ->
-                        val cover = BitmapFactory.decodeStream(input)
-                        val out = FileOutputStream(FileUtils.createFileIfNotExist(book.coverUrl!!))
-                        cover.compress(Bitmap.CompressFormat.JPEG, 90, out)
-                        out.flush()
-                        out.close()
-                    } ?: AppLog.putDebug("Epub: 封面获取为空. path: ${book.bookUrl}")
-                }
-            }
-        } catch (e: Exception) {
-            AppLog.put("加载书籍封面失败\n${e.localizedMessage}", e)
-            e.printOnDebug()
-        }
+        upBookCover(true)
     }
 
     /**
@@ -176,8 +159,17 @@ class EpubFile(var book: Book) {
         }
         //title标签中的内容不需要显示在正文中，去除
         elements.select("title").remove()
+        elements.select("[style*=display:none]").remove()
         elements.select("img[src=\"cover.jpeg\"]").forEachIndexed { i, it ->
             if (i > 0) it.remove()
+        }
+        elements.select("img").forEach {
+            if (it.attributesSize() <= 1) {
+                return@forEach
+            }
+            val src = it.attr("src")
+            it.clearAttributes()
+            it.attr("src", src)
         }
         val tag = Book.rubyTag
         if (book.getDelTag(tag)) {
@@ -222,13 +214,14 @@ class EpubFile(var book: Book) {
          */
         if (!startFragmentId.isNullOrBlank()) {
             bodyElement.getElementById(startFragmentId)?.outerHtml()?.let {
-                /* 章节内容在fragmentI对应的div下时 会截取空白 */
-                bodyString = bodyString.substringAfter(it).ifBlank { bodyString }
+                val tagStart = it.substringBefore("\n")
+                bodyString = tagStart + bodyString.substringAfter(tagStart)
             }
         }
         if (!endFragmentId.isNullOrBlank() && endFragmentId != startFragmentId) {
             bodyElement.getElementById(endFragmentId)?.outerHtml()?.let {
-                bodyString = bodyString.substringBefore(it)
+                val tagStart = it.substringBefore("\n")
+                bodyString = bodyString.substringBefore(tagStart)
             }
         }
         //截取过再重新解析
@@ -243,13 +236,15 @@ class EpubFile(var book: Book) {
                 //getElementsMatchingOwnText(chapter.title)?.remove()
             }
         }
+        bodyElement.select("image").forEach {
+            it.tagName("img", Parser.NamespaceHtml)
+            it.attr("src", it.attr("xlink:href"))
+        }
         bodyElement.select("img").forEach {
-            val src = it.attr("src")
-            val path = res.href.substringBeforeLast("/", "")
-            if (path.isNotEmpty()) {
-                val absSrc = StringUtil.collapsePathDots("$path/$src")
-                it.attr("src", absSrc)
-            }
+            val src = it.attr("src").trim().encodeURI()
+            val href = res.href.encodeURI()
+            val resolvedHref = URLDecoder.decode(URI(href).resolve(src).toString(), "UTF-8")
+            it.attr("src", resolvedHref)
         }
         return bodyElement
     }
@@ -260,23 +255,48 @@ class EpubFile(var book: Book) {
         return epubBook?.resources?.getByHref(abHref)?.inputStream
     }
 
+    private fun upBookCover(fastCheck: Boolean = false) {
+        try {
+            epubBook?.let {
+                if (book.coverUrl.isNullOrEmpty()) {
+                    book.coverUrl = LocalBook.getCoverPath(book)
+                }
+                if (fastCheck && File(book.coverUrl!!).exists()) {
+                    return
+                }
+                /*部分书籍DRM处理后，封面获取异常，待优化*/
+                it.coverImage?.inputStream?.use { input ->
+                    val cover = BitmapFactory.decodeStream(input)
+                    val out = FileOutputStream(FileUtils.createFileIfNotExist(book.coverUrl!!))
+                    cover.compress(Bitmap.CompressFormat.JPEG, 90, out)
+                    out.flush()
+                    out.close()
+                } ?: AppLog.putDebug("Epub: 封面获取为空. path: ${book.bookUrl}")
+            }
+        } catch (e: Exception) {
+            AppLog.put("加载书籍封面失败\n${e.localizedMessage}", e)
+            e.printOnDebug()
+        }
+    }
+
     private fun upBookInfo() {
         if (epubBook == null) {
             eFile = null
             book.intro = "书籍导入异常"
         } else {
+            upBookCover()
             val metadata = epubBook!!.metadata
             book.name = metadata.firstTitle
             if (book.name.isEmpty()) {
                 book.name = book.originName.replace(".epub", "")
             }
 
-            if (metadata.authors.size > 0) {
+            if (metadata.authors.isNotEmpty()) {
                 val author =
                     metadata.authors[0].toString().replace("^, |, $".toRegex(), "")
                 book.author = author
             }
-            if (metadata.descriptions.size > 0) {
+            if (metadata.descriptions.isNotEmpty()) {
                 val desc = metadata.descriptions[0]
                 book.intro = if (desc.isXml()) {
                     Jsoup.parse(metadata.descriptions[0]).text()
@@ -304,7 +324,7 @@ class EpubFile(var book: Book) {
                             val doc =
                                 Jsoup.parse(String(resource.data, mCharset))
                             val elements = doc.getElementsByTag("title")
-                            if (elements.size > 0) {
+                            if (elements.isNotEmpty()) {
                                 title = elements[0].text()
                             }
                         } catch (e: IOException) {
@@ -366,7 +386,7 @@ class EpubFile(var book: Book) {
                     String(epubBook!!.resources.getByHref(content.href).data, mCharset)
                 ).getElementsByTag("title")
                 title =
-                    if (elements.size > 0 && elements[0].text().isNotBlank())
+                    if (elements.isNotEmpty() && elements[0].text().isNotBlank())
                         elements[0].text()
                     else
                         "--卷首--"

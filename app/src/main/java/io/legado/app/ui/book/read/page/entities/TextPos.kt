@@ -11,30 +11,22 @@ data class TextPos(
     var relativePagePos: Int,
     var lineIndex: Int,
     var columnIndex: Int,
-    var isTouch: Boolean = true,
-    var isLast: Boolean = false
 ) {
 
     fun upData(
         relativePos: Int,
         lineIndex: Int,
         charIndex: Int,
-        isTouch: Boolean,
-        isLast: Boolean
     ) {
         this.relativePagePos = relativePos
         this.lineIndex = lineIndex
         this.columnIndex = charIndex
-        this.isTouch = isTouch
-        this.isLast = isLast
     }
 
     fun upData(pos: TextPos) {
         relativePagePos = pos.relativePagePos
         lineIndex = pos.lineIndex
         columnIndex = pos.columnIndex
-        isTouch = pos.isTouch
-        isLast = pos.isLast
     }
 
     fun compare(pos: TextPos): Int {
@@ -60,4 +52,15 @@ data class TextPos(
             else -> 0
         }
     }
+
+    fun reset() {
+        relativePagePos = 0
+        lineIndex = -1
+        columnIndex = -1
+    }
+
+    fun isSelected(): Boolean {
+        return lineIndex >= 0 && columnIndex >= 0
+    }
+
 }

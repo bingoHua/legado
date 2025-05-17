@@ -8,12 +8,17 @@ import io.legado.app.data.appDb
 import io.legado.app.data.entities.BookSource
 import io.legado.app.data.entities.BookSourcePart
 import io.legado.app.data.entities.toBookSource
-import io.legado.app.help.config.SourceConfig
-import io.legado.app.utils.*
+import io.legado.app.help.source.SourceHelp
+import io.legado.app.utils.FileUtils
+import io.legado.app.utils.GSON
+import io.legado.app.utils.cnCompare
+import io.legado.app.utils.outputStream
+import io.legado.app.utils.splitNotBlank
+import io.legado.app.utils.stackTraceStr
+import io.legado.app.utils.toastOnUi
+import io.legado.app.utils.writeToOutputStream
 import splitties.init.appCtx
-import java.io.BufferedOutputStream
 import java.io.File
-import java.io.FileOutputStream
 
 /**
  * 书源管理数据修改
@@ -45,10 +50,7 @@ class BookSourceViewModel(application: Application) : BaseViewModel(application)
 
     fun del(sources: List<BookSourcePart>) {
         execute {
-            appDb.bookSourceDao.delete(sources)
-            sources.forEach {
-                SourceConfig.removeSource(it.bookSourceUrl)
-            }
+            SourceHelp.deleteBookSourceParts(sources)
         }
     }
 
@@ -121,16 +123,13 @@ class BookSourceViewModel(application: Application) : BaseViewModel(application)
         }
     }
 
-    @Suppress("BlockingMethodInNonBlockingContext")
     private fun saveToFile(sources: List<BookSource>, success: (file: File) -> Unit) {
         execute {
             val path = "${context.filesDir}/shareBookSource.json"
             FileUtils.delete(path)
             val file = FileUtils.createFileWithReplace(path)
-            FileOutputStream(file).use { out ->
-                BufferedOutputStream(out, 64 * 1024).use {
-                    GSON.writeToOutputStream(it, sources)
-                }
+            file.outputStream().buffered().use {
+                GSON.writeToOutputStream(it, sources)
             }
             file
         }.onSuccess {
@@ -191,6 +190,14 @@ class BookSourceViewModel(application: Application) : BaseViewModel(application)
                 appDb.bookSourceDao.allNoGroup
             }
 
+            searchKey == appCtx.getString(R.string.enabled_explore) -> {
+                appDb.bookSourceDao.allEnabledExplore
+            }
+
+            searchKey == appCtx.getString(R.string.disabled_explore) -> {
+                appDb.bookSourceDao.allDisabledExplore
+            }
+
             searchKey.startsWith("group:") -> {
                 val key = searchKey.substringAfter("group:")
                 appDb.bookSourceDao.groupSearch(key)
@@ -244,7 +251,7 @@ class BookSourceViewModel(application: Application) : BaseViewModel(application)
     fun addGroup(group: String) {
         execute {
             val sources = appDb.bookSourceDao.noGroup
-            sources.map { source ->
+            sources.forEach { source ->
                 source.bookSourceGroup = group
             }
             appDb.bookSourceDao.update(*sources.toTypedArray())
@@ -254,7 +261,7 @@ class BookSourceViewModel(application: Application) : BaseViewModel(application)
     fun upGroup(oldGroup: String, newGroup: String?) {
         execute {
             val sources = appDb.bookSourceDao.getByGroup(oldGroup)
-            sources.map { source ->
+            sources.forEach { source ->
                 source.bookSourceGroup?.splitNotBlank(",")?.toHashSet()?.let {
                     it.remove(oldGroup)
                     if (!newGroup.isNullOrEmpty())
@@ -270,7 +277,7 @@ class BookSourceViewModel(application: Application) : BaseViewModel(application)
         execute {
             execute {
                 val sources = appDb.bookSourceDao.getByGroup(group)
-                sources.map { source ->
+                sources.forEach { source ->
                     source.removeGroup(group)
                 }
                 appDb.bookSourceDao.update(*sources.toTypedArray())

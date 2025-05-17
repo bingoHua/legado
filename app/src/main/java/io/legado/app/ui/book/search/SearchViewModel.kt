@@ -10,11 +10,13 @@ import io.legado.app.constant.AppLog
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.SearchBook
 import io.legado.app.data.entities.SearchKeyword
+import io.legado.app.help.book.isNotShelf
 import io.legado.app.help.config.AppConfig
 import io.legado.app.model.webBook.SearchModel
 import io.legado.app.utils.ConflateLiveData
 import io.legado.app.utils.toastOnUi
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.mapLatest
 import java.util.concurrent.ConcurrentHashMap
 
@@ -28,6 +30,7 @@ class SearchViewModel(application: Application) : BaseViewModel(application) {
     var searchFinishLiveData = MutableLiveData<Boolean>()
     var isSearchLiveData = MutableLiveData<Boolean>()
     var searchKey: String = ""
+    var hasMore = true
     private var searchID = 0L
     private val searchModel = SearchModel(viewModelScope, object : SearchModel.CallBack {
 
@@ -39,16 +42,17 @@ class SearchViewModel(application: Application) : BaseViewModel(application) {
             isSearchLiveData.postValue(true)
         }
 
-        override fun onSearchSuccess(searchBooks: ArrayList<SearchBook>) {
+        override fun onSearchSuccess(searchBooks: List<SearchBook>) {
             searchBookLiveData.postValue(searchBooks)
         }
 
-        override fun onSearchFinish(isEmpty: Boolean) {
+        override fun onSearchFinish(isEmpty: Boolean, hasMore: Boolean) {
+            this@SearchViewModel.hasMore = hasMore
             isSearchLiveData.postValue(false)
             searchFinishLiveData.postValue(isEmpty)
         }
 
-        override fun onSearchCancel(exception: Exception?) {
+        override fun onSearchCancel(exception: Throwable?) {
             isSearchLiveData.postValue(false)
             exception?.let {
                 context.toastOnUi(it.localizedMessage)
@@ -61,11 +65,14 @@ class SearchViewModel(application: Application) : BaseViewModel(application) {
         execute {
             appDb.bookDao.flowAll().mapLatest { books ->
                 val keys = arrayListOf<String>()
-                books.forEach {
-                    keys.add("${it.name}-${it.author}")
-                    keys.add(it.name)
-                }
+                books.filterNot { it.isNotShelf }
+                    .forEach {
+                        keys.add("${it.name}-${it.author}")
+                        keys.add(it.name)
+                    }
                 keys
+            }.catch {
+                AppLog.put("搜索界面获取书籍列表失败\n${it.localizedMessage}", it)
             }.collect {
                 bookshelf.clear()
                 bookshelf.addAll(it)
@@ -92,7 +99,9 @@ class SearchViewModel(application: Application) : BaseViewModel(application) {
             if ((searchKey == key) || key.isNotEmpty()) {
                 searchModel.cancelSearch()
                 searchID = System.currentTimeMillis()
+                searchBookLiveData.postValue(emptyList())
                 searchKey = key
+                hasMore = true
             }
             if (searchKey.isEmpty()) {
                 return@execute

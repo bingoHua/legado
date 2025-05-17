@@ -110,6 +110,11 @@
             android:title="@string/bitmap_cache_size" />
 
         <io.legado.app.lib.prefs.Preference
+            android:key="imageRetainNum"
+            android:summary="@string/image_retain_number_summary"
+            android:title="@string/image_retain_number" />
+
+        <io.legado.app.lib.prefs.Preference
             android:key="preDownloadNum"
             android:summary="@string/pre_download_s"
             android:title="@string/pre_download" />
@@ -130,6 +135,13 @@
 
         <io.legado.app.lib.prefs.SwitchPreference
             android:defaultValue="false"
+            android:key="readAloudByMediaButton"
+            android:summary="@string/read_aloud_by_media_button_summary"
+            android:title="@string/read_aloud_by_media_button_title"
+            app:iconSpaceReserved="false" />
+
+        <io.legado.app.lib.prefs.SwitchPreference
+            android:defaultValue="false"
             android:key="ignoreAudioFocus"
             android:summary="@string/ignore_audio_focus_summary"
             android:title="@string/ignore_audio_focus_title" />
@@ -145,6 +157,22 @@
             android:key="showAddToShelfAlert"
             android:summary="@string/show_add_to_shelf_alert_summary"
             android:title="@string/show_add_to_shelf_alert_title" />
+
+        <io.legado.app.lib.prefs.NameListPreference
+            android:defaultValue="default_version"
+            android:key="updateToVariant"
+            android:summary="@string/update_to_variant_summary"
+            android:title="@string/update_to_variant_title"
+            app:allowDividerAbove="false"
+            app:allowDividerBelow="false"
+            app:entries="@array/default_app_variant"
+            app:entryValues="@array/default_app_variant_value" />
+
+        <io.legado.app.lib.prefs.SwitchPreference
+            android:defaultValue="true"
+            android:key="showMangaUi"
+            android:title="@string/show_manga_ui"
+            app:iconSpaceReserved="false" />
 
         <io.legado.app.lib.prefs.Preference
             android:key="webPort"
@@ -186,6 +214,13 @@
             android:key="recordLog"
             android:summary="@string/record_debug_log"
             android:title="@string/record_log"
+            app:iconSpaceReserved="false" />
+
+        <io.legado.app.lib.prefs.SwitchPreference
+            android:defaultValue="false"
+            android:key="recordHeapDump"
+            android:summary="@string/record_heap_dump_s"
+            android:title="@string/record_heap_dump_t"
             app:iconSpaceReserved="false" />
 
     </io.legado.app.lib.prefs.PreferenceCategory>

@@ -9,6 +9,10 @@ import android.graphics.Typeface
 import android.graphics.drawable.Drawable
 import android.text.TextPaint
 import android.util.AttributeSet
+import android.view.ViewGroup
+import androidx.appcompat.widget.AppCompatImageView
+import androidx.fragment.app.Fragment
+import androidx.lifecycle.Lifecycle
 import com.bumptech.glide.load.DataSource
 import com.bumptech.glide.load.engine.GlideException
 import com.bumptech.glide.request.RequestListener
@@ -30,13 +34,10 @@ import io.legado.app.utils.toStringArray
 class CoverImageView @JvmOverloads constructor(
     context: Context,
     attrs: AttributeSet? = null
-) : androidx.appcompat.widget.AppCompatImageView(
-    context,
-    attrs
-) {
+) : AppCompatImageView(context, attrs) {
     private var filletPath = Path()
-    private var width: Float = 0.toFloat()
-    private var height: Float = 0.toFloat()
+    private var viewWidth: Float = 0f
+    private var viewHeight: Float = 0f
     private var defaultCover = true
     var bitmapPath: String? = null
         private set
@@ -59,6 +60,18 @@ class CoverImageView @JvmOverloads constructor(
         textPaint
     }
 
+    override fun setLayoutParams(params: ViewGroup.LayoutParams?) {
+        if (params != null) {
+            val width = params.width
+            if (width >= 0) {
+                params.height = width * 7 / 5
+            } else {
+                params.height = ViewGroup.LayoutParams.WRAP_CONTENT
+            }
+        }
+        super.setLayoutParams(params)
+    }
+
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         val measuredWidth = MeasureSpec.getSize(widthMeasureSpec)
         val measuredHeight = measuredWidth * 7 / 5
@@ -70,18 +83,18 @@ class CoverImageView @JvmOverloads constructor(
 
     override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
         super.onLayout(changed, left, top, right, bottom)
-        width = getWidth().toFloat()
-        height = getHeight().toFloat()
+        viewWidth = width.toFloat()
+        viewHeight = height.toFloat()
         filletPath.reset()
-        if (width > 10 && height > 10) {
+        if (width > 10 && viewHeight > 10) {
             filletPath.apply {
                 moveTo(10f, 0f)
-                lineTo(width - 10, 0f)
-                quadTo(width, 0f, width, 10f)
-                lineTo(width, height - 10)
-                quadTo(width, height, width - 10, height)
-                lineTo(10f, height)
-                quadTo(0f, height, 0f, height - 10)
+                lineTo(viewWidth - 10, 0f)
+                quadTo(viewWidth, 0f, viewWidth, 10f)
+                lineTo(viewWidth, viewHeight - 10)
+                quadTo(viewWidth, viewHeight, viewWidth - 10, viewHeight)
+                lineTo(10f, viewHeight)
+                quadTo(0f, viewHeight, 0f, viewHeight - 10)
                 lineTo(0f, 10f)
                 quadTo(0f, 0f, 10f, 0f)
                 close()
@@ -102,9 +115,9 @@ class CoverImageView @JvmOverloads constructor(
     private fun drawNameAuthor(canvas: Canvas) {
         if (!BookCover.drawBookName) return
         var startX = width * 0.2f
-        var startY = height * 0.2f
+        var startY = viewHeight * 0.2f
         name?.toStringArray()?.let { name ->
-            namePaint.textSize = width / 6
+            namePaint.textSize = viewWidth / 6
             namePaint.strokeWidth = namePaint.textSize / 5
             name.forEachIndexed { index, char ->
                 namePaint.color = Color.WHITE
@@ -114,20 +127,20 @@ class CoverImageView @JvmOverloads constructor(
                 namePaint.style = Paint.Style.FILL
                 canvas.drawText(char, startX, startY, namePaint)
                 startY += namePaint.textHeight
-                if (startY > height * 0.8) {
+                if (startY > viewHeight * 0.8) {
                     startX += namePaint.textSize
-                    namePaint.textSize = width / 10
-                    startY = (height - (name.size - index - 1) * namePaint.textHeight) / 2
+                    namePaint.textSize = viewWidth / 10
+                    startY = (viewHeight - (name.size - index - 1) * namePaint.textHeight) / 2
                 }
             }
         }
         if (!BookCover.drawBookAuthor) return
         author?.toStringArray()?.let { author ->
-            authorPaint.textSize = width / 10
+            authorPaint.textSize = viewWidth / 10
             authorPaint.strokeWidth = authorPaint.textSize / 5
             startX = width * 0.8f
-            startY = height * 0.95f - author.size * authorPaint.textHeight
-            startY = maxOf(startY, height * 0.3f)
+            startY = viewHeight * 0.95f - author.size * authorPaint.textHeight
+            startY = maxOf(startY, viewHeight * 0.3f)
             author.forEach {
                 authorPaint.color = Color.WHITE
                 authorPaint.style = Paint.Style.STROKE
@@ -136,7 +149,7 @@ class CoverImageView @JvmOverloads constructor(
                 authorPaint.style = Paint.Style.FILL
                 canvas.drawText(it, startX, startY, authorPaint)
                 startY += authorPaint.textHeight
-                if (startY > height * 0.95) {
+                if (startY > viewHeight * 0.95) {
                     return@let
                 }
             }
@@ -180,13 +193,17 @@ class CoverImageView @JvmOverloads constructor(
         name: String? = null,
         author: String? = null,
         loadOnlyWifi: Boolean = false,
-        sourceOrigin: String? = null
+        sourceOrigin: String? = null,
+        fragment: Fragment? = null,
+        lifecycle: Lifecycle? = null,
+        onLoadFinish: (() -> Unit)? = null
     ) {
         this.bitmapPath = path
         this.name = name?.replace(AppPattern.bdRegex, "")?.trim()
         this.author = author?.replace(AppPattern.bdRegex, "")?.trim()
+        defaultCover = true
+        invalidate()
         if (AppConfig.useDefaultCover) {
-            defaultCover = true
             ImageLoader.load(context, BookCover.defaultDrawable)
                 .centerCrop()
                 .into(this)
@@ -195,11 +212,40 @@ class CoverImageView @JvmOverloads constructor(
             if (sourceOrigin != null) {
                 options = options.set(OkHttpModelLoader.sourceOriginOption, sourceOrigin)
             }
-            ImageLoader.load(context, path)//Glide自动识别http://,content://和file://
-                .apply(options)
+            var builder = if (fragment != null && lifecycle != null) {
+                ImageLoader.load(fragment, lifecycle, path)
+            } else {
+                ImageLoader.load(context, path)//Glide自动识别http://,content://和file://
+            }
+            builder = builder.apply(options)
                 .placeholder(BookCover.defaultDrawable)
                 .error(BookCover.defaultDrawable)
                 .listener(glideListener)
+            if (onLoadFinish != null) {
+                builder = builder.addListener(object : RequestListener<Drawable> {
+                    override fun onLoadFailed(
+                        e: GlideException?,
+                        model: Any?,
+                        target: Target<Drawable?>,
+                        isFirstResource: Boolean
+                    ): Boolean {
+                        onLoadFinish.invoke()
+                        return false
+                    }
+
+                    override fun onResourceReady(
+                        resource: Drawable,
+                        model: Any,
+                        target: Target<Drawable?>?,
+                        dataSource: DataSource,
+                        isFirstResource: Boolean
+                    ): Boolean {
+                        onLoadFinish.invoke()
+                        return false
+                    }
+                })
+            }
+            builder
                 .centerCrop()
                 .into(this)
         }

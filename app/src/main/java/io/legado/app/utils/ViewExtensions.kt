@@ -7,6 +7,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.Picture
 import android.os.Build
 import android.text.Html
 import android.view.MotionEvent
@@ -15,6 +16,7 @@ import android.view.View.GONE
 import android.view.View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS
 import android.view.View.INVISIBLE
 import android.view.View.VISIBLE
+import android.view.ViewGroup
 import android.view.inputmethod.InputMethodManager
 import android.widget.EdgeEffect
 import android.widget.EditText
@@ -22,15 +24,26 @@ import android.widget.RadioGroup
 import android.widget.SeekBar
 import android.widget.TextView
 import androidx.annotation.ColorInt
+import androidx.annotation.DrawableRes
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.view.menu.MenuPopupHelper
 import androidx.appcompat.widget.PopupMenu
+import androidx.core.graphics.record
+import androidx.core.graphics.withTranslation
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.get
+import androidx.core.view.marginBottom
+import androidx.core.view.updateLayoutParams
 import androidx.recyclerview.widget.RecyclerView
 import androidx.viewpager.widget.ViewPager
 import io.legado.app.help.config.AppConfig
 import io.legado.app.lib.theme.TintHelper
+import io.legado.app.utils.canvasrecorder.CanvasRecorder
+import io.legado.app.utils.canvasrecorder.record
 import splitties.systemservices.inputMethodManager
+import splitties.views.bottomPadding
+import splitties.views.topPadding
 import java.lang.reflect.Field
 
 
@@ -163,6 +176,24 @@ fun View.screenshot(bitmap: Bitmap? = null, canvas: Canvas? = null): Bitmap? {
     }
 }
 
+fun View.screenshot(picture: Picture) {
+    if (width > 0 && height > 0) {
+        picture.record(width, height) {
+            withTranslation(-scrollX.toFloat(), -scrollY.toFloat()) {
+                draw(this)
+            }
+        }
+    }
+}
+
+fun View.screenshot(canvasRecorder: CanvasRecorder) {
+    if (width > 0 && height > 0) {
+        canvasRecorder.record(width, height) {
+            draw(this)
+        }
+    }
+}
+
 fun View.setPaddingBottom(bottom: Int) {
     setPadding(paddingLeft, paddingTop, paddingRight, bottom)
 }
@@ -203,6 +234,12 @@ fun TextView.setHtml(html: String) {
     }
 }
 
+fun TextView.setTextIfNotEqual(charSequence: CharSequence?) {
+    if (text != charSequence) {
+        text = charSequence
+    }
+}
+
 @SuppressLint("RestrictedApi")
 fun PopupMenu.show(x: Int, y: Int) {
     kotlin.runCatching {
@@ -226,3 +263,59 @@ fun View.shouldHideSoftInput(event: MotionEvent): Boolean {
     }
     return false
 }
+
+fun View.applyStatusBarPadding(withInitialPadding: Boolean = false) {
+    val initialPadding = if (withInitialPadding) topPadding else 0
+    setOnApplyWindowInsetsListenerCompat { _, windowInsets ->
+        val insets = windowInsets.getInsets(WindowInsetsCompat.Type.statusBars())
+        topPadding = initialPadding + insets.top
+        windowInsets
+    }
+}
+
+fun View.applyNavigationBarPadding(withInitialPadding: Boolean = false) {
+    val initialPadding = if (withInitialPadding) bottomPadding else 0
+    setOnApplyWindowInsetsListenerCompat { _, windowInsets ->
+        bottomPadding = initialPadding + windowInsets.navigationBarHeight
+        windowInsets
+    }
+}
+
+fun View.applyNavigationBarMargin(withInitialMargin: Boolean = false) {
+    val initialMargin = if (withInitialMargin) marginBottom else 0
+    setOnApplyWindowInsetsListenerCompat { _, windowInsets ->
+        updateLayoutParams<ViewGroup.MarginLayoutParams> {
+            bottomMargin = initialMargin + windowInsets.navigationBarHeight
+        }
+        windowInsets
+    }
+}
+
+fun View.setBackgroundKeepPadding(@DrawableRes backgroundResId: Int) {
+    val paddingLeft = paddingLeft
+    val paddingTop = paddingTop
+    val paddingRight = paddingRight
+    val paddingBottom = paddingBottom
+    setBackgroundResource(backgroundResId)
+    setPadding(paddingLeft, paddingTop, paddingRight, paddingBottom)
+}
+
+fun View.canScroll(direction: Int): Boolean {
+    return canScrollVertically(direction) || canScrollHorizontally(direction)
+}
+
+private val requestLayoutBroken = Build.VERSION.SDK_INT <= Build.VERSION_CODES.M
+        || Build.VERSION.SDK_INT in Build.VERSION_CODES.O..Build.VERSION_CODES.Q
+
+fun View.setOnApplyWindowInsetsListenerCompat(listener: (View, WindowInsetsCompat) -> WindowInsetsCompat) {
+    ViewCompat.setOnApplyWindowInsetsListener(this) { view, insets ->
+        val windowInsets = listener(view, insets)
+        if (requestLayoutBroken && isLayoutRequested) {
+            post {
+                requestLayout()
+            }
+        }
+        windowInsets
+    }
+}
+

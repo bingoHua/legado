@@ -2,6 +2,7 @@ package io.legado.app.ui.book.explore
 
 import android.os.Bundle
 import androidx.activity.viewModels
+import androidx.core.os.bundleOf
 import androidx.recyclerview.widget.RecyclerView
 import io.legado.app.R
 import io.legado.app.base.VMBaseActivity
@@ -12,9 +13,13 @@ import io.legado.app.databinding.ViewLoadMoreBinding
 import io.legado.app.ui.book.info.BookInfoActivity
 import io.legado.app.ui.widget.recycler.LoadMoreView
 import io.legado.app.ui.widget.recycler.VerticalDivider
+import io.legado.app.utils.applyNavigationBarPadding
 import io.legado.app.utils.startActivity
 import io.legado.app.utils.viewbindingdelegate.viewBinding
 
+/**
+ * 发现列表
+ */
 class ExploreShowActivity : VMBaseActivity<ActivityExploreShowBinding, ExploreShowViewModel>(),
     ExploreShowAdapter.CallBack {
     override val binding by viewBinding(ActivityExploreShowBinding::inflate)
@@ -32,21 +37,21 @@ class ExploreShowActivity : VMBaseActivity<ActivityExploreShowBinding, ExploreSh
             loadMoreView.error(it)
         }
         viewModel.upAdapterLiveData.observe(this) {
-            adapter.notifyItemRangeChanged(0, adapter.itemCount, it)
+            adapter.notifyItemRangeChanged(0, adapter.itemCount, bundleOf(it to null))
         }
     }
 
     private fun initRecyclerView() {
         binding.recyclerView.addItemDecoration(VerticalDivider(this))
         binding.recyclerView.adapter = adapter
+        binding.recyclerView.applyNavigationBarPadding()
         adapter.addFooterView {
             ViewLoadMoreBinding.bind(loadMoreView)
         }
         loadMoreView.startLoad()
         loadMoreView.setOnClickListener {
             if (!loadMoreView.isLoading) {
-                loadMoreView.hasMore()
-                scrollToBottom()
+                scrollToBottom(true)
             }
         }
         binding.recyclerView.addOnScrollListener(object : RecyclerView.OnScrollListener() {
@@ -59,12 +64,10 @@ class ExploreShowActivity : VMBaseActivity<ActivityExploreShowBinding, ExploreSh
         })
     }
 
-    private fun scrollToBottom() {
-        adapter.let {
-            if (loadMoreView.hasMore && !loadMoreView.isLoading) {
-                loadMoreView.startLoad()
-                viewModel.explore()
-            }
+    private fun scrollToBottom(forceLoad: Boolean = false) {
+        if ((loadMoreView.hasMore && !loadMoreView.isLoading) || forceLoad) {
+            loadMoreView.hasMore()
+            viewModel.explore()
         }
     }
 
@@ -72,14 +75,10 @@ class ExploreShowActivity : VMBaseActivity<ActivityExploreShowBinding, ExploreSh
         loadMoreView.stopLoad()
         if (books.isEmpty() && adapter.isEmpty()) {
             loadMoreView.noMore(getString(R.string.empty))
-        } else if (books.isEmpty()) {
-            loadMoreView.noMore()
-        } else if (adapter.getItems().contains(books.first()) && adapter.getItems()
-                .contains(books.last())
-        ) {
+        } else if (adapter.getActualItemCount() == books.size) {
             loadMoreView.noMore()
         } else {
-            adapter.addItems(books)
+            adapter.setItems(books)
         }
     }
 

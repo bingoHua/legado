@@ -6,12 +6,14 @@ import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.help.http.StrResponse
 import io.legado.app.model.Debug
 import io.legado.app.model.analyzeRule.AnalyzeRule
+import io.legado.app.model.analyzeRule.AnalyzeRule.Companion.setCoroutineContext
 import io.legado.app.model.analyzeRule.AnalyzeUrl
 import io.legado.app.model.analyzeRule.RuleData
 import io.legado.app.utils.NetworkUtils
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlin.coroutines.CoroutineContext
+import kotlin.coroutines.coroutineContext
 
 @Suppress("MemberVisibilityCanBePrivate")
 object Rss {
@@ -41,11 +43,12 @@ object Rss {
             page = page,
             source = rssSource,
             ruleData = ruleData,
-            headerMapF = rssSource.getHeaderMap()
+            coroutineContext = coroutineContext,
+            hasLoginHeader = false
         )
         val res = analyzeUrl.getStrResponseAwait()
         checkRedirect(rssSource, res)
-        return RssParserByRule.parseXML(sortName, sortUrl, res.body, rssSource, ruleData)
+        return RssParserByRule.parseXML(sortName, sortUrl, res.url, res.body, rssSource, ruleData)
     }
 
     fun getContent(
@@ -70,7 +73,8 @@ object Rss {
             baseUrl = rssArticle.origin,
             source = rssSource,
             ruleData = rssArticle,
-            headerMapF = rssSource.getHeaderMap()
+            coroutineContext = coroutineContext,
+            hasLoginHeader = false
         )
         val res = analyzeUrl.getStrResponseAwait()
         checkRedirect(rssSource, res)
@@ -79,6 +83,8 @@ object Rss {
         val analyzeRule = AnalyzeRule(rssArticle, rssSource)
         analyzeRule.setContent(res.body)
             .setBaseUrl(NetworkUtils.getAbsoluteURL(rssArticle.origin, rssArticle.link))
+            .setCoroutineContext(coroutineContext)
+            .setRedirectUrl(res.url)
         return analyzeRule.getString(ruleContent)
     }
 

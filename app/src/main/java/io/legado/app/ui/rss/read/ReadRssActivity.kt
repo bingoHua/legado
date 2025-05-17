@@ -6,6 +6,7 @@ import android.content.res.Configuration
 import android.net.Uri
 import android.net.http.SslError
 import android.os.Bundle
+import android.os.SystemClock
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
@@ -21,9 +22,10 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.addCallback
 import androidx.activity.viewModels
+import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.size
 import androidx.lifecycle.lifecycleScope
-import com.script.rhino.RhinoScriptEngine
+import com.script.rhino.runScriptWithContext
 import io.legado.app.R
 import io.legado.app.base.VMBaseActivity
 import io.legado.app.constant.AppConst
@@ -32,6 +34,7 @@ import io.legado.app.constant.AppLog
 import io.legado.app.data.entities.RssSource
 import io.legado.app.databinding.ActivityRssReadBinding
 import io.legado.app.help.config.AppConfig
+import io.legado.app.help.http.CookieManager
 import io.legado.app.lib.dialogs.SelectItem
 import io.legado.app.lib.dialogs.selector
 import io.legado.app.lib.theme.accentColor
@@ -40,26 +43,31 @@ import io.legado.app.model.Download
 import io.legado.app.ui.association.OnLineImportActivity
 import io.legado.app.ui.file.HandleFileContract
 import io.legado.app.ui.login.SourceLoginActivity
+import io.legado.app.ui.rss.favorites.RssFavoritesDialog
 import io.legado.app.utils.ACache
 import io.legado.app.utils.NetworkUtils
-import io.legado.app.utils.get
 import io.legado.app.utils.gone
 import io.legado.app.utils.invisible
 import io.legado.app.utils.isTrue
+import io.legado.app.utils.keepScreenOn
 import io.legado.app.utils.longSnackbar
 import io.legado.app.utils.openUrl
 import io.legado.app.utils.setDarkeningAllowed
+import io.legado.app.utils.setOnApplyWindowInsetsListenerCompat
 import io.legado.app.utils.setTintMutate
 import io.legado.app.utils.share
+import io.legado.app.utils.showDialogFragment
 import io.legado.app.utils.splitNotBlank
 import io.legado.app.utils.startActivity
 import io.legado.app.utils.textArray
 import io.legado.app.utils.toastOnUi
+import io.legado.app.utils.toggleSystemBar
 import io.legado.app.utils.viewbindingdelegate.viewBinding
 import io.legado.app.utils.visible
 import kotlinx.coroutines.launch
 import org.apache.commons.text.StringEscapeUtils
 import org.jsoup.Jsoup
+import splitties.views.bottomPadding
 import java.io.ByteArrayInputStream
 import java.net.URLDecoder
 import java.util.regex.PatternSyntaxException
@@ -67,7 +75,8 @@ import java.util.regex.PatternSyntaxException
 /**
  * rss阅读界面
  */
-class ReadRssActivity : VMBaseActivity<ActivityRssReadBinding, ReadRssViewModel>(false) {
+class ReadRssActivity : VMBaseActivity<ActivityRssReadBinding, ReadRssViewModel>(),
+    RssFavoritesDialog.Callback {
 
     override val binding by viewBinding(ActivityRssReadBinding::inflate)
     override val viewModel by viewModels<ReadRssViewModel>()
@@ -91,6 +100,7 @@ class ReadRssActivity : VMBaseActivity<ActivityRssReadBinding, ReadRssViewModel>
         viewModel.upStarMenuData.observe(this) { upStarMenu() }
         viewModel.upTtsMenuData.observe(this) { upTtsMenu(it) }
         binding.titleBar.title = intent.getStringExtra("title")
+        initView()
         initWebView()
         initLiveData()
         viewModel.initData(intent)
@@ -148,7 +158,13 @@ class ReadRssActivity : VMBaseActivity<ActivityRssReadBinding, ReadRssViewModel>
                 binding.webView.reload()
             }
 
-            R.id.menu_rss_star -> viewModel.favorite()
+            R.id.menu_rss_star -> {
+                viewModel.addFavorite()
+                viewModel.rssArticle?.let {
+                    showDialogFragment(RssFavoritesDialog(it))
+                }
+            }
+
             R.id.menu_share_it -> {
                 binding.webView.url?.let {
                     share(it)
@@ -160,7 +176,7 @@ class ReadRssActivity : VMBaseActivity<ActivityRssReadBinding, ReadRssViewModel>
             R.id.menu_aloud -> readAloud()
             R.id.menu_login -> startActivity<SourceLoginActivity> {
                 putExtra("type", "rssSource")
-                putExtra("key", viewModel.rssSource?.loginUrl)
+                putExtra("key", viewModel.rssSource?.sourceUrl)
             }
 
             R.id.menu_browser_open -> binding.webView.url?.let {
@@ -170,12 +186,37 @@ class ReadRssActivity : VMBaseActivity<ActivityRssReadBinding, ReadRssViewModel>
         return super.onCompatOptionsItemSelected(item)
     }
 
+    override fun updateFavorite(title: String?, group: String?) {
+        viewModel.rssArticle?.let {
+            if (title != null) {
+                it.title = title
+            }
+            if (group != null) {
+                it.group = group
+            }
+        }
+        viewModel.updateFavorite()
+    }
+
+    override fun deleteFavorite() {
+        viewModel.delFavorite()
+    }
+
     @JavascriptInterface
     fun isNightTheme(): Boolean {
         return AppConfig.isNightTheme
     }
 
-    @SuppressLint("SetJavaScriptEnabled")
+    private fun initView() {
+        binding.root.setOnApplyWindowInsetsListenerCompat { view, windowInsets ->
+            val typeMask = WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.ime()
+            val insets = windowInsets.getInsets(typeMask)
+            view.bottomPadding = insets.bottom
+            windowInsets
+        }
+    }
+
+    @SuppressLint("SetJavaScriptEnabled", "JavascriptInterface")
     private fun initWebView() {
         binding.progressBar.fontColor = accentColor
         binding.webView.webChromeClient = CustomWebChromeClient()
@@ -189,9 +230,6 @@ class ReadRssActivity : VMBaseActivity<ActivityRssReadBinding, ReadRssViewModel>
             setDarkeningAllowed(AppConfig.isNightTheme)
         }
         binding.webView.addJavascriptInterface(this, "thisActivity")
-        viewModel.rssSource?.let {
-            binding.webView.addJavascriptInterface(it, "thisSource")
-        }
         binding.webView.setOnLongClickListener {
             val hitTestResult = binding.webView.hitTestResult
             if (hitTestResult.type == WebView.HitTestResult.IMAGE_TYPE ||
@@ -253,8 +291,7 @@ class ReadRssActivity : VMBaseActivity<ActivityRssReadBinding, ReadRssViewModel>
                 val url = NetworkUtils.getAbsoluteURL(it.origin, it.link)
                 val html = viewModel.clHtml(content)
                 binding.webView.settings.userAgentString =
-                    viewModel.rssSource?.getHeaderMap()?.get(AppConst.UA_NAME, true)
-                        ?: AppConfig.userAgent
+                    viewModel.headerMap[AppConst.UA_NAME] ?: AppConfig.userAgent
                 if (viewModel.rssSource?.loadWithBaseUrl == true) {
                     binding.webView
                         .loadDataWithBaseURL(url, html, "text/html", "utf-8", url)//不想用baseUrl进else
@@ -266,6 +303,7 @@ class ReadRssActivity : VMBaseActivity<ActivityRssReadBinding, ReadRssViewModel>
         }
         viewModel.urlLiveData.observe(this) {
             upJavaScriptEnable()
+            CookieManager.applyToWebView(it.url)
             binding.webView.settings.userAgentString = it.getUserAgent()
             binding.webView.loadUrl(it.url, it.headerMap)
         }
@@ -340,12 +378,16 @@ class ReadRssActivity : VMBaseActivity<ActivityRssReadBinding, ReadRssViewModel>
             binding.llView.invisible()
             binding.customWebView.addView(view)
             customWebViewCallback = callback
+            keepScreenOn(true)
+            toggleSystemBar(false)
         }
 
         override fun onHideCustomView() {
             binding.customWebView.removeAllViews()
             binding.llView.visible()
             requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+            keepScreenOn(false)
+            toggleSystemBar(true)
         }
     }
 
@@ -432,14 +474,20 @@ class ReadRssActivity : VMBaseActivity<ActivityRssReadBinding, ReadRssViewModel>
             val source = viewModel.rssSource
             val js = source?.shouldOverrideUrlLoading
             if (!js.isNullOrBlank()) {
-                val result = RhinoScriptEngine.runCatching {
-                    eval(js) {
-                        put("java", rssJsExtensions)
-                        put("url", url.toString())
-                    }.toString()
+                val t = SystemClock.uptimeMillis()
+                val result = kotlin.runCatching {
+                    runScriptWithContext(lifecycleScope.coroutineContext) {
+                        source.evalJS(js) {
+                            put("java", rssJsExtensions)
+                            put("url", url.toString())
+                        }.toString()
+                    }
                 }.onFailure {
-                    AppLog.put("url跳转拦截js出错", it)
+                    AppLog.put("${source.getTag()}: url跳转拦截js出错", it)
                 }.getOrNull()
+                if (SystemClock.uptimeMillis() - t > 30) {
+                    AppLog.put("${source.getTag()}: url跳转拦截js执行耗时过长")
+                }
                 if (result.isTrue()) {
                     return true
                 }

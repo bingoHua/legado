@@ -1,6 +1,5 @@
 package io.legado.app.ui.rss.source.edit
 
-import android.app.Activity
 import android.os.Bundle
 import android.view.Menu
 import android.view.MenuItem
@@ -23,28 +22,32 @@ import io.legado.app.ui.file.HandleFileContract
 import io.legado.app.ui.login.SourceLoginActivity
 import io.legado.app.ui.qrcode.QrCodeResult
 import io.legado.app.ui.rss.source.debug.RssSourceDebugActivity
-import io.legado.app.ui.widget.dialog.TextDialog
 import io.legado.app.ui.widget.dialog.UrlOptionDialog
 import io.legado.app.ui.widget.dialog.VariableDialog
 import io.legado.app.ui.widget.keyboard.KeyboardToolPop
 import io.legado.app.ui.widget.text.EditEntity
 import io.legado.app.utils.GSON
+import io.legado.app.utils.imeHeight
 import io.legado.app.utils.isContentScheme
 import io.legado.app.utils.isTrue
 import io.legado.app.utils.launch
+import io.legado.app.utils.navigationBarHeight
 import io.legado.app.utils.sendToClip
 import io.legado.app.utils.setEdgeEffectColor
+import io.legado.app.utils.setOnApplyWindowInsetsListenerCompat
 import io.legado.app.utils.share
 import io.legado.app.utils.shareWithQr
 import io.legado.app.utils.showDialogFragment
+import io.legado.app.utils.showHelp
 import io.legado.app.utils.startActivity
 import io.legado.app.utils.viewbindingdelegate.viewBinding
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import splitties.views.bottomPadding
 
 class RssSourceEditActivity :
-    VMBaseActivity<ActivityRssSourceEditBinding, RssSourceEditViewModel>(false),
+    VMBaseActivity<ActivityRssSourceEditBinding, RssSourceEditViewModel>(),
     KeyboardToolPop.CallBack,
     VariableDialog.Callback {
 
@@ -123,7 +126,7 @@ class RssSourceEditActivity :
     override fun onCompatOptionsItemSelected(item: MenuItem): Boolean {
         when (item.itemId) {
             R.id.menu_save -> viewModel.save(getRssSource()) {
-                setResult(Activity.RESULT_OK)
+                setResult(RESULT_OK)
                 finish()
             }
 
@@ -185,6 +188,13 @@ class RssSourceEditActivity :
                 setEditEntities(tab?.position)
             }
         })
+        binding.recyclerView.setOnApplyWindowInsetsListenerCompat { view, windowInsets ->
+            val navigationBarHeight = windowInsets.navigationBarHeight
+            val imeHeight = windowInsets.imeHeight
+            view.bottomPadding = if (imeHeight == 0) navigationBarHeight else 0
+            softKeyboardTool.initialPadding = imeHeight
+            windowInsets
+        }
     }
 
     private fun setEditEntities(tabPosition: Int?) {
@@ -271,6 +281,7 @@ class RssSourceEditActivity :
         source.singleUrl = binding.cbSingleUrl.isChecked
         source.enabledCookieJar = binding.cbIsEnableCookie.isChecked
         sourceEntities.forEach {
+            it.value = it.value?.takeIf { s -> s.isNotBlank() }
             when (it.key) {
                 "sourceName" -> source.sourceName = it.value ?: ""
                 "sourceUrl" -> source.sourceUrl = it.value ?: ""
@@ -289,6 +300,7 @@ class RssSourceEditActivity :
             }
         }
         listEntities.forEach {
+            it.value = it.value?.takeIf { s -> s.isNotBlank() }
             when (it.key) {
                 "ruleArticles" -> source.ruleArticles = it.value
                 "ruleNextPage" -> source.ruleNextPage =
@@ -311,6 +323,7 @@ class RssSourceEditActivity :
             }
         }
         webViewEntities.forEach {
+            it.value = it.value?.takeIf { s -> s.isNotBlank() }
             when (it.key) {
                 "enableJs" -> source.enableJs = it.value.isTrue()
                 "loadWithBaseUrl" -> source.loadWithBaseUrl = it.value.isTrue()
@@ -387,12 +400,6 @@ class RssSourceEditActivity :
                 edit.replace(start, end, text)//光标所在位置插入文字
             }
         }
-    }
-
-    private fun showHelp(fileName: String) {
-        //显示目录help下的帮助文档
-        val mdText = String(assets.open("help/${fileName}.md").readBytes())
-        showDialogFragment(TextDialog(getString(R.string.help), mdText, TextDialog.Mode.MD))
     }
 
 }

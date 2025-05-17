@@ -21,11 +21,11 @@ import io.legado.app.model.remote.RemoteBook
 import io.legado.app.ui.about.AppLogDialog
 import io.legado.app.ui.book.import.BaseImportBookActivity
 import io.legado.app.ui.widget.SelectActionBar
-import io.legado.app.ui.widget.dialog.TextDialog
 import io.legado.app.utils.ArchiveUtils
 import io.legado.app.utils.FileDoc
 import io.legado.app.utils.find
 import io.legado.app.utils.showDialogFragment
+import io.legado.app.utils.showHelp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.launch
@@ -170,7 +170,11 @@ class RemoteBookActivity : BaseImportBookActivity<RemoteBookViewModel>(),
 
     private fun upPath() {
         binding.tvGoBack.isEnabled = viewModel.dirList.isNotEmpty()
-        var path = "books" + File.separator
+        var path = if (viewModel.isDefaultWebdav) {
+            "books" + File.separator
+        } else {
+            File.separator
+        }
         viewModel.dirList.forEach {
             path = path + it.filename + File.separator
         }
@@ -203,13 +207,6 @@ class RemoteBookActivity : BaseImportBookActivity<RemoteBookViewModel>(),
         viewModel.updateCallBackFlow(newText)
     }
 
-    @Suppress("SameParameterValue")
-    private fun showHelp(fileName: String) {
-        //显示目录help下的帮助文档
-        val mdText = String(assets.open("help/${fileName}.md").readBytes())
-        showDialogFragment(TextDialog(getString(R.string.help), mdText, TextDialog.Mode.MD))
-    }
-
     private fun showRemoteBookDownloadAlert(
         remoteBook: RemoteBook,
         onDownloadFinish: (() -> Unit)? = null
@@ -231,7 +228,7 @@ class RemoteBookActivity : BaseImportBookActivity<RemoteBookViewModel>(),
         val downloadFileName = remoteBook.filename
         if (!ArchiveUtils.isArchive(downloadFileName)) {
             appDb.bookDao.getBookByFileName(downloadFileName)?.let {
-                startReadBook(it.bookUrl)
+                startReadBook(it)
             }
         } else {
             AppConfig.defaultBookTreeUri ?: return

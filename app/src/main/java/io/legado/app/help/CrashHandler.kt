@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.net.Uri
 import android.os.Build
+import android.os.Debug
 import android.os.Looper
 import android.webkit.WebSettings
 import io.legado.app.constant.AppConst
@@ -12,12 +13,20 @@ import io.legado.app.exception.NoStackTraceException
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.LocalConfig
 import io.legado.app.model.ReadAloud
-import io.legado.app.utils.*
+import io.legado.app.utils.FileDoc
+import io.legado.app.utils.FileUtils
+import io.legado.app.utils.createFileIfNotExist
+import io.legado.app.utils.createFolderReplace
+import io.legado.app.utils.externalCache
+import io.legado.app.utils.getFile
+import io.legado.app.utils.longToastOnUiLegacy
+import io.legado.app.utils.stackTraceStr
+import io.legado.app.utils.writeText
 import splitties.init.appCtx
 import java.io.PrintWriter
 import java.io.StringWriter
 import java.text.SimpleDateFormat
-import java.util.*
+import java.util.Date
 import java.util.concurrent.TimeUnit
 
 /**
@@ -69,6 +78,9 @@ class CrashHandler(val context: Context) : Thread.UncaughtExceptionHandler {
         LocalConfig.appCrash = true
         //保存日志文件
         saveCrashInfo2File(ex)
+        if ((ex is OutOfMemoryError || ex.cause is OutOfMemoryError) && AppConfig.recordHeapDump) {
+            doHeapDump()
+        }
         context.longToastOnUiLegacy(ex.stackTraceStr)
         Thread.sleep(3000)
     }
@@ -78,7 +90,7 @@ class CrashHandler(val context: Context) : Thread.UncaughtExceptionHandler {
          * 存储异常和参数信息
          */
         private val paramsMap by lazy {
-            val map = HashMap<String, String>()
+            val map = LinkedHashMap<String, String>()
             kotlin.runCatching {
                 //获取系统信息
                 map["MANUFACTURER"] = Build.MANUFACTURER
@@ -86,7 +98,13 @@ class CrashHandler(val context: Context) : Thread.UncaughtExceptionHandler {
                 map["MODEL"] = Build.MODEL
                 map["SDK_INT"] = Build.VERSION.SDK_INT.toString()
                 map["RELEASE"] = Build.VERSION.RELEASE
-                map["WebViewUserAgent"] = WebSettings.getDefaultUserAgent(appCtx)
+                map["WebViewUserAgent"] = try {
+                    WebSettings.getDefaultUserAgent(appCtx)
+                } catch (e: Throwable) {
+                    e.toString()
+                }
+                map["packageName"] = appCtx.packageName
+                map["heapSize"] = Runtime.getRuntime().maxMemory().toString()
                 //获取app版本信息
                 AppConst.appInfo.let {
                     map["versionName"] = it.versionName
@@ -122,6 +140,7 @@ class CrashHandler(val context: Context) : Thread.UncaughtExceptionHandler {
             printWriter.close()
             val result = writer.toString()
             sb.append(result)
+            val crashLog = sb.toString()
             val timestamp = System.currentTimeMillis()
             val time = format.format(Date())
             val fileName = "crash-$time-$timestamp.log"
@@ -131,21 +150,39 @@ class CrashHandler(val context: Context) : Thread.UncaughtExceptionHandler {
                 val uri = Uri.parse(backupPath)
                 val fileDoc = FileDoc.fromUri(uri, true)
                 fileDoc.createFileIfNotExist(fileName, "crash")
-                    .writeText(sb.toString())
-            } catch (e: Exception) {
+                    .writeText(crashLog)
+            } catch (_: Exception) {
+            }
+            kotlin.runCatching {
                 appCtx.externalCacheDir?.let { rootFile ->
+                    val exceedTimeMillis = System.currentTimeMillis() - TimeUnit.DAYS.toMillis(7)
                     rootFile.getFile("crash").listFiles()?.forEach {
-                        if (it.lastModified() < System.currentTimeMillis() - TimeUnit.DAYS.toMillis(
-                                7
-                            )
-                        ) {
+                        if (it.lastModified() < exceedTimeMillis) {
                             it.delete()
                         }
                     }
                     FileUtils.createFileIfNotExist(rootFile, "crash", fileName)
-                        .writeText(sb.toString())
+                        .writeText(crashLog)
                 }
             }
+        }
+
+        /**
+         * 进行堆转储
+         */
+        fun doHeapDump(manually: Boolean = false) {
+            val heapDir = appCtx
+                .externalCache
+                .getFile("heapDump")
+            heapDir.createFolderReplace()
+            val fileName = if (manually) {
+                "heap-dump-manually-${System.currentTimeMillis()}.hprof"
+            } else {
+                "heap-dump-${System.currentTimeMillis()}.hprof"
+            }
+            val heapFile = heapDir.getFile(fileName)
+            val heapDumpName = heapFile.absolutePath
+            Debug.dumpHprofData(heapDumpName)
         }
 
     }

@@ -8,6 +8,7 @@ import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.PopupMenu
 import androidx.core.os.bundleOf
+import androidx.core.view.doOnLayout
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.RecyclerView
 import io.legado.app.R
@@ -21,18 +22,25 @@ import io.legado.app.ui.login.SourceLoginActivity
 import io.legado.app.ui.widget.recycler.DragSelectTouchHelper
 import io.legado.app.ui.widget.recycler.ItemTouchCallback
 import io.legado.app.utils.ColorUtils
+import io.legado.app.utils.buildMainHandler
+import io.legado.app.utils.gone
 import io.legado.app.utils.invisible
 import io.legado.app.utils.startActivity
 import io.legado.app.utils.visible
 import java.util.Collections
 
 
-class BookSourceAdapter(context: Context, val callBack: CallBack) :
-    RecyclerAdapter<BookSourcePart, ItemBookSourceBinding>(context),
+class BookSourceAdapter(
+    context: Context,
+    private val callBack: CallBack,
+    private val recyclerView: RecyclerView
+) : RecyclerAdapter<BookSourcePart, ItemBookSourceBinding>(context),
     ItemTouchCallback.Callback {
 
     private val selected = linkedSetOf<BookSourcePart>()
     private val finalMessageRegex = Regex("成功|失败")
+    private val handler = buildMainHandler()
+    var showSourceHost = false
 
     val selection: List<BookSourcePart>
         get() {
@@ -89,22 +97,26 @@ class BookSourceAdapter(context: Context, val callBack: CallBack) :
         payloads: MutableList<Any>
     ) {
         binding.run {
-            val payload = payloads.getOrNull(0) as? Bundle
-            if (payload == null) {
+            if (payloads.isEmpty()) {
                 root.setBackgroundColor(ColorUtils.withAlpha(context.backgroundColor, 0.5f))
                 cbBookSource.text = item.getDisPlayNameGroup()
                 swtEnabled.isChecked = item.enabled
                 cbBookSource.isChecked = selected.contains(item)
                 upCheckSourceMessage(binding, item)
                 upShowExplore(ivExplore, item)
+                upSourceHost(binding, holder.layoutPosition)
             } else {
-                payload.keySet().map {
-                    when (it) {
-                        "enabled" -> swtEnabled.isChecked = payload.getBoolean("enabled")
-                        "upName" -> cbBookSource.text = item.getDisPlayNameGroup()
-                        "upExplore" -> upShowExplore(ivExplore, item)
-                        "selected" -> cbBookSource.isChecked = selected.contains(item)
-                        "checkSourceMessage" -> upCheckSourceMessage(binding, item)
+                for (i in payloads.indices) {
+                    val bundle = payloads[i] as Bundle
+                    bundle.keySet().forEach {
+                        when (it) {
+                            "enabled" -> swtEnabled.isChecked = bundle.getBoolean("enabled")
+                            "upName" -> cbBookSource.text = item.getDisPlayNameGroup()
+                            "upExplore" -> upShowExplore(ivExplore, item)
+                            "selected" -> cbBookSource.isChecked = selected.contains(item)
+                            "checkSourceMessage" -> upCheckSourceMessage(binding, item)
+                            "upSourceHost" -> upSourceHost(binding, holder.layoutPosition)
+                        }
                     }
                 }
             }
@@ -146,6 +158,11 @@ class BookSourceAdapter(context: Context, val callBack: CallBack) :
 
     override fun onCurrentListChanged() {
         callBack.upCountView()
+        recyclerView.doOnLayout {
+            handler.post {
+                notifyItemRangeChanged(0, itemCount, bundleOf("upSourceHost" to null))
+            }
+        }
     }
 
     private fun showMenu(view: View, position: Int) {
@@ -231,6 +248,15 @@ class BookSourceAdapter(context: Context, val callBack: CallBack) :
             if (isFinalMessage || isEmpty || !Debug.isChecking) View.GONE else View.VISIBLE
     }
 
+    private fun upSourceHost(binding: ItemBookSourceBinding, position: Int) = binding.run {
+        if (showSourceHost && isItemHeader(position)) {
+            tvHostText.text = getHeaderText(position)
+            tvHostText.visible()
+        } else {
+            tvHostText.gone()
+        }
+    }
+
     fun selectAll() {
         getItems().forEach {
             selected.add(it)
@@ -268,6 +294,18 @@ class BookSourceAdapter(context: Context, val callBack: CallBack) :
         }
         notifyItemRangeChanged(minPosition, itemCount, bundleOf(Pair("selected", null)))
         callBack.upCountView()
+    }
+
+    fun getHeaderText(position: Int): String {
+        val source = getItem(position)!!
+        return callBack.getSourceHost(source.bookSourceUrl)
+    }
+
+    fun isItemHeader(position: Int): Boolean {
+        if (position == 0) return true
+        val lastHost = getHeaderText(position - 1)
+        val curHost = getHeaderText(position)
+        return lastHost != curHost
     }
 
     override fun swap(srcPosition: Int, targetPosition: Int): Boolean {
@@ -342,5 +380,6 @@ class BookSourceAdapter(context: Context, val callBack: CallBack) :
         fun enable(enable: Boolean, bookSource: BookSourcePart)
         fun enableExplore(enable: Boolean, bookSource: BookSourcePart)
         fun upCountView()
+        fun getSourceHost(origin: String): String
     }
 }

@@ -14,20 +14,20 @@ import io.legado.app.constant.PageAnim
 import io.legado.app.data.appDb
 import io.legado.app.help.book.BookHelp
 import io.legado.app.help.book.ContentProcessor
+import io.legado.app.help.book.getFolderNameNoCache
 import io.legado.app.help.book.isEpub
 import io.legado.app.help.book.isImage
-import io.legado.app.help.book.isPdf
+import io.legado.app.help.book.simulatedTotalChapterNum
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.ReadBookConfig
 import io.legado.app.model.ReadBook
 import io.legado.app.utils.GSON
-import io.legado.app.utils.MD5Utils
 import io.legado.app.utils.fromJsonObject
 import kotlinx.parcelize.IgnoredOnParcel
 import kotlinx.parcelize.Parcelize
 import java.nio.charset.Charset
+import java.time.LocalDate
 import kotlin.math.max
-import kotlin.math.min
 
 @Parcelize
 @TypeConverters(Book.Converters::class)
@@ -160,7 +160,7 @@ data class Book(
 
     fun getRealAuthor() = author.replace(AppPattern.authorRegex, "")
 
-    fun getUnreadChapterNum() = max(totalChapterNum - durChapterIndex - 1, 0)
+    fun getUnreadChapterNum() = max(simulatedTotalChapterNum() - durChapterIndex - 1, 0)
 
     fun getDisplayCover() = if (customCoverUrl.isNullOrEmpty()) coverUrl else customCoverUrl
 
@@ -236,7 +236,6 @@ data class Book(
 
     fun getImageStyle(): String? {
         return config.imageStyle
-            ?: if (isImage || isPdf) imgStyleFull else null
     }
 
     fun setTtsEngine(ttsEngine: String?) {
@@ -253,6 +252,46 @@ data class Book(
 
     fun getSplitLongChapter(): Boolean {
         return config.splitLongChapter
+    }
+
+    // readSimulating 的 setter 和 getter
+    fun setReadSimulating(readSimulating: Boolean) {
+        config.readSimulating = readSimulating
+    }
+
+    fun getReadSimulating(): Boolean {
+        return config.readSimulating
+    }
+
+    // startDate 的 setter 和 getter
+    fun setStartDate(startDate: LocalDate?) {
+        config.startDate = startDate
+    }
+
+    fun getStartDate(): LocalDate? {
+        if (!config.readSimulating || config.startDate == null) {
+            return LocalDate.now()
+        }
+        return config.startDate
+    }
+
+    // startChapter 的 setter 和 getter
+    fun setStartChapter(startChapter: Int) {
+        config.startChapter = startChapter
+    }
+
+    fun getStartChapter(): Int {
+        if (config.readSimulating) return config.startChapter ?: 0
+        return this.durChapterIndex
+    }
+
+    // dailyChapters 的 setter 和 getter
+    fun setDailyChapters(dailyChapters: Int) {
+        config.dailyChapters = dailyChapters
+    }
+
+    fun getDailyChapters(): Int {
+        return config.dailyChapters
     }
 
     fun getDelTag(tag: Long): Boolean {
@@ -274,12 +313,6 @@ data class Book(
         //防止书名过长,只取9位
         folderName = getFolderNameNoCache()
         return folderName!!
-    }
-
-    fun getFolderNameNoCache(): String {
-        return name.replace(AppPattern.fileNameRegex, "").let {
-            it.substring(0, min(9, it.length)) + MD5Utils.md5Encode16(bookUrl)
-        }
     }
 
     fun toSearchBook() = SearchBook(
@@ -309,7 +342,8 @@ data class Book(
         newBook.durChapterIndex = BookHelp
             .getDurChapter(durChapterIndex, durChapterTitle, toc, totalChapterNum)
         newBook.durChapterTitle = toc[newBook.durChapterIndex].getDisplayTitle(
-            ContentProcessor.get(newBook.name, newBook.origin).getTitleReplaceRules()
+            ContentProcessor.get(newBook.name, newBook.origin).getTitleReplaceRules(),
+            getUseReplaceRule()
         )
         newBook.durChapterPos = durChapterPos
         newBook.durChapterTime = durChapterTime
@@ -331,7 +365,7 @@ data class Book(
     }
 
     fun save() {
-        if (appDb.bookDao.has(bookUrl) == true) {
+        if (appDb.bookDao.has(bookUrl)) {
             appDb.bookDao.update(this)
         } else {
             appDb.bookDao.insert(this)
@@ -352,6 +386,7 @@ data class Book(
         const val imgStyleDefault = "DEFAULT"
         const val imgStyleFull = "FULL"
         const val imgStyleText = "TEXT"
+        const val imgStyleSingle = "SINGLE"
     }
 
     @Parcelize
@@ -363,7 +398,11 @@ data class Book(
         var useReplaceRule: Boolean? = null,// 正文使用净化替换规则
         var delTag: Long = 0L,//去除标签
         var ttsEngine: String? = null,
-        var splitLongChapter: Boolean = true
+        var splitLongChapter: Boolean = true,
+        var readSimulating: Boolean = false,
+        var startDate: LocalDate? = null,
+        var startChapter: Int? = null,     // 用户设置的起始章节
+        var dailyChapters: Int = 3    // 用户设置的每日更新章节数
     ) : Parcelable
 
     class Converters {

@@ -6,7 +6,6 @@ import android.view.Menu
 import android.view.MenuItem
 import android.view.MotionEvent
 import android.widget.CheckBox
-import android.widget.EditText
 import android.widget.LinearLayout
 import androidx.activity.viewModels
 import androidx.appcompat.widget.PopupMenu
@@ -16,6 +15,7 @@ import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.LinearLayoutManager
 import io.legado.app.R
 import io.legado.app.base.VMBaseActivity
+import io.legado.app.constant.AppLog
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookGroup
@@ -46,11 +46,13 @@ import io.legado.app.utils.hideSoftInput
 import io.legado.app.utils.isAbsUrl
 import io.legado.app.utils.sendToClip
 import io.legado.app.utils.setEdgeEffectColor
+import io.legado.app.utils.shouldHideSoftInput
 import io.legado.app.utils.showDialogFragment
 import io.legado.app.utils.startActivity
 import io.legado.app.utils.viewbindingdelegate.viewBinding
 import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
@@ -58,7 +60,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.max
 
-
+/**
+ * 书架管理
+ */
 class BookshelfManageActivity :
     VMBaseActivity<ActivityArrangeBookBinding, BookshelfManageViewModel>(),
     PopupMenu.OnMenuItemClickListener,
@@ -118,9 +122,11 @@ class BookshelfManageActivity :
     override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
         if (ev.action == MotionEvent.ACTION_DOWN) {
             currentFocus?.let {
-                if (it is EditText) {
-                    it.clearFocus()
-                    it.hideSoftInput()
+                if (it.shouldHideSoftInput(ev)) {
+                    it.post {
+                        it.clearFocus()
+                        it.hideSoftInput()
+                    }
                 }
             }
         }
@@ -172,9 +178,7 @@ class BookshelfManageActivity :
 
     private fun initSearchView() {
         searchView.applyTint(primaryTextColor)
-        searchView.onActionViewExpanded()
         searchView.isSubmitButtonEnabled = true
-        searchView.clearFocus()
         searchView.setOnQueryTextListener(object : SearchView.OnQueryTextListener {
             override fun onQueryTextSubmit(query: String?): Boolean {
                 return false
@@ -216,7 +220,9 @@ class BookshelfManageActivity :
     @SuppressLint("NotifyDataSetChanged")
     private fun initGroupData() {
         lifecycleScope.launch {
-            appDb.bookGroupDao.flowAll().conflate().collect {
+            appDb.bookGroupDao.flowAll().catch {
+                AppLog.put("书架管理界面获取分组数据失败\n${it.localizedMessage}", it)
+            }.flowOn(IO).conflate().collect {
                 groupList.clear()
                 groupList.addAll(it)
                 adapter.notifyDataSetChanged()
@@ -251,6 +257,8 @@ class BookshelfManageActivity :
                         it.durChapterTime
                     }
                 }
+            }.catch {
+                AppLog.put("书架管理界面获取书籍列表失败\n${it.localizedMessage}", it)
             }.flowOn(IO)
                 .conflate().collect {
                     books = it

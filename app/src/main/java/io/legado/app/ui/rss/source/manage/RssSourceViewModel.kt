@@ -6,7 +6,12 @@ import io.legado.app.base.BaseViewModel
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.RssSource
 import io.legado.app.help.DefaultData
-import io.legado.app.utils.*
+import io.legado.app.help.source.SourceHelp
+import io.legado.app.utils.FileUtils
+import io.legado.app.utils.GSON
+import io.legado.app.utils.splitNotBlank
+import io.legado.app.utils.stackTraceStr
+import io.legado.app.utils.toastOnUi
 import java.io.File
 
 /**
@@ -38,7 +43,9 @@ class RssSourceViewModel(application: Application) : BaseViewModel(application) 
     }
 
     fun del(vararg rssSource: RssSource) {
-        execute { appDb.rssSourceDao.delete(*rssSource) }
+        execute {
+            SourceHelp.deleteRssSources(rssSource.toList())
+        }
     }
 
     fun update(vararg rssSource: RssSource) {
@@ -108,7 +115,7 @@ class RssSourceViewModel(application: Application) : BaseViewModel(application) 
     fun addGroup(group: String) {
         execute {
             val sources = appDb.rssSourceDao.noGroup
-            sources.map { source ->
+            sources.forEach { source ->
                 source.sourceGroup = group
             }
             appDb.rssSourceDao.update(*sources.toTypedArray())
@@ -118,7 +125,7 @@ class RssSourceViewModel(application: Application) : BaseViewModel(application) 
     fun upGroup(oldGroup: String, newGroup: String?) {
         execute {
             val sources = appDb.rssSourceDao.getByGroup(oldGroup)
-            sources.map { source ->
+            sources.forEach { source ->
                 source.sourceGroup?.splitNotBlank(",")?.toHashSet()?.let {
                     it.remove(oldGroup)
                     if (!newGroup.isNullOrEmpty())
@@ -134,7 +141,7 @@ class RssSourceViewModel(application: Application) : BaseViewModel(application) 
         execute {
             execute {
                 val sources = appDb.rssSourceDao.getByGroup(group)
-                sources.map { source ->
+                sources.forEach { source ->
                     source.sourceGroup?.splitNotBlank(",")?.toHashSet()?.let {
                         it.remove(group)
                         source.sourceGroup = TextUtils.join(",", it)

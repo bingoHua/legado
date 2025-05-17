@@ -1,6 +1,8 @@
 package io.legado.app.model
 
 import io.legado.app.constant.AppLog
+import io.legado.app.constant.EventBus
+import io.legado.app.constant.PageAnim.scrollPageAnim
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookChapter
@@ -10,24 +12,42 @@ import io.legado.app.data.entities.ReadRecord
 import io.legado.app.help.AppWebDav
 import io.legado.app.help.book.BookHelp
 import io.legado.app.help.book.ContentProcessor
+import io.legado.app.help.book.isImage
 import io.legado.app.help.book.isLocal
+import io.legado.app.help.book.isPdf
+import io.legado.app.help.book.isSameNameAuthor
+import io.legado.app.help.book.readSimulating
+import io.legado.app.help.book.simulatedTotalChapterNum
+import io.legado.app.help.book.update
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.ReadBookConfig
 import io.legado.app.help.coroutine.Coroutine
+import io.legado.app.help.globalExecutor
 import io.legado.app.model.localBook.TextFile
 import io.legado.app.model.webBook.WebBook
 import io.legado.app.service.BaseReadAloudService
+import io.legado.app.service.CacheBookService
 import io.legado.app.ui.book.read.page.entities.TextChapter
 import io.legado.app.ui.book.read.page.provider.ChapterProvider
+import io.legado.app.ui.book.read.page.provider.LayoutProgressListener
+import io.legado.app.utils.postEvent
 import io.legado.app.utils.stackTraceStr
 import io.legado.app.utils.toastOnUi
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers.IO
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.withContext
 import splitties.init.appCtx
+import kotlin.math.max
 import kotlin.math.min
 
 
@@ -36,15 +56,27 @@ object ReadBook : CoroutineScope by MainScope() {
     var book: Book? = null
     var callBack: CallBack? = null
     var inBookshelf = false
-    var tocChanged = false
     var chapterSize = 0
+    var simulatedChapterSize = 0
     var durChapterIndex = 0
     var durChapterPos = 0
     var isLocalBook = true
     var chapterChanged = false
     var prevTextChapter: TextChapter? = null
+        set(value) {
+            field?.cancelLayout()
+            field = value
+        }
     var curTextChapter: TextChapter? = null
+        set(value) {
+            field?.cancelLayout()
+            field = value
+        }
     var nextTextChapter: TextChapter? = null
+        set(value) {
+            field?.cancelLayout()
+            field = value
+        }
     var bookSource: BookSource? = null
     var msg: String? = null
     private val loadingChapters = arrayListOf<Int>()
@@ -52,75 +84,111 @@ object ReadBook : CoroutineScope by MainScope() {
     var readStartTime: Long = System.currentTimeMillis()
 
     /* 跳转进度前进度记录 */
-    var lastBookPress: BookProgress? = null
+    var lastBookProgress: BookProgress? = null
 
     /* web端阅读进度记录 */
     var webBookProgress: BookProgress? = null
 
-    var preDownloadTask: Coroutine<*>? = null
+    var preDownloadTask: Job? = null
     val downloadedChapters = hashSetOf<Int>()
     val downloadFailChapters = hashMapOf<Int, Int>()
     var contentProcessor: ContentProcessor? = null
     val downloadScope = CoroutineScope(SupervisorJob() + IO)
-
-    //暂时保存跳转前进度
-    fun saveCurrentBookProcess() {
-        if (lastBookPress != null) return //避免进度条连续跳转不能覆盖最初的进度记录
-        lastBookPress = book?.let { BookProgress(it) }
-    }
-
-    //恢复跳转前进度
-    fun restoreLastBookProcess() {
-        lastBookPress?.let {
-            setProgress(it)
-            lastBookPress = null
-        }
-    }
+    val preDownloadSemaphore = Semaphore(2)
+    val executor = globalExecutor
 
     fun resetData(book: Book) {
         ReadBook.book = book
         readRecord.bookName = book.name
         readRecord.readTime = appDb.readRecordDao.getReadTime(book.name) ?: 0
         chapterSize = appDb.bookChapterDao.getChapterCount(book.bookUrl)
+        simulatedChapterSize = if (book.readSimulating()) {
+            book.simulatedTotalChapterNum()
+        } else {
+            chapterSize
+        }
         contentProcessor = ContentProcessor.get(book)
         durChapterIndex = book.durChapterIndex
         durChapterPos = book.durChapterPos
         isLocalBook = book.isLocal
         clearTextChapter()
+        callBack?.upContent()
         callBack?.upMenuView()
         callBack?.upPageAnim()
         upWebBook(book)
-        lastBookPress = null
+        lastBookProgress = null
         webBookProgress = null
         TextFile.clear()
         synchronized(this) {
             loadingChapters.clear()
+            downloadedChapters.clear()
+            downloadFailChapters.clear()
         }
     }
 
     fun upData(book: Book) {
         ReadBook.book = book
         chapterSize = appDb.bookChapterDao.getChapterCount(book.bookUrl)
-        if (durChapterIndex != book.durChapterIndex || tocChanged) {
+        simulatedChapterSize = if (book.readSimulating()) {
+            book.simulatedTotalChapterNum()
+        } else {
+            chapterSize
+        }
+        if (durChapterIndex != book.durChapterIndex) {
             durChapterIndex = book.durChapterIndex
             durChapterPos = book.durChapterPos
             clearTextChapter()
         }
+        if (curTextChapter?.isCompleted == false) {
+            curTextChapter = null
+        }
+        if (nextTextChapter?.isCompleted == false) {
+            nextTextChapter = null
+        }
+        if (prevTextChapter?.isCompleted == false) {
+            prevTextChapter = null
+        }
         callBack?.upMenuView()
         upWebBook(book)
+        synchronized(this) {
+            loadingChapters.clear()
+            downloadedChapters.clear()
+            downloadFailChapters.clear()
+        }
     }
 
     fun upWebBook(book: Book) {
         if (book.isLocal) {
             bookSource = null
+            if (book.getImageStyle().isNullOrBlank() && (book.isImage || book.isPdf)) {
+                book.setImageStyle(Book.imgStyleFull)
+            }
         } else {
             appDb.bookSourceDao.getBookSource(book.origin)?.let {
                 bookSource = it
                 if (book.getImageStyle().isNullOrBlank()) {
-                    book.setImageStyle(it.getContentRule().imageStyle)
+                    var imageStyle = it.getContentRule().imageStyle
+                    if (imageStyle.isNullOrBlank() && (book.isImage || book.isPdf)) {
+                        imageStyle = Book.imgStyleFull
+                    }
+                    book.setImageStyle(imageStyle)
+                    if (imageStyle.equals(Book.imgStyleSingle, true)) {
+                        book.setPageAnim(0)
+                    }
                 }
             } ?: let {
                 bookSource = null
+            }
+        }
+    }
+
+    fun upReadBookConfig(book: Book) {
+        val oldIndex = ReadBookConfig.styleSelect
+        ReadBookConfig.isComic = book.isImage
+        if (oldIndex != ReadBookConfig.styleSelect) {
+            postEvent(EventBus.UP_CONFIG, arrayListOf(1, 2, 5))
+            if (AppConfig.readBarStyleFollowPage) {
+                postEvent(EventBus.UPDATE_READ_ACTION_BAR, true)
             }
         }
     }
@@ -132,9 +200,24 @@ object ReadBook : CoroutineScope by MainScope() {
         ) {
             durChapterIndex = progress.durChapterIndex
             durChapterPos = progress.durChapterPos
+            saveRead()
             clearTextChapter()
             callBack?.upContent()
             loadContent(resetPageOffset = true)
+        }
+    }
+
+    //暂时保存跳转前进度
+    fun saveCurrentBookProgress() {
+        if (lastBookProgress != null) return //避免进度条连续跳转不能覆盖最初的进度记录
+        lastBookProgress = book?.let { BookProgress(it) }
+    }
+
+    //恢复跳转前进度
+    fun restoreLastBookProgress() {
+        lastBookProgress?.let {
+            setProgress(it)
+            lastBookProgress = null
         }
     }
 
@@ -144,23 +227,68 @@ object ReadBook : CoroutineScope by MainScope() {
         nextTextChapter = null
     }
 
-    fun uploadProgress() {
+    fun clearSearchResult() {
+        curTextChapter?.clearSearchResult()
+        prevTextChapter?.clearSearchResult()
+        nextTextChapter?.clearSearchResult()
+    }
+
+    fun uploadProgress(successAction: (() -> Unit)? = null) {
         book?.let {
-            Coroutine.async {
+            launch(IO) {
                 AppWebDav.uploadBookProgress(it)
-                it.save()
+                ensureActive()
+                it.update()
+                successAction?.invoke()
+            }
+        }
+    }
+
+    /**
+     * 同步阅读进度
+     * 如果当前进度快于服务器进度或者没有进度进行上传，如果慢与服务器进度则执行传入动作
+     */
+    fun syncProgress(
+        newProgressAction: ((progress: BookProgress) -> Unit)? = null,
+        uploadSuccessAction: (() -> Unit)? = null,
+        syncSuccessAction: (() -> Unit)? = null
+    ) {
+        if (!AppConfig.syncBookProgress) return
+        val book = book ?: return
+        Coroutine.async {
+            AppWebDav.getBookProgress(book)
+        }.onError {
+            AppLog.put("拉取阅读进度失败", it)
+        }.onSuccess { progress ->
+            if (progress == null || progress.durChapterIndex < book.durChapterIndex ||
+                (progress.durChapterIndex == book.durChapterIndex
+                        && progress.durChapterPos < book.durChapterPos)
+            ) {
+                // 服务器没有进度或者进度比服务器快，上传现有进度
+                Coroutine.async {
+                    AppWebDav.uploadBookProgress(BookProgress(book), uploadSuccessAction)
+                    book.update()
+                }
+            } else if (progress.durChapterIndex > book.durChapterIndex ||
+                progress.durChapterPos > book.durChapterPos
+            ) {
+                // 进度比服务器慢，执行传入动作
+                newProgressAction?.invoke(progress)
+            } else {
+                syncSuccessAction?.invoke()
             }
         }
     }
 
     fun upReadTime() {
-        Coroutine.async(executeContext = IO) {
+        executor.execute {
+            if (!AppConfig.enableReadRecord) {
+                return@execute
+            }
             readRecord.readTime = readRecord.readTime + System.currentTimeMillis() - readStartTime
             readStartTime = System.currentTimeMillis()
             readRecord.lastRead = System.currentTimeMillis()
-            if (AppConfig.enableReadRecord) {
-                appDb.readRecordDao.insert(readRecord)
-            }
+            appDb.readRecordDao.insert(readRecord)
         }
     }
 
@@ -177,9 +305,11 @@ object ReadBook : CoroutineScope by MainScope() {
             val nextPagePos = it.getNextPageLength(durChapterPos)
             if (nextPagePos >= 0) {
                 hasNextPage = true
+                it.getPage(durPageIndex)?.removePageAloudSpan()
                 durChapterPos = nextPagePos
+                callBack?.cancelSelect()
                 callBack?.upContent()
-                saveRead()
+                saveRead(true)
             }
         }
         return hasNextPage
@@ -193,14 +323,14 @@ object ReadBook : CoroutineScope by MainScope() {
                 hasPrevPage = true
                 durChapterPos = prevPagePos
                 callBack?.upContent()
-                saveRead()
+                saveRead(true)
             }
         }
         return hasPrevPage
     }
 
-    fun moveToNextChapter(upContent: Boolean): Boolean {
-        if (durChapterIndex < chapterSize - 1) {
+    fun moveToNextChapter(upContent: Boolean, upContentInPlace: Boolean = true): Boolean {
+        if (durChapterIndex < simulatedChapterSize - 1) {
             durChapterPos = 0
             durChapterIndex++
             prevTextChapter = curTextChapter
@@ -208,9 +338,9 @@ object ReadBook : CoroutineScope by MainScope() {
             nextTextChapter = null
             if (curTextChapter == null) {
                 AppLog.putDebug("moveToNextChapter-章节未加载,开始加载")
-                callBack?.upContent()
+                if (upContentInPlace) callBack?.upContent()
                 loadContent(durChapterIndex, upContent, resetPageOffset = false)
-            } else if (upContent) {
+            } else if (upContent && upContentInPlace) {
                 AppLog.putDebug("moveToNextChapter-章节已加载,刷新视图")
                 callBack?.upContent()
             }
@@ -226,9 +356,40 @@ object ReadBook : CoroutineScope by MainScope() {
         }
     }
 
+    suspend fun moveToNextChapterAwait(
+        upContent: Boolean,
+        upContentInPlace: Boolean = true
+    ): Boolean {
+        if (durChapterIndex < simulatedChapterSize - 1) {
+            durChapterPos = 0
+            durChapterIndex++
+            prevTextChapter = curTextChapter
+            curTextChapter = nextTextChapter
+            nextTextChapter = null
+            if (curTextChapter == null) {
+                AppLog.putDebug("moveToNextChapter-章节未加载,开始加载")
+                if (upContentInPlace) callBack?.upContentAwait()
+                loadContentAwait(durChapterIndex, upContent, resetPageOffset = false)
+            } else if (upContent && upContentInPlace) {
+                AppLog.putDebug("moveToNextChapter-章节已加载,刷新视图")
+                callBack?.upContentAwait()
+            }
+            loadContent(durChapterIndex.plus(1), upContent, false)
+            saveRead()
+            callBack?.upMenuView()
+            AppLog.putDebug("moveToNextChapter-curPageChanged()")
+            curPageChanged()
+            return true
+        } else {
+            AppLog.putDebug("跳转下一章失败,没有下一章")
+            return false
+        }
+    }
+
     fun moveToPrevChapter(
         upContent: Boolean,
-        toLast: Boolean = true
+        toLast: Boolean = true,
+        upContentInPlace: Boolean = true
     ): Boolean {
         if (durChapterIndex > 0) {
             durChapterPos = if (toLast) prevTextChapter?.lastReadLength ?: Int.MAX_VALUE else 0
@@ -237,9 +398,9 @@ object ReadBook : CoroutineScope by MainScope() {
             curTextChapter = prevTextChapter
             prevTextChapter = null
             if (curTextChapter == null) {
-                callBack?.upContent()
+                if (upContentInPlace) callBack?.upContent()
                 loadContent(durChapterIndex, upContent, resetPageOffset = false)
-            } else if (upContent) {
+            } else if (upContent && upContentInPlace) {
                 callBack?.upContent()
             }
             loadContent(durChapterIndex.minus(1), upContent, false)
@@ -258,26 +419,57 @@ object ReadBook : CoroutineScope by MainScope() {
             success?.invoke()
         }
         curPageChanged()
-        saveRead()
+        saveRead(true)
     }
 
     fun setPageIndex(index: Int) {
+        recycleRecorders(durPageIndex, index)
         durChapterPos = curTextChapter?.getReadLength(index) ?: index
-        saveRead()
+        saveRead(true)
         curPageChanged(true)
+    }
+
+    fun recycleRecorders(beforeIndex: Int, afterIndex: Int) {
+        if (!AppConfig.optimizeRender) {
+            return
+        }
+        executor.execute {
+            val textChapter = curTextChapter ?: return@execute
+            if (afterIndex > beforeIndex) {
+                textChapter.getPage(afterIndex - 2)?.recycleRecorders()
+            }
+            if (afterIndex < beforeIndex) {
+                textChapter.getPage(afterIndex + 3)?.recycleRecorders()
+            }
+        }
+    }
+
+    fun openChapter(index: Int, durChapterPos: Int = 0, success: (() -> Unit)? = null) {
+        if (index < chapterSize) {
+            clearTextChapter()
+            callBack?.upContent()
+            durChapterIndex = index
+            ReadBook.durChapterPos = durChapterPos
+            saveRead()
+            loadContent(resetPageOffset = true) {
+                success?.invoke()
+            }
+        }
     }
 
     /**
      * 当前页面变化
      */
-    private fun curPageChanged(pauseReadAloud: Boolean = false) {
+    private fun curPageChanged(pageChanged: Boolean = false) {
         callBack?.pageChanged()
-        if (BaseReadAloudService.isRun) {
-            val scrollPageAnim = pageAnim() == 3
-            if (scrollPageAnim && pauseReadAloud) {
-                ReadAloud.pause(appCtx)
-            } else {
-                readAloud(!BaseReadAloudService.pause)
+        curTextChapter?.let {
+            if (BaseReadAloudService.isRun && it.isCompleted) {
+                val scrollPageAnim = pageAnim() == 3
+                if (scrollPageAnim && pageChanged) {
+                    ReadAloud.pause(appCtx)
+                } else {
+                    readAloud(!BaseReadAloudService.pause)
+                }
             }
         }
         upReadTime()
@@ -288,7 +480,9 @@ object ReadBook : CoroutineScope by MainScope() {
      * 朗读
      */
     fun readAloud(play: Boolean = true, startPos: Int = 0) {
-        book?.let {
+        book ?: return
+        val textChapter = curTextChapter ?: return
+        if (textChapter.isCompleted) {
             ReadAloud.play(appCtx, play, startPos = startPos)
         }
     }
@@ -300,6 +494,15 @@ object ReadBook : CoroutineScope by MainScope() {
         get() {
             return curTextChapter?.getPageIndexByCharIndex(durChapterPos) ?: durChapterPos
         }
+
+    /**
+     * 是否排版到了当前阅读位置
+     */
+    val isLayoutAvailable inline get() = durPageIndex >= 0
+
+    val isScroll inline get() = pageAnim() == scrollPageAnim
+
+    val contentLoadFinish get() = curTextChapter != null || msg != null
 
     /**
      * chapterOnDur: 0为当前页,1为下一页,-1为上一页
@@ -329,6 +532,20 @@ object ReadBook : CoroutineScope by MainScope() {
         loadContent(durChapterIndex - 1, resetPageOffset = resetPageOffset)
     }
 
+    fun loadOrUpContent() {
+        if (curTextChapter == null) {
+            loadContent(durChapterIndex)
+        } else {
+            callBack?.upContent()
+        }
+        if (nextTextChapter == null) {
+            loadContent(durChapterIndex + 1)
+        }
+        if (prevTextChapter == null) {
+            loadContent(durChapterIndex - 1)
+        }
+    }
+
     /**
      * 加载章节内容
      * @param index 章节序号
@@ -342,29 +559,47 @@ object ReadBook : CoroutineScope by MainScope() {
         resetPageOffset: Boolean = false,
         success: (() -> Unit)? = null
     ) {
-        if (addLoading(index)) {
-            Coroutine.async {
-                val book = book!!
-                appDb.bookChapterDao.getChapter(book.bookUrl, index)?.let { chapter ->
-                    BookHelp.getContent(book, chapter)?.let {
-                        contentLoadFinish(
-                            book,
-                            chapter,
-                            it,
-                            upContent,
-                            resetPageOffset
-                        ) {
-                            success?.invoke()
-                        }
-                    } ?: download(
-                        downloadScope,
+        Coroutine.async {
+            val book = book!!
+            val chapter = appDb.bookChapterDao.getChapter(book.bookUrl, index) ?: return@async
+            if (addLoading(index)) {
+                BookHelp.getContent(book, chapter)?.let {
+                    contentLoadFinish(
+                        book,
                         chapter,
-                        resetPageOffset
+                        it,
+                        upContent,
+                        resetPageOffset,
+                        success = success
                     )
-                } ?: removeLoading(index)
-            }.onError {
+                } ?: download(
+                    downloadScope,
+                    chapter,
+                    resetPageOffset
+                )
+            }
+        }.onError {
+            AppLog.put("加载正文出错\n${it.localizedMessage}")
+        }
+    }
+
+    suspend fun loadContentAwait(
+        index: Int,
+        upContent: Boolean = true,
+        resetPageOffset: Boolean = false,
+        success: (() -> Unit)? = null
+    ) = withContext(IO) {
+        if (addLoading(index)) {
+            try {
+                val book = book!!
+                val chapter = appDb.bookChapterDao.getChapter(book.bookUrl, index)!!
+                val content = BookHelp.getContent(book, chapter) ?: downloadAwait(chapter)
+                contentLoadFinishAwait(book, chapter, content, upContent, resetPageOffset)
+                success?.invoke()
+            } catch (e: Exception) {
+                AppLog.put("加载正文出错\n${e.localizedMessage}")
+            } finally {
                 removeLoading(index)
-                AppLog.put("加载正文出错\n${it.localizedMessage}")
             }
         }
     }
@@ -379,19 +614,13 @@ object ReadBook : CoroutineScope by MainScope() {
             return
         }
         val book = book ?: return
-        if (addLoading(index)) {
-            try {
-                appDb.bookChapterDao.getChapter(book.bookUrl, index)?.let { chapter ->
-                    if (BookHelp.hasContent(book, chapter)) {
-                        removeLoading(chapter.index)
-                        downloadedChapters.add(chapter.index)
-                    } else {
-                        delay(1000)
-                        download(downloadScope, chapter, false)
-                    }
-                } ?: removeLoading(index)
-            } catch (e: Exception) {
-                removeLoading(index)
+        val chapter = appDb.bookChapterDao.getChapter(book.bookUrl, index) ?: return
+        if (BookHelp.hasContent(book, chapter)) {
+            downloadedChapters.add(chapter.index)
+        } else {
+            delay(1000)
+            if (addLoading(index)) {
+                download(downloadScope, chapter, false, preDownloadSemaphore)
             }
         }
     }
@@ -403,12 +632,13 @@ object ReadBook : CoroutineScope by MainScope() {
         scope: CoroutineScope,
         chapter: BookChapter,
         resetPageOffset: Boolean,
+        semaphore: Semaphore? = null,
         success: (() -> Unit)? = null
     ) {
         val book = book ?: return removeLoading(chapter.index)
         val bookSource = bookSource
         if (bookSource != null) {
-            CacheBook.getOrCreate(bookSource, book).download(scope, chapter)
+            CacheBook.getOrCreate(bookSource, book).download(scope, chapter, semaphore)
         } else {
             val msg = if (book.isLocal) "无内容" else "没有书源"
             contentLoadFinish(
@@ -416,24 +646,32 @@ object ReadBook : CoroutineScope by MainScope() {
                 chapter,
                 "加载正文失败\n$msg",
                 resetPageOffset = resetPageOffset,
-            ) {
-                success?.invoke()
-            }
+                success = success
+            )
         }
     }
 
+    private suspend fun downloadAwait(chapter: BookChapter): String {
+        val book = book!!
+        val bookSource = bookSource
+        if (bookSource != null) {
+            return CacheBook.getOrCreate(bookSource, book).downloadAwait(chapter)
+        } else {
+            val msg = if (book.isLocal) "无内容" else "没有书源"
+            return "加载正文失败\n$msg"
+        }
+    }
+
+    @Synchronized
     private fun addLoading(index: Int): Boolean {
-        synchronized(this) {
-            if (loadingChapters.contains(index)) return false
-            loadingChapters.add(index)
-            return true
-        }
+        if (loadingChapters.contains(index)) return false
+        loadingChapters.add(index)
+        return true
     }
 
+    @Synchronized
     fun removeLoading(index: Int) {
-        synchronized(this) {
-            loadingChapters.remove(index)
-        }
+        loadingChapters.remove(index)
     }
 
     /**
@@ -445,10 +683,11 @@ object ReadBook : CoroutineScope by MainScope() {
         content: String,
         upContent: Boolean = true,
         resetPageOffset: Boolean,
+        canceled: Boolean = false,
         success: (() -> Unit)? = null
     ) {
         removeLoading(chapter.index)
-        if (chapter.index !in durChapterIndex - 1..durChapterIndex + 1) {
+        if (canceled || chapter.index !in durChapterIndex - 1..durChapterIndex + 1) {
             return
         }
         Coroutine.async {
@@ -459,28 +698,52 @@ object ReadBook : CoroutineScope by MainScope() {
             )
             val contents = contentProcessor
                 .getContent(book, chapter, content, includeTitle = false)
-            val textChapter = ChapterProvider
-                .getTextChapter(book, chapter, displayTitle, contents, chapterSize)
+            val textChapter = ChapterProvider.getTextChapterAsync(
+                this@ReadBook, book, chapter, displayTitle, contents, simulatedChapterSize
+            )
             when (val offset = chapter.index - durChapterIndex) {
                 0 -> {
                     curTextChapter = textChapter
-                    if (upContent) callBack?.upContent(offset, resetPageOffset)
                     callBack?.upMenuView()
+                    var available = false
+                    for (page in textChapter.layoutChannel) {
+                        val index = page.index
+                        if (!available && page.containPos(durChapterPos)) {
+                            if (upContent) {
+                                callBack?.upContent(offset, resetPageOffset)
+                            }
+                            available = true
+                        }
+                        if (upContent && isScroll) {
+                            if (max(index - 3, 0) < durPageIndex) {
+                                callBack?.upContent(offset, false)
+                            }
+                        }
+                        callBack?.onLayoutPageCompleted(index, page)
+                    }
+                    if (upContent) callBack?.upContent(offset, !available && resetPageOffset)
                     curPageChanged()
                     callBack?.contentLoadFinish()
                 }
 
                 -1 -> {
                     prevTextChapter = textChapter
+                    textChapter.layoutChannel.receiveAsFlow().collect()
                     if (upContent) callBack?.upContent(offset, resetPageOffset)
                 }
 
                 1 -> {
                     nextTextChapter = textChapter
-                    if (upContent) callBack?.upContent(offset, resetPageOffset)
+                    for (page in textChapter.layoutChannel) {
+                        if (page.index > 1) {
+                            continue
+                        }
+                        if (upContent) callBack?.upContent(offset, resetPageOffset)
+                    }
                 }
             }
-            Unit
+
+            return@async
         }.onError {
             AppLog.put("ChapterProvider ERROR", it)
             appCtx.toastOnUi("ChapterProvider ERROR:\n${it.stackTraceStr}")
@@ -489,18 +752,93 @@ object ReadBook : CoroutineScope by MainScope() {
         }
     }
 
+    suspend fun contentLoadFinishAwait(
+        book: Book,
+        chapter: BookChapter,
+        content: String,
+        upContent: Boolean = true,
+        resetPageOffset: Boolean
+    ) {
+        removeLoading(chapter.index)
+        if (chapter.index !in durChapterIndex - 1..durChapterIndex + 1) {
+            return
+        }
+        kotlin.runCatching {
+            val contentProcessor = ContentProcessor.get(book.name, book.origin)
+            val displayTitle = chapter.getDisplayTitle(
+                contentProcessor.getTitleReplaceRules(),
+                book.getUseReplaceRule()
+            )
+            val contents = contentProcessor
+                .getContent(book, chapter, content, includeTitle = false)
+            val textChapter = ChapterProvider.getTextChapterAsync(
+                this@ReadBook, book, chapter, displayTitle, contents, simulatedChapterSize
+            )
+            when (val offset = chapter.index - durChapterIndex) {
+                0 -> {
+                    curTextChapter = textChapter
+                    callBack?.upMenuView()
+                    var available = false
+                    for (page in textChapter.layoutChannel) {
+                        val index = page.index
+                        if (!available && page.containPos(durChapterPos)) {
+                            if (upContent) {
+                                callBack?.upContent(offset, resetPageOffset)
+                            }
+                            available = true
+                        }
+                        if (upContent && isScroll) {
+                            if (max(index - 3, 0) < durPageIndex) {
+                                callBack?.upContent(offset, false)
+                            }
+                        }
+                        callBack?.onLayoutPageCompleted(index, page)
+                    }
+                    if (upContent) callBack?.upContent(offset, !available && resetPageOffset)
+                    curPageChanged()
+                    callBack?.contentLoadFinish()
+                }
+
+                -1 -> {
+                    prevTextChapter = textChapter
+                    textChapter.layoutChannel.receiveAsFlow().collect()
+                    if (upContent) callBack?.upContent(offset, resetPageOffset)
+                }
+
+                1 -> {
+                    nextTextChapter = textChapter
+                    for (page in textChapter.layoutChannel) {
+                        if (page.index > 1) {
+                            continue
+                        }
+                        if (upContent) callBack?.upContent(offset, resetPageOffset)
+                    }
+                }
+            }
+
+            return
+        }.onFailure {
+            AppLog.put("ChapterProvider ERROR", it)
+            appCtx.toastOnUi("ChapterProvider ERROR:\n${it.stackTraceStr}")
+        }
+    }
+
     @Synchronized
     fun upToc() {
         val bookSource = bookSource ?: return
         val book = book ?: return
+        if (!book.canUpdate) return
         if (System.currentTimeMillis() - book.lastCheckTime < 600000) return
         book.lastCheckTime = System.currentTimeMillis()
         WebBook.getChapterList(this, bookSource, book).onSuccess(IO) { cList ->
             if (book.bookUrl == ReadBook.book?.bookUrl
                 && cList.size > chapterSize
             ) {
+                appDb.bookChapterDao.delByBook(book.bookUrl)
                 appDb.bookChapterDao.insert(*cList.toTypedArray())
+                saveRead()
                 chapterSize = cList.size
+                simulatedChapterSize = book.simulatedTotalChapterNum()
                 nextTextChapter ?: loadContent(durChapterIndex + 1)
             }
         }
@@ -518,18 +856,19 @@ object ReadBook : CoroutineScope by MainScope() {
         saveRead()
     }
 
-    fun saveRead() {
-        Coroutine.async(executeContext = IO) {
-            val book = book ?: return@async
+    fun saveRead(pageChanged: Boolean = false) {
+        executor.execute {
+            val book = book ?: return@execute
             book.lastCheckCount = 0
             book.durChapterTime = System.currentTimeMillis()
             val chapterChanged = book.durChapterIndex != durChapterIndex
             book.durChapterIndex = durChapterIndex
             book.durChapterPos = durChapterPos
-            if (chapterChanged) {
+            if (!pageChanged || chapterChanged) {
                 appDb.bookChapterDao.getChapter(book.bookUrl, durChapterIndex)?.let {
                     book.durChapterTitle = it.getDisplayTitle(
-                        ContentProcessor.get(book.name, book.origin).getTitleReplaceRules()
+                        ContentProcessor.get(book.name, book.origin).getTitleReplaceRules(),
+                        book.getUseReplaceRule()
                     )
                 }
             }
@@ -542,32 +881,83 @@ object ReadBook : CoroutineScope by MainScope() {
      */
     private fun preDownload() {
         if (book?.isLocal == true) return
-        if (AppConfig.preDownloadNum < 2) {
-            return
-        }
-        preDownloadTask?.cancel()
-        preDownloadTask = Coroutine.async(executeContext = IO) {
-            //预下载
-            launch {
-                val maxChapterIndex = min(durChapterIndex + AppConfig.preDownloadNum, chapterSize)
-                for (i in durChapterIndex.plus(2)..maxChapterIndex) {
-                    if (downloadedChapters.contains(i)) continue
-                    if ((downloadFailChapters[i] ?: 0) >= 3) continue
-                    downloadIndex(i)
-                }
+        executor.execute {
+            if (AppConfig.preDownloadNum < 2) {
+                return@execute
             }
-            launch {
-                val minChapterIndex = durChapterIndex - min(5, AppConfig.preDownloadNum)
-                for (i in durChapterIndex.minus(2) downTo minChapterIndex) {
-                    if (downloadedChapters.contains(i)) continue
-                    if ((downloadFailChapters[i] ?: 0) >= 3) continue
-                    downloadIndex(i)
+            preDownloadTask?.cancel()
+            preDownloadTask = launch(IO) {
+                //预下载
+                launch {
+                    val maxChapterIndex =
+                        min(durChapterIndex + AppConfig.preDownloadNum, chapterSize)
+                    for (i in durChapterIndex.plus(2)..maxChapterIndex) {
+                        if (downloadedChapters.contains(i)) continue
+                        if ((downloadFailChapters[i] ?: 0) >= 3) continue
+                        downloadIndex(i)
+                    }
+                }
+                launch {
+                    val minChapterIndex = durChapterIndex - min(5, AppConfig.preDownloadNum)
+                    for (i in durChapterIndex.minus(2) downTo minChapterIndex) {
+                        if (downloadedChapters.contains(i)) continue
+                        if ((downloadFailChapters[i] ?: 0) >= 3) continue
+                        downloadIndex(i)
+                    }
                 }
             }
         }
     }
 
-    interface CallBack {
+    fun cancelPreDownloadTask() {
+        if (contentLoadFinish) {
+            preDownloadTask?.cancel()
+            downloadScope.coroutineContext.cancelChildren()
+        }
+    }
+
+    fun onChapterListUpdated(newBook: Book) {
+        if (newBook.isSameNameAuthor(book)) {
+            book = newBook
+            chapterSize = newBook.totalChapterNum
+            simulatedChapterSize = newBook.simulatedTotalChapterNum()
+            if (simulatedChapterSize > 0 && durChapterIndex > simulatedChapterSize - 1) {
+                durChapterIndex = simulatedChapterSize - 1
+            }
+            if (callBack == null) {
+                clearTextChapter()
+            } else {
+                loadContent(true)
+            }
+        }
+    }
+
+    /**
+     * 注册回调
+     */
+    fun register(cb: CallBack) {
+        callBack?.notifyBookChanged()
+        callBack = cb
+    }
+
+    /**
+     * 取消注册回调
+     */
+    fun unregister(cb: CallBack) {
+        if (callBack === cb) {
+            callBack = null
+        }
+        msg = null
+        preDownloadTask?.cancel()
+        downloadScope.coroutineContext.cancelChildren()
+        coroutineContext.cancelChildren()
+        ImageProvider.clear()
+        if (!CacheBookService.isRun) {
+            CacheBook.close()
+        }
+    }
+
+    interface CallBack : LayoutProgressListener {
         fun upMenuView()
 
         fun loadChapterList(book: Book)
@@ -578,13 +968,23 @@ object ReadBook : CoroutineScope by MainScope() {
             success: (() -> Unit)? = null
         )
 
+        suspend fun upContentAwait(
+            relativePosition: Int = 0,
+            resetPageOffset: Boolean = true,
+            success: (() -> Unit)? = null
+        )
+
         fun pageChanged()
 
         fun contentLoadFinish()
 
-        fun upPageAnim()
+        fun upPageAnim(upRecorder: Boolean = false)
 
         fun notifyBookChanged()
+
+        fun sureNewProgress(progress: BookProgress)
+
+        fun cancelSelect()
     }
 
 }

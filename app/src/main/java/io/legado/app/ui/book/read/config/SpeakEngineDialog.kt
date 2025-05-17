@@ -14,6 +14,7 @@ import io.legado.app.R
 import io.legado.app.base.BaseDialogFragment
 import io.legado.app.base.adapter.ItemViewHolder
 import io.legado.app.base.adapter.RecyclerAdapter
+import io.legado.app.constant.AppLog
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.HttpTTS
 import io.legado.app.databinding.DialogEditTextBinding
@@ -44,13 +45,16 @@ import io.legado.app.utils.splitNotBlank
 import io.legado.app.utils.startActivity
 import io.legado.app.utils.viewbindingdelegate.viewBinding
 import io.legado.app.utils.visible
+import kotlinx.coroutines.Dispatchers.IO
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.conflate
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.launch
 
 /**
  * tts引擎管理
  */
-class SpeakEngineDialog(val callBack: CallBack) : BaseDialogFragment(R.layout.dialog_recycler_view),
+class SpeakEngineDialog() : BaseDialogFragment(R.layout.dialog_recycler_view),
     Toolbar.OnMenuItemClickListener {
 
     private val binding by viewBinding(DialogRecyclerViewBinding::bind)
@@ -59,6 +63,7 @@ class SpeakEngineDialog(val callBack: CallBack) : BaseDialogFragment(R.layout.di
     private val adapter by lazy { Adapter(requireContext()) }
     private var ttsEngine: String? = ReadAloud.ttsEngine
     private val sysTtsViews = arrayListOf<RadioButton>()
+    private val callBack: CallBack? get() = parentFragment as? CallBack
     private val importDocResult = registerForActivityResult(HandleFileContract()) {
         it.uri?.let { uri ->
             viewModel.importLocal(uri)
@@ -136,7 +141,7 @@ class SpeakEngineDialog(val callBack: CallBack) : BaseDialogFragment(R.layout.di
         tvFooterLeft.visible()
         tvFooterLeft.setOnClickListener {
             ReadBook.book?.setTtsEngine(ttsEngine)
-            callBack.upSpeakEngineSummary()
+            callBack?.upSpeakEngineSummary()
             ReadAloud.upReadAloudClass()
             dismissAllowingStateLoss()
         }
@@ -145,7 +150,7 @@ class SpeakEngineDialog(val callBack: CallBack) : BaseDialogFragment(R.layout.di
         tvOk.setOnClickListener {
             ReadBook.book?.setTtsEngine(null)
             AppConfig.ttsEngine = ttsEngine
-            callBack.upSpeakEngineSummary()
+            callBack?.upSpeakEngineSummary()
             ReadAloud.upReadAloudClass()
             dismissAllowingStateLoss()
         }
@@ -163,7 +168,9 @@ class SpeakEngineDialog(val callBack: CallBack) : BaseDialogFragment(R.layout.di
 
     private fun initData() {
         lifecycleScope.launch {
-            appDb.httpTTSDao.flowAll().conflate().collect {
+            appDb.httpTTSDao.flowAll().catch {
+                AppLog.put("朗读引擎界面获取数据失败\n${it.localizedMessage}", it)
+            }.flowOn(IO).conflate().collect {
                 adapter.setItems(it)
             }
         }
@@ -209,7 +216,7 @@ class SpeakEngineDialog(val callBack: CallBack) : BaseDialogFragment(R.layout.di
             customView { alertBinding.root }
             okButton {
                 alertBinding.editView.text?.toString()?.let { url ->
-                    if (!cacheUrls.contains(url)) {
+                    if (url.isAbsUrl() && !cacheUrls.contains(url)) {
                         cacheUrls.add(0, url)
                         aCache.put(ttsUrlKey, cacheUrls.joinToString(","))
                     }

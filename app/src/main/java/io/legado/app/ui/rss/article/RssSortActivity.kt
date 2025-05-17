@@ -5,7 +5,6 @@ package io.legado.app.ui.rss.article
 import android.os.Bundle
 import android.view.Menu
 import android.view.MenuItem
-import android.view.MotionEvent
 import android.view.ViewGroup
 import androidx.activity.viewModels
 import androidx.fragment.app.Fragment
@@ -55,15 +54,6 @@ class RssSortActivity : VMBaseActivity<ActivityRssArtivlesBinding, RssSortViewMo
         }
     }
 
-    override fun dispatchTouchEvent(ev: MotionEvent?): Boolean {
-        return try {
-            super.dispatchTouchEvent(ev)
-        } catch (e: IllegalArgumentException) {
-            e.printStackTrace()
-            false
-        }
-    }
-
     override fun onCompatCreateOptionsMenu(menu: Menu): Boolean {
         menuInflater.inflate(R.menu.rss_articles, menu)
         return super.onCompatCreateOptionsMenu(menu)
@@ -99,6 +89,10 @@ class RssSortActivity : VMBaseActivity<ActivityRssArtivlesBinding, RssSortViewMo
             R.id.menu_switch_layout -> {
                 viewModel.switchLayout()
                 upFragments()
+            }
+
+            R.id.menu_read_record -> {
+                showDialogFragment<ReadRecordDialog>()
             }
         }
         return super.onCompatOptionsItemSelected(item)

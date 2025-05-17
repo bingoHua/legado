@@ -8,6 +8,7 @@ import android.database.Cursor
 import android.net.Uri
 import android.os.ParcelFileDescriptor
 import android.provider.DocumentsContract
+import androidx.core.net.toUri
 import androidx.documentfile.provider.DocumentFile
 import io.legado.app.exception.NoStackTraceException
 import splitties.init.appCtx
@@ -16,6 +17,7 @@ import java.io.File
 import java.io.InputStream
 import java.io.OutputStream
 import java.nio.charset.Charset
+import java.util.concurrent.atomic.AtomicInteger
 
 
 data class FileDoc(
@@ -36,17 +38,14 @@ data class FileDoc(
         return uri.readBytes(appCtx)
     }
 
+    fun readText(): String {
+        return uri.readText(appCtx)
+    }
+
     fun asDocumentFile(): DocumentFile? {
         if (isContentScheme) {
             return if (isDir) {
-                Class.forName("androidx.documentfile.provider.TreeDocumentFile")
-                    .getDeclaredConstructor(
-                        DocumentFile::class.java,
-                        Context::class.java,
-                        Uri::class.java
-                    ).apply {
-                        isAccessible = true
-                    }.newInstance(null, appCtx, uri) as DocumentFile
+                treeDocumentFileConstructor.newInstance(null, appCtx, uri) as DocumentFile
             } else {
                 DocumentFile.fromSingleUri(appCtx, uri)
             }
@@ -62,6 +61,25 @@ data class FileDoc(
     }
 
     companion object {
+
+        private val treeDocumentFileConstructor by lazy {
+            Class.forName("androidx.documentfile.provider.TreeDocumentFile")
+                .getDeclaredConstructor(
+                    DocumentFile::class.java,
+                    Context::class.java,
+                    Uri::class.java
+                ).apply {
+                    isAccessible = true
+                }
+        }
+
+        fun fromDir(path: String): FileDoc {
+            return fromUri(path.toUri(), true)
+        }
+
+        fun fromFile(path: String): FileDoc {
+            return fromUri(path.toUri(), false)
+        }
 
         fun fromUri(uri: Uri, isDir: Boolean): FileDoc {
             if (uri.isContentScheme()) {
@@ -157,7 +175,8 @@ fun FileDoc.list(filter: FileDocFilter? = null): ArrayList<FileDoc>? {
                         do {
                             val item = FileDoc(
                                 name = cursor.getString(nci),
-                                isDir = cursor.getString(mci) == DocumentsContract.Document.MIME_TYPE_DIR,
+                                isDir = cursor.getString(mci) ==
+                                        DocumentsContract.Document.MIME_TYPE_DIR,
                                 size = cursor.getLong(sci),
                                 lastModified = cursor.getLong(dci),
                                 uri = DocumentsContract.buildDocumentUriUsingTree(
@@ -198,6 +217,39 @@ fun FileDoc.find(name: String, depth: Int = 0): FileDoc? {
         list?.forEach {
             if (it.isDir) {
                 val fileDoc = it.find(name, depth - 1)
+                if (fileDoc != null) {
+                    return fileDoc
+                }
+            }
+        }
+    }
+    return null
+}
+
+/**
+ * 查找文档, 如果存在则返回文档,如果不存在返回空
+ * @param name 文件名
+ * @param depth 查找文件夹深度
+ * @param maxFinds 最大查找文件夹数量
+ */
+fun FileDoc.find(name: String, depth: Int = 0, maxFinds: Int = Int.MAX_VALUE): FileDoc? {
+    return find(name, depth, AtomicInteger(maxFinds))
+}
+
+private fun FileDoc.find(name: String, depth: Int, maxFinds: AtomicInteger): FileDoc? {
+    if (maxFinds.getAndDecrement() <= 0) {
+        return null
+    }
+    val list = list()
+    list?.forEach {
+        if (it.name == name) {
+            return it
+        }
+    }
+    if (depth > 0) {
+        list?.forEach {
+            if (it.isDir) {
+                val fileDoc = it.find(name, depth - 1, maxFinds)
                 if (fileDoc != null) {
                     return fileDoc
                 }
@@ -280,6 +332,14 @@ fun FileDoc.writeText(text: String) {
     }
 }
 
+fun FileDoc.writeFile(file: File) {
+    openOutputStream().getOrThrow().use { out ->
+        file.inputStream().use {
+            it.copyTo(out)
+        }
+    }
+}
+
 fun FileDoc.delete() {
     asFile()?.let {
         FileUtils.delete(it, true)
@@ -287,14 +347,14 @@ fun FileDoc.delete() {
     asDocumentFile()?.delete()
 }
 
-fun FileDoc.checkWrite(): Boolean? {
+fun FileDoc.checkWrite(): Boolean {
     if (!isDir) {
         throw NoStackTraceException("只能检查目录")
     }
     asFile()?.let {
         return it.checkWrite()
     }
-    return asDocumentFile()?.checkWrite()
+    return asDocumentFile()!!.checkWrite()
 }
 
 /**
@@ -341,17 +401,22 @@ fun DocumentFile.readBytes(context: Context): ByteArray {
 }
 
 fun DocumentFile.checkWrite(): Boolean {
+    var file: DocumentFile? = null
     return try {
         val filename = System.currentTimeMillis().toString()
-        createFile(FileUtils.getMimeType(filename), filename)?.let {
-            it.openOutputStream()?.let { out ->
-                out.use { }
-                it.delete()
-                return true
+        file = createFile(FileUtils.getMimeType(filename), filename)
+        file?.openOutputStream()?.let { out ->
+            out.bufferedWriter().use { it.write(filename) }
+            file.openInputStream()?.let { input ->
+                input.bufferedReader().use {
+                    return it.readText() == filename
+                }
             }
         }
         false
     } catch (e: Exception) {
         false
+    } finally {
+        file?.delete()
     }
 }

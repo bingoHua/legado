@@ -2,20 +2,28 @@ package io.legado.app.ui.book.source.manage
 
 import android.annotation.SuppressLint
 import android.os.Bundle
-import android.view.*
-import android.widget.EditText
+import android.view.Menu
+import android.view.MenuItem
+import android.view.MotionEvent
+import android.view.SubMenu
+import android.view.WindowManager
 import androidx.activity.viewModels
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.widget.PopupMenu
 import androidx.appcompat.widget.SearchView
 import androidx.core.os.bundleOf
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.LifecycleRegistry
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.recyclerview.widget.ItemTouchHelper
 import com.google.android.material.snackbar.Snackbar
 import io.legado.app.R
 import io.legado.app.base.VMBaseActivity
 import io.legado.app.constant.AppLog
 import io.legado.app.constant.EventBus
+import io.legado.app.data.AppDatabase
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.BookSourcePart
 import io.legado.app.databinding.ActivityBookSourceBinding
@@ -36,19 +44,41 @@ import io.legado.app.ui.config.CheckSourceConfig
 import io.legado.app.ui.file.HandleFileContract
 import io.legado.app.ui.qrcode.QrCodeResult
 import io.legado.app.ui.widget.SelectActionBar
-import io.legado.app.ui.widget.dialog.TextDialog
 import io.legado.app.ui.widget.recycler.DragSelectTouchHelper
 import io.legado.app.ui.widget.recycler.ItemTouchCallback
 import io.legado.app.ui.widget.recycler.VerticalDivider
-import io.legado.app.utils.*
+import io.legado.app.utils.ACache
+import io.legado.app.utils.NetworkUtils
+import io.legado.app.utils.applyTint
+import io.legado.app.utils.cnCompare
+import io.legado.app.utils.dpToPx
+import io.legado.app.utils.flowWithLifecycleAndDatabaseChange
+import io.legado.app.utils.flowWithLifecycleAndDatabaseChangeFirst
+import io.legado.app.utils.hideSoftInput
+import io.legado.app.utils.isAbsUrl
+import io.legado.app.utils.launch
+import io.legado.app.utils.observeEvent
+import io.legado.app.utils.sendToClip
+import io.legado.app.utils.setEdgeEffectColor
+import io.legado.app.utils.share
+import io.legado.app.utils.shouldHideSoftInput
+import io.legado.app.utils.showDialogFragment
+import io.legado.app.utils.showHelp
+import io.legado.app.utils.splitNotBlank
+import io.legado.app.utils.startActivity
+import io.legado.app.utils.toastOnUi
+import io.legado.app.utils.transaction
 import io.legado.app.utils.viewbindingdelegate.viewBinding
-import kotlinx.coroutines.*
 import kotlinx.coroutines.Dispatchers.IO
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.conflate
-import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 
 /**
  * 书源管理界面
@@ -61,12 +91,13 @@ class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceV
     override val binding by viewBinding(ActivityBookSourceBinding::inflate)
     override val viewModel by viewModels<BookSourceViewModel>()
     private val importRecordKey = "bookSourceRecordKey"
-    private val adapter by lazy { BookSourceAdapter(this, this) }
+    private val adapter by lazy { BookSourceAdapter(this, this, binding.recyclerView) }
     private val itemTouchCallback by lazy { ItemTouchCallback(adapter) }
     private val searchView: SearchView by lazy {
         binding.titleBar.findViewById(R.id.search_view)
     }
     private var sourceFlowJob: Job? = null
+    private var checkMessageRefreshJob: Job? = null
     private val groups = linkedSetOf<String>()
     private var groupMenu: SubMenu? = null
     override var sort = BookSourceSort.Default
@@ -74,8 +105,8 @@ class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceV
     override var sortAscending = true
         private set
     private var snackBar: Snackbar? = null
-    private var isPaused = false
-    private var searchKey: String? = null
+    private var showDuplicationSource = false
+    private val hostMap = hashMapOf<String, String>()
     private val qrResult = registerForActivityResult(QrCodeResult()) {
         it ?: return@registerForActivityResult
         showDialogFragment(ImportBookSourceDialog(it))
@@ -102,6 +133,19 @@ class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceV
             }
         }
     }
+    private val groupMenuLifecycleOwner = object : LifecycleOwner {
+        private val registry = LifecycleRegistry(this)
+        override val lifecycle: Lifecycle get() = registry
+
+        fun onMenuOpened() {
+            registry.handleLifecycleEvent(Lifecycle.Event.ON_START)
+        }
+
+        fun onMenuClosed() {
+            registry.handleLifecycleEvent(Lifecycle.Event.ON_STOP)
+        }
+
+    }
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
         initRecyclerView()
@@ -111,16 +155,18 @@ class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceV
         initSelectActionBar()
         resumeCheckSource()
         if (!LocalConfig.bookSourcesHelpVersionIsLast) {
-            showHelp()
+            showHelp("SourceMBookHelp")
         }
     }
 
     override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
         if (ev.action == MotionEvent.ACTION_DOWN) {
             currentFocus?.let {
-                if (it is EditText) {
-                    it.clearFocus()
-                    it.hideSoftInput()
+                if (it.shouldHideSoftInput(ev)) {
+                    it.post {
+                        it.clearFocus()
+                        it.hideSoftInput()
+                    }
                 }
             }
         }
@@ -217,7 +263,22 @@ class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceV
                 searchView.setQuery(getString(R.string.no_group), true)
             }
 
-            R.id.menu_help -> showHelp()
+            R.id.menu_enabled_explore_group -> {
+                searchView.setQuery(getString(R.string.enabled_explore), true)
+            }
+
+            R.id.menu_disabled_explore_group -> {
+                searchView.setQuery(getString(R.string.disabled_explore), true)
+            }
+
+            R.id.menu_show_same_source -> {
+                item.isChecked = !item.isChecked
+                showDuplicationSource = item.isChecked
+                adapter.showSourceHost = item.isChecked
+                upBookSource(searchView.query?.toString())
+            }
+
+            R.id.menu_help -> showHelp("SourceMBookHelp")
         }
         if (item.groupId == R.id.source_group) {
             searchView.setQuery("group:${item.title}", true)
@@ -229,6 +290,7 @@ class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceV
         binding.recyclerView.setEdgeEffectColor(primaryColor)
         binding.recyclerView.addItemDecoration(VerticalDivider(this))
         binding.recyclerView.adapter = adapter
+        binding.recyclerView.recycledViewPool.setMaxRecycledViews(0, 15)
         // When this page is opened, it is in selection mode
         val dragSelectTouchHelper =
             DragSelectTouchHelper(adapter.dragSelectCallback).setSlideArea(16, 50)
@@ -240,15 +302,12 @@ class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceV
 
     private fun initSearchView() {
         searchView.applyTint(primaryTextColor)
-        searchView.onActionViewExpanded()
         searchView.queryHint = getString(R.string.search_book_source)
-        searchView.clearFocus()
         searchView.setOnQueryTextListener(this)
     }
 
 
     private fun upBookSource(searchKey: String? = null) {
-        this.searchKey = searchKey
         sourceFlowJob?.cancel()
         sourceFlowJob = lifecycleScope.launch {
             when {
@@ -272,6 +331,14 @@ class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceV
                     appDb.bookSourceDao.flowNoGroup()
                 }
 
+                searchKey == getString(R.string.enabled_explore) -> {
+                    appDb.bookSourceDao.flowEnabledExplore()
+                }
+
+                searchKey == getString(R.string.disabled_explore) -> {
+                    appDb.bookSourceDao.flowDisabledExplore()
+                }
+
                 searchKey.startsWith("group:") -> {
                     val key = searchKey.substringAfter("group:")
                     appDb.bookSourceDao.flowGroupSearch(key)
@@ -281,7 +348,13 @@ class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceV
                     appDb.bookSourceDao.flowSearch(searchKey)
                 }
             }.map { data ->
-                if (sortAscending) {
+                hostMap.clear()
+                if (showDuplicationSource) {
+                    data.sortedWith(
+                        compareBy<BookSourcePart> { getSourceHost(it.bookSourceUrl) == "#" }
+                            .thenBy { getSourceHost(it.bookSourceUrl) }
+                            .thenByDescending { it.lastUpdateTime })
+                } else if (sortAscending) {
                     when (sort) {
                         BookSourceSort.Weight -> data.sortedBy { it.weight }
                         BookSourceSort.Name -> data.sortedWith { o1, o2 ->
@@ -322,29 +395,39 @@ class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceV
                         else -> data.reversed()
                     }
                 }
-            }.catch {
+            }.flowWithLifecycleAndDatabaseChange(
+                lifecycle,
+                table = AppDatabase.BOOK_SOURCE_TABLE_NAME
+            ).catch {
                 AppLog.put("书源界面更新书源出错", it)
             }.flowOn(IO).conflate().collect { data ->
                 adapter.setItems(data, adapter.diffItemCallback, !Debug.isChecking)
-                itemTouchCallback.isCanDrag = sort == BookSourceSort.Default
+                itemTouchCallback.isCanDrag =
+                    sort == BookSourceSort.Default && !showDuplicationSource
                 delay(500)
             }
         }
     }
 
-    private fun showHelp() {
-        val text = String(assets.open("help/SourceMBookHelp.md").readBytes())
-        showDialogFragment(TextDialog(getString(R.string.help), text, TextDialog.Mode.MD))
-    }
-
     private fun initLiveDataGroup() {
         lifecycleScope.launch {
-            appDb.bookSourceDao.flowGroups().conflate().collect {
-                groups.clear()
-                groups.addAll(it)
-                upGroupMenu()
-                delay(500)
-            }
+            appDb.bookSourceDao.flowGroups()
+                .flowWithLifecycleAndDatabaseChange(
+                    lifecycle,
+                    table = AppDatabase.BOOK_SOURCE_TABLE_NAME
+                )
+                .flowWithLifecycleAndDatabaseChangeFirst(
+                    groupMenuLifecycleOwner.lifecycle,
+                    table = AppDatabase.BOOK_SOURCE_TABLE_NAME
+                )
+                .conflate()
+                .distinctUntilChanged()
+                .collect {
+                    groups.clear()
+                    groups.addAll(it)
+                    upGroupMenu()
+                    delay(500)
+                }
         }
     }
 
@@ -364,6 +447,20 @@ class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceV
         alert(titleResource = R.string.draw, messageResource = R.string.sure_del) {
             yesButton { viewModel.del(adapter.selection) }
             noButton()
+        }
+    }
+
+    override fun onMenuOpened(featureId: Int, menu: Menu): Boolean {
+        if (menu === groupMenu) {
+            groupMenuLifecycleOwner.onMenuOpened()
+        }
+        return super.onMenuOpened(featureId, menu)
+    }
+
+    override fun onPanelClosed(featureId: Int, menu: Menu) {
+        super.onPanelClosed(featureId, menu)
+        if (menu === groupMenu) {
+            groupMenuLifecycleOwner.onMenuClosed()
         }
     }
 
@@ -387,7 +484,7 @@ class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceV
             R.id.menu_remove_group -> selectionRemoveFromGroups()
             R.id.menu_export_selection -> viewModel.saveToFile(
                 adapter,
-                searchKey,
+                searchView.query?.toString(),
                 sortAscending,
                 sort
             ) { file ->
@@ -403,7 +500,7 @@ class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceV
 
             R.id.menu_share_source -> viewModel.saveToFile(
                 adapter,
-                searchKey,
+                searchView.query?.toString(),
                 sortAscending,
                 sort
             ) {
@@ -436,7 +533,7 @@ class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceV
                 val firstItem = adapterItems.indexOf(selectItems.firstOrNull())
                 val lastItem = adapterItems.indexOf(selectItems.lastOrNull())
                 Debug.isChecking = firstItem >= 0 && lastItem >= 0
-                checkMessageRefreshJob(firstItem, lastItem).start()
+                startCheckMessageRefreshJob(firstItem, lastItem)
             }
             neutralButton(R.string.check_source_config)
             cancelButton()
@@ -453,7 +550,7 @@ class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceV
         }
         keepScreenOn(true)
         CheckSource.resume(this)
-        checkMessageRefreshJob(0, 0).start()
+        startCheckMessageRefreshJob(0, 0)
     }
 
     @SuppressLint("InflateParams")
@@ -496,7 +593,7 @@ class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceV
         }
     }
 
-    private fun upGroupMenu() = groupMenu?.let { menu ->
+    private fun upGroupMenu() = groupMenu?.transaction { menu ->
         menu.removeGroup(R.id.source_group)
         groups.forEach {
             menu.add(R.id.source_group, Menu.NONE, Menu.NONE, it)
@@ -523,7 +620,7 @@ class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceV
             okButton {
                 val text = alertBinding.editView.text?.toString()
                 text?.let {
-                    if (!cacheUrls.contains(it)) {
+                    if (it.isAbsUrl() && !cacheUrls.contains(it)) {
                         cacheUrls.add(0, it)
                         aCache.put(importRecordKey, cacheUrls.joinToString(","))
                     }
@@ -542,11 +639,6 @@ class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceV
                     .setAction(R.string.cancel) {
                         CheckSource.stop(this)
                         Debug.finishChecking()
-                        adapter.notifyItemRangeChanged(
-                            0,
-                            adapter.itemCount,
-                            bundleOf(Pair("checkSourceMessage", null))
-                        )
                     }.apply { show() }
             }
         }
@@ -554,7 +646,12 @@ class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceV
             keepScreenOn(false)
             snackBar?.dismiss()
             snackBar = null
-            groups.map { group ->
+            adapter.notifyItemRangeChanged(
+                0,
+                adapter.itemCount,
+                bundleOf(Pair("checkSourceMessage", null))
+            )
+            groups.forEach { group ->
                 if (group.contains("失效") && searchView.query.isEmpty()) {
                     searchView.setQuery("失效", true)
                     toastOnUi("发现有失效书源，已为您自动筛选！")
@@ -563,15 +660,11 @@ class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceV
         }
     }
 
-    private fun checkMessageRefreshJob(firstItem: Int, lastItem: Int): Job {
-        return lifecycleScope.async(start = CoroutineStart.LAZY) {
-            flow {
-                while (true) {
-                    emit(Debug.isChecking)
-                    delay(300L)
-                }
-            }.collect {
-                if (SystemUtils.isScreenOn() && !isPaused) {
+    private fun startCheckMessageRefreshJob(firstItem: Int, lastItem: Int) {
+        checkMessageRefreshJob?.cancel()
+        checkMessageRefreshJob = lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                while (isActive) {
                     if (lastItem == 0) {
                         adapter.notifyItemRangeChanged(
                             0,
@@ -585,9 +678,10 @@ class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceV
                             bundleOf(Pair("checkSourceMessage", null))
                         )
                     }
-                }
-                if (!it) {
-                    this.cancel()
+                    if (!Debug.isChecking) {
+                        checkMessageRefreshJob?.cancel()
+                    }
+                    delay(300L)
                 }
             }
         }
@@ -607,19 +701,15 @@ class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceV
         }
     }
 
-    override fun onPause() {
-        super.onPause()
-        isPaused = true
-    }
-
-    override fun onResume() {
-        super.onResume()
-        isPaused = false
-    }
-
     override fun upCountView() {
         binding.selectActionBar
             .upCountView(adapter.selection.size, adapter.itemCount)
+    }
+
+    override fun getSourceHost(origin: String): String {
+        return hostMap.getOrPut(origin) {
+            NetworkUtils.getSubDomainOrNull(origin) ?: "#"
+        }
     }
 
     override fun onQueryTextChange(newText: String?): Boolean {

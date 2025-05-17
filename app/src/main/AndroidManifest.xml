@@ -4,6 +4,7 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
@@ -23,9 +24,8 @@
     <application
         android:name=".App"
         android:allowBackup="true"
-        android:enableOnBackInvokedCallback="true"
         android:icon="@mipmap/ic_launcher"
-        android:label="@string/app_name"
+        android:label="${app_name}"
         android:networkSecurityConfig="@xml/network_security_config"
         android:requestLegacyExternalStorage="true"
         android:supportsRtl="true"
@@ -134,6 +134,20 @@
                 android:name="com.samsung.android.support.REMOTE_ACTION"
                 android:resource="@xml/spen_remote_actions" />
         </activity>
+
+        <!-- 阅读漫画界面 -->
+        <activity
+            android:name=".ui.book.manga.ReadMangaActivity"
+            android:exported="false"
+            android:launchMode="singleTask">
+            <intent-filter>
+                <action android:name="com.samsung.android.support.REMOTE_ACTION" />
+            </intent-filter>
+
+            <meta-data
+                android:name="com.samsung.android.support.REMOTE_ACTION"
+                android:resource="@xml/spen_remote_actions" />
+        </activity>
         <!-- 书籍详情页 -->
         <activity
             android:name=".ui.book.info.BookInfoActivity"
@@ -179,7 +193,7 @@
         <!-- 配置界面 -->
         <activity
             android:name=".ui.config.ConfigActivity"
-            android:launchMode="singleTask" />
+            android:launchMode="standard" />
         <!-- 搜索界面 -->
         <activity
             android:name=".ui.book.search.SearchActivity"
@@ -340,7 +354,11 @@
         <activity
             android:name=".ui.association.VerificationCodeActivity"
             android:configChanges="locale|keyboardHidden|orientation|screenSize|smallestScreenSize|screenLayout"
-            android:exported="true"
+            android:theme="@style/AppTheme.Transparent" />
+        <!-- 跳转确认 -->
+        <activity
+            android:name=".ui.association.OpenUrlConfirmActivity"
+            android:configChanges="locale|keyboardHidden|orientation|screenSize|smallestScreenSize|screenLayout"
             android:theme="@style/AppTheme.Transparent" />
         <!-- 打开文件 -->
         <activity
@@ -367,6 +385,13 @@
                 <data android:mimeType="application/epub+zip" />
                 <!-- pdf -->
                 <data android:mimeType="application/pdf" />
+                <!-- mobi -->
+                <data android:mimeType="application/mobi" />
+                <data android:mimeType="application/x-mobipocket-ebook" />
+                <!-- azw/azw3 -->
+                <data android:mimeType="application/azw" />
+                <data android:mimeType="application/azw3" />
+                <data android:mimeType="application/x-mobi8-ebook" />
                 <data android:mimeType="application/octet-stream" />
             </intent-filter>
             <!-- Works when an app doesn't know the media type, e.g. Dropbox -->
@@ -399,6 +424,18 @@
                 <data android:pathAdvancedPattern=".*\\.[pP][dD][fF]" />
                 <data android:pathPattern=".*\\.pdf" />
                 <data android:pathPattern=".*\\.PDF" />
+                <!-- mobi -->
+                <data android:pathAdvancedPattern=".*\\.[mM][oO][bB][iI]" />
+                <data android:pathPattern=".*\\.mobi" />
+                <data android:pathPattern=".*\\.MOBI" />
+                <!-- azw -->
+                <data android:pathAdvancedPattern=".*\\.[aA][zZ][wW]" />
+                <data android:pathPattern=".*\\.azw" />
+                <data android:pathPattern=".*\\.AZW" />
+                <!-- azw3 -->
+                <data android:pathAdvancedPattern=".*\\.[aA][zZ][wW]3" />
+                <data android:pathPattern=".*\\.azw3" />
+                <data android:pathPattern=".*\\.AZW3" />
                 <!-- zip -->
                 <data android:pathAdvancedPattern=".*\\.[zZ][iI][pP]" />
                 <data android:pathPattern=".*\\.zip" />
@@ -432,7 +469,8 @@
             android:foregroundServiceType="dataSync"
             android:icon="@drawable/ic_web_service_noti"
             android:label="legado Web Service"
-            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE"
+            tools:targetApi="24">
             <intent-filter>
                 <action android:name="android.service.quicksettings.action.QS_TILE" />
             </intent-filter>
@@ -473,6 +511,15 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths" />
         </provider>
+        <provider
+            android:name="androidx.startup.InitializationProvider"
+            android:authorities="${applicationId}.androidx-startup"
+            android:exported="false"
+            tools:node="merge">
+            <meta-data
+                android:name="androidx.emoji2.text.EmojiCompatInitializer"
+                tools:node="remove" />
+        </provider>
 
         <meta-data
             android:name="channel"
@@ -480,6 +527,16 @@
     </application>
 
     <queries>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="*" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data
+                android:mimeType="*/*"
+                android:scheme="*" />
+        </intent>
         <intent>
             <action android:name="android.intent.action.TTS_SERVICE" />
         </intent>

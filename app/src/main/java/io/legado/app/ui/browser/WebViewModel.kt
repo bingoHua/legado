@@ -5,15 +5,16 @@ import android.content.Intent
 import android.net.Uri
 import android.util.Base64
 import android.webkit.URLUtil
+import android.webkit.WebView
 import androidx.documentfile.provider.DocumentFile
 import io.legado.app.base.BaseViewModel
 import io.legado.app.constant.AppConst
+import io.legado.app.constant.SourceType
 import io.legado.app.data.appDb
 import io.legado.app.exception.NoStackTraceException
-import io.legado.app.help.CacheManager
-import io.legado.app.help.IntentData
 import io.legado.app.help.http.newCallResponseBody
 import io.legado.app.help.http.okHttpClient
+import io.legado.app.help.source.SourceHelp
 import io.legado.app.help.source.SourceVerificationHelp
 import io.legado.app.model.analyzeRule.AnalyzeUrl
 import io.legado.app.utils.DocumentUtils
@@ -22,29 +23,36 @@ import io.legado.app.utils.isContentScheme
 import io.legado.app.utils.printOnDebug
 import io.legado.app.utils.toastOnUi
 import io.legado.app.utils.writeBytes
+import org.apache.commons.text.StringEscapeUtils
 import java.io.File
 import java.util.Date
 
 class WebViewModel(application: Application) : BaseViewModel(application) {
+    var intent: Intent? = null
     var baseUrl: String = ""
     var html: String? = null
     val headerMap: HashMap<String, String> = hashMapOf()
     var sourceVerificationEnable: Boolean = false
+    var refetchAfterSuccess: Boolean = true
+    var sourceName: String = ""
     var sourceOrigin: String = ""
-    var key = ""
+    var sourceType = SourceType.book
 
     fun initData(
         intent: Intent,
         success: () -> Unit
     ) {
         execute {
+            this@WebViewModel.intent = intent
             val url = intent.getStringExtra("url")
                 ?: throw NoStackTraceException("url不能为空")
+            sourceName = intent.getStringExtra("sourceName") ?: ""
             sourceOrigin = intent.getStringExtra("sourceOrigin") ?: ""
-            key = SourceVerificationHelp.getKey(sourceOrigin)
+            sourceType = intent.getIntExtra("sourceType", SourceType.book)
             sourceVerificationEnable = intent.getBooleanExtra("sourceVerificationEnable", false)
-            val headerMapF = IntentData.get<Map<String, String>>(url)
-            val analyzeUrl = AnalyzeUrl(url, headerMapF = headerMapF)
+            refetchAfterSuccess = intent.getBooleanExtra("refetchAfterSuccess", true)
+            val source = SourceHelp.getSource(sourceOrigin, sourceType)
+            val analyzeUrl = AnalyzeUrl(url, source = source, coroutineContext = coroutineContext)
             baseUrl = analyzeUrl.url
             headerMap.putAll(analyzeUrl.headerMap)
             if (analyzeUrl.isPost()) {
@@ -91,21 +99,49 @@ class WebViewModel(application: Application) : BaseViewModel(application) {
         }
     }
 
-    fun saveVerificationResult(intent: Intent, success: () -> Unit) {
-        execute {
-            if (sourceVerificationEnable) {
-                val url = intent.getStringExtra("url")!!
+    fun saveVerificationResult(webView: WebView, success: () -> Unit) {
+        if (!sourceVerificationEnable) {
+            return success.invoke()
+        }
+        if (refetchAfterSuccess) {
+            execute {
+                val url = intent!!.getStringExtra("url")!!
                 val source = appDb.bookSourceDao.getBookSource(sourceOrigin)
-                val key = "${sourceOrigin}_verificationResult"
                 html = AnalyzeUrl(
                     url,
                     headerMapF = headerMap,
-                    source = source
+                    source = source,
+                    coroutineContext = coroutineContext
                 ).getStrResponseAwait(useWebView = false).body
-                CacheManager.putMemory(key, html ?: "")
+                SourceVerificationHelp.setResult(sourceOrigin, html ?: "")
+            }.onSuccess {
+                success.invoke()
             }
+        } else {
+            webView.evaluateJavascript("document.documentElement.outerHTML") {
+                execute {
+                    html = StringEscapeUtils.unescapeJson(it).trim('"')
+                    SourceVerificationHelp.setResult(sourceOrigin, html ?: "")
+                }.onSuccess {
+                    success.invoke()
+                }
+            }
+        }
+    }
+
+    fun disableSource(block: () -> Unit) {
+        execute {
+            SourceHelp.enableSource(sourceOrigin, sourceType, false)
         }.onSuccess {
-            success.invoke()
+            block.invoke()
+        }
+    }
+
+    fun deleteSource(block: () -> Unit) {
+        execute {
+            SourceHelp.deleteSource(sourceOrigin, sourceType)
+        }.onSuccess {
+            block.invoke()
         }
     }
 
